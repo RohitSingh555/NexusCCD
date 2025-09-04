@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+html {
+    font-family: 'Inter', system-ui, sans-serif;
+}
+
+.btn-primary {
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+.btn-secondary {
+    @apply bg-secondary-100 hover:bg-secondary-200 text-secondary-800 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+}
+
+.card {
+    @apply bg-white rounded-xl shadow-sm border border-secondary-200 p-6;
+}
+
+.nav-link {
+    @apply text-secondary-600 hover:text-primary-600 font-medium transition-colors duration-200;
+}
+
+/* Loading states */
+.loading {
+    @apply opacity-50 pointer-events-none;
+}
+
+/* Form styles */
+.form-input {
+    @apply w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+}
+
+.form-label {
+    @apply block text-sm font-medium text-secondary-700 mb-1;
+}
+
+/* Card styles */
+.card-header {
+    @apply border-b border-secondary-200 pb-4 mb-4;
+}
+
+.card-title {
+    @apply text-lg font-semibold text-secondary-900;
+}
+
+/* Table styles */
+.table {
+    @apply min-w-full divide-y divide-secondary-200;
+}
+
+.table th {
+    @apply px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider;
+}
+
+.table td {
+    @apply px-6 py-4 whitespace-nowrap text-sm text-secondary-900;
+}
+
+/* Status badges */
+.status-active {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800;
+}
+
+.status-inactive {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800;
+}
+
+.status-pending {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-out;
+}
+
+/* Responsive utilities */
+@media (max-width: 640px) {
+    .mobile-hidden {
+        @apply hidden;
+    }
+}

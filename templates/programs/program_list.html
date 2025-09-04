@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Programs - Central Client Database{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-secondary-900">Programs & Services</h1>
+            <p class="text-secondary-600 mt-2">Manage programs and track capacity</p>
+        </div>
+        <a href="{% url 'programs:create' %}" class="btn-primary">
+            Add New Program
+        </a>
+    </div>
+    
+    <div class="card">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-secondary-200">
+                <thead class="bg-secondary-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Program</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Department</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Location</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Capacity</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-secondary-200">
+                    {% for program in programs %}
+                    <tr class="hover:bg-secondary-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-secondary-900">{{ program.name }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
+                            {{ program.department.name }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
+                            {{ program.location }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
+                            {{ program.capacity_current }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <a href="{% url 'programs:detail' program.external_id %}" class="text-primary-600 hover:text-primary-900 mr-3">View</a>
+                            <a href="{% url 'programs:edit' program.external_id %}" class="text-secondary-600 hover:text-secondary-900 mr-3">Edit</a>
+                            <a href="{% url 'programs:delete' program.external_id %}" class="text-red-600 hover:text-red-900">Delete</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-4 text-center text-secondary-500">
+                            No programs found. <a href="{% url 'programs:create' %}" class="text-primary-600 hover:text-primary-900">Add your first program</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

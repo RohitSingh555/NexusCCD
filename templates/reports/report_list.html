@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Reports - Central Client Database{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-secondary-900">Reports</h1>
+        <p class="text-secondary-600 mt-2">Generate reports and analytics</p>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for report in reports %}
+        <div class="card hover:shadow-md transition-shadow duration-200">
+            <div class="flex items-center mb-4">
+                <div class="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
+                    <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-secondary-900 ml-4">{{ report.name }}</h3>
+            </div>
+            <p class="text-secondary-600 mb-4">{{ report.description }}</p>
+            <a href="{% url 'reports:'|add:report.url %}" class="btn-primary w-full text-center">
+                View Report
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

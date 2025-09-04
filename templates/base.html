@@ -1,0 +1,544 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Central Client Database{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="{% static 'css/custom.css' %}" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        },
+                        secondary: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            400: '#94a3b8',
+                            500: '#64748b',
+                            600: '#475569',
+                            700: '#334155',
+                            800: '#1e293b',
+                            900: '#0f172a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="h-full bg-secondary-50" x-data="authApp()">
+    <!-- Loading Overlay -->
+    <div x-show="loading" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            <span class="text-secondary-700">Loading...</span>
+        </div>
+    </div>
+
+    <div class="min-h-full">
+        <nav class="bg-white shadow-sm border-b border-secondary-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <a href="{% url 'home' %}" class="flex items-center space-x-3">
+                            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                </svg>
+                            </div>
+                            <span class="text-xl font-bold text-secondary-900">CCD</span>
+                        </a>
+                    </div>
+                    
+                    <!-- Desktop Navigation -->
+                    <div class="hidden md:flex items-center space-x-8">
+                        <a href="{% url 'home' %}" class="nav-link">Home</a>
+                        
+                        <!-- Authenticated User Navigation -->
+                        <div x-show="isAuthenticated" class="flex items-center space-x-6">
+                            <a href="{% url 'clients:list' %}" class="nav-link">Clients</a>
+                            <a href="{% url 'programs:list' %}" class="nav-link">Programs</a>
+                            <a href="{% url 'staff:list' %}" class="nav-link">Staff</a>
+                            <a href="{% url 'reports:list' %}" class="nav-link">Reports</a>
+                            
+                            <!-- User Dropdown -->
+                            <div class="relative" x-data="{ userMenuOpen: false }">
+                                <button @click="userMenuOpen = !userMenuOpen" class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">
+                                    <div class="h-8 w-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
+                                        <span class="text-white font-medium text-xs" x-text="userInitials"></span>
+                                    </div>
+                                    <span class="ml-2 text-secondary-700" x-text="userName"></span>
+                                    <svg class="ml-1 h-4 w-4 text-secondary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </button>
+                                
+                                <div x-show="userMenuOpen" @click.away="userMenuOpen = false" x-transition class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                                    <a href="#" class="block px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-100">Profile</a>
+                                    <a href="#" class="block px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-100">Settings</a>
+                                    <div class="border-t border-secondary-100"></div>
+                                    <button @click="logout()" class="block w-full text-left px-4 py-2 text-sm text-secondary-700 hover:bg-secondary-100">Sign out</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Guest Navigation -->
+                        <div x-show="!isAuthenticated" class="flex items-center space-x-4">
+                            <button @click="showLoginModal = true" class="text-secondary-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors">Login</button>
+                            <button @click="showRegisterModal = true" class="bg-primary-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-700 transition-colors">Sign Up</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Mobile Menu Button -->
+                    <div class="md:hidden flex items-center">
+                        <button @click="mobileMenuOpen = !mobileMenuOpen" class="text-secondary-600 hover:text-primary-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Mobile Menu -->
+            <div x-show="mobileMenuOpen" x-transition class="md:hidden bg-white border-t border-secondary-200">
+                <div class="px-2 pt-2 pb-3 space-y-1">
+                    <a href="{% url 'home' %}" class="block px-3 py-2 text-base font-medium text-secondary-600 hover:text-primary-600">Home</a>
+                    
+                    <!-- Mobile Authenticated Navigation -->
+                    <div x-show="isAuthenticated">
+                        <a href="{% url 'clients:list' %}" class="block px-3 py-2 text-base font-medium text-secondary-600 hover:text-primary-600">Clients</a>
+                        <a href="{% url 'programs:list' %}" class="block px-3 py-2 text-base font-medium text-secondary-600 hover:text-primary-600">Programs</a>
+                        <a href="{% url 'staff:list' %}" class="block px-3 py-2 text-base font-medium text-secondary-600 hover:text-primary-600">Staff</a>
+                        <a href="{% url 'reports:list' %}" class="block px-3 py-2 text-base font-medium text-secondary-600 hover:text-primary-600">Reports</a>
+                        <button @click="logout()" class="text-secondary-600 hover:text-primary-600 block px-3 py-2 text-base font-medium w-full text-left">Sign out</button>
+                    </div>
+                    
+                    <!-- Mobile Guest Navigation -->
+                    <div x-show="!isAuthenticated">
+                        <button @click="showLoginModal = true" class="text-secondary-600 hover:text-primary-600 block px-3 py-2 text-base font-medium w-full text-left">Login</button>
+                        <button @click="showRegisterModal = true" class="bg-primary-600 text-white block px-3 py-2 rounded-md text-base font-medium hover:bg-primary-700 w-full text-left">Sign Up</button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <main class="flex-1">
+            {% if messages %}
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                    {% for message in messages %}
+                        <div class="rounded-md p-4 mb-4 {% if message.tags == 'error' %}bg-red-50 border border-red-200{% elif message.tags == 'success' %}bg-green-50 border border-green-200{% else %}bg-blue-50 border border-blue-200{% endif %}">
+                            <div class="flex">
+                                <div class="ml-3">
+                                    <p class="text-sm font-medium {% if message.tags == 'error' %}text-red-800{% elif message.tags == 'success' %}text-green-800{% else %}text-blue-800{% endif %}">
+                                        {{ message }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            
+            {% block content %}{% endblock %}
+        </main>
+
+        <!-- Login Modal -->
+        <div x-show="showLoginModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="showLoginModal = false">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4" @click.stop>
+                <div class="px-6 py-4 border-b border-secondary-200">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-secondary-900">Sign In</h3>
+                        <button @click="showLoginModal = false" class="text-secondary-400 hover:text-secondary-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <form @submit.prevent="login()" class="px-6 py-4">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-secondary-700 mb-1">Email</label>
+                            <input type="email" x-model="loginForm.email" required class="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="Enter your email">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-secondary-700 mb-1">Password</label>
+                            <input type="password" x-model="loginForm.password" required class="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="Enter your password">
+                        </div>
+                        
+                        <div class="flex items-center justify-between">
+                            <label class="flex items-center">
+                                <input type="checkbox" x-model="loginForm.remember" class="rounded border-secondary-300 text-primary-600 focus:ring-primary-500">
+                                <span class="ml-2 text-sm text-secondary-600">Remember me</span>
+                            </label>
+                            <a href="#" class="text-sm text-primary-600 hover:text-primary-500">Forgot password?</a>
+                        </div>
+                        
+                        <div x-show="loginError" class="text-red-600 text-sm" x-text="loginError"></div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <button type="submit" :disabled="loginLoading" class="w-full bg-primary-600 text-white py-2 px-4 rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <span x-show="!loginLoading">Sign In</span>
+                            <span x-show="loginLoading" class="flex items-center justify-center">
+                                <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                Signing In...
+                            </span>
+                        </button>
+                    </div>
+                    
+                    <div class="mt-4 text-center">
+                        <span class="text-sm text-secondary-600">Don't have an account? </span>
+                        <button @click="showLoginModal = false; showRegisterModal = true" class="text-sm text-primary-600 hover:text-primary-500 font-medium">Sign up</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Registration Modal -->
+        <div x-show="showRegisterModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click.self="showRegisterModal = false">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4" @click.stop>
+                <div class="px-6 py-4 border-b border-secondary-200">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-secondary-900">Create Account</h3>
+                        <button @click="showRegisterModal = false" class="text-secondary-400 hover:text-secondary-600">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <form @submit.prevent="register()" class="px-6 py-4">
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-secondary-700 mb-1">First Name</label>
+                                <input type="text" x-model="registerForm.first_name" required class="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="First name">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-secondary-700 mb-1">Last Name</label>
+                                <input type="text" x-model="registerForm.last_name" required class="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="Last name">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-secondary-700 mb-1">Username</label>
+                            <input type="text" x-model="registerForm.username" required class="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="Choose a username">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-secondary-700 mb-1">Email</label>
+                            <input type="email" x-model="registerForm.email" required class="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="Enter your email">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-secondary-700 mb-1">Phone Number</label>
+                            <input type="tel" x-model="registerForm.phone_number" class="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="Phone number (optional)">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-secondary-700 mb-1">Password</label>
+                            <input type="password" x-model="registerForm.password" required class="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="Create a password">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-secondary-700 mb-1">Confirm Password</label>
+                            <input type="password" x-model="registerForm.password_confirm" required class="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent" placeholder="Confirm your password">
+                        </div>
+                        
+                        <div x-show="registerError" class="text-red-600 text-sm" x-text="registerError"></div>
+                    </div>
+                    
+                    <div class="mt-6">
+                        <button type="submit" :disabled="registerLoading" class="w-full bg-primary-600 text-white py-2 px-4 rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <span x-show="!registerLoading">Create Account</span>
+                            <span x-show="registerLoading" class="flex items-center justify-center">
+                                <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                                Creating Account...
+                            </span>
+                        </button>
+                    </div>
+                    
+                    <div class="mt-4 text-center">
+                        <span class="text-sm text-secondary-600">Already have an account? </span>
+                        <button @click="showRegisterModal = false; showLoginModal = true" class="text-sm text-primary-600 hover:text-primary-500 font-medium">Sign in</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <footer class="bg-white border-t border-secondary-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                    <div class="col-span-1 md:col-span-2">
+                        <div class="flex items-center space-x-3 mb-4">
+                            <div class="w-8 h-8 bg-primary-600 rounded-lg flex items-center justify-center">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                </svg>
+                            </div>
+                            <span class="text-xl font-bold text-secondary-900">Central Client Database</span>
+                        </div>
+                        <p class="text-secondary-600 text-sm max-w-md">
+                            Streamline client management, program tracking, and service delivery with our comprehensive database solution.
+                        </p>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-sm font-semibold text-secondary-900 uppercase tracking-wider mb-4">Quick Links</h3>
+                        <ul class="space-y-2">
+                            <li><a href="{% url 'clients:list' %}" class="text-sm text-secondary-600 hover:text-primary-600">Clients</a></li>
+                            <li><a href="{% url 'programs:list' %}" class="text-sm text-secondary-600 hover:text-primary-600">Programs</a></li>
+                            <li><a href="{% url 'staff:list' %}" class="text-sm text-secondary-600 hover:text-primary-600">Staff</a></li>
+                            <li><a href="{% url 'reports:list' %}" class="text-sm text-secondary-600 hover:text-primary-600">Reports</a></li>
+                        </ul>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-sm font-semibold text-secondary-900 uppercase tracking-wider mb-4">Support</h3>
+                        <ul class="space-y-2">
+                            <li><a href="#" class="text-sm text-secondary-600 hover:text-primary-600">Documentation</a></li>
+                            <li><a href="#" class="text-sm text-secondary-600 hover:text-primary-600">Help Center</a></li>
+                            <li><a href="#" class="text-sm text-secondary-600 hover:text-primary-600">Contact</a></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="mt-8 pt-8 border-t border-secondary-200">
+                    <p class="text-center text-sm text-secondary-500">
+                        &copy; 2024 Central Client Database. All rights reserved.
+                    </p>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        function authApp() {
+            return {
+                // State
+                isAuthenticated: false,
+                loading: false,
+                mobileMenuOpen: false,
+                showLoginModal: false,
+                showRegisterModal: false,
+                user: null,
+                userName: '',
+                userInitials: '',
+                
+                // Forms
+                loginForm: {
+                    email: '',
+                    password: '',
+                    remember: false
+                },
+                registerForm: {
+                    first_name: '',
+                    last_name: '',
+                    username: '',
+                    email: '',
+                    phone_number: '',
+                    password: '',
+                    password_confirm: ''
+                },
+                
+                // Errors
+                loginError: '',
+                registerError: '',
+                loginLoading: false,
+                registerLoading: false,
+                
+                // Methods
+                async init() {
+                    await this.checkAuthStatus();
+                },
+                
+                async checkAuthStatus() {
+                    const token = localStorage.getItem('access_token');
+                    if (token) {
+                        try {
+                            const response = await fetch('/core/api/auth/profile/', {
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                            
+                            if (response.ok) {
+                                const data = await response.json();
+                                this.user = data.user;
+                                this.userName = `${data.user.first_name} ${data.user.last_name}`;
+                                this.userInitials = `${data.user.first_name[0]}${data.user.last_name[0]}`.toUpperCase();
+                                this.isAuthenticated = true;
+                            } else {
+                                this.logout();
+                            }
+                        } catch (error) {
+                            console.error('Auth check failed:', error);
+                            this.logout();
+                        }
+                    }
+                },
+                
+                async login() {
+                    this.loginLoading = true;
+                    this.loginError = '';
+                    
+                    try {
+                        const response = await fetch('/core/api/auth/login/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(this.loginForm)
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            localStorage.setItem('access_token', data.tokens.access);
+                            localStorage.setItem('refresh_token', data.tokens.refresh);
+                            
+                            this.user = data.user;
+                            this.userName = `${data.user.first_name} ${data.user.last_name}`;
+                            this.userInitials = `${data.user.first_name[0]}${data.user.last_name[0]}`.toUpperCase();
+                            this.isAuthenticated = true;
+                            this.showLoginModal = false;
+                            this.loginForm = { email: '', password: '', remember: false };
+                            
+                            // Show success message
+                            this.showNotification('Successfully logged in!', 'success');
+                        } else {
+                            this.loginError = data.error || 'Login failed';
+                        }
+                    } catch (error) {
+                        this.loginError = 'Network error. Please try again.';
+                    } finally {
+                        this.loginLoading = false;
+                    }
+                },
+                
+                async register() {
+                    this.registerLoading = true;
+                    this.registerError = '';
+                    
+                    if (this.registerForm.password !== this.registerForm.password_confirm) {
+                        this.registerError = 'Passwords do not match';
+                        this.registerLoading = false;
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch('/core/api/auth/register/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(this.registerForm)
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            localStorage.setItem('access_token', data.tokens.access);
+                            localStorage.setItem('refresh_token', data.tokens.refresh);
+                            
+                            this.user = data.user;
+                            this.userName = `${data.user.first_name} ${data.user.last_name}`;
+                            this.userInitials = `${data.user.first_name[0]}${data.user.last_name[0]}`.toUpperCase();
+                            this.isAuthenticated = true;
+                            this.showRegisterModal = false;
+                            this.registerForm = {
+                                first_name: '',
+                                last_name: '',
+                                username: '',
+                                email: '',
+                                phone_number: '',
+                                password: '',
+                                password_confirm: ''
+                            };
+                            
+                            // Show success message
+                            this.showNotification('Account created successfully!', 'success');
+                        } else {
+                            this.registerError = data.error || 'Registration failed';
+                        }
+                    } catch (error) {
+                        this.registerError = 'Network error. Please try again.';
+                    } finally {
+                        this.registerLoading = false;
+                    }
+                },
+                
+                async logout() {
+                    const refreshToken = localStorage.getItem('refresh_token');
+                    
+                    if (refreshToken) {
+                        try {
+                            await fetch('/core/api/auth/logout/', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ refresh: refreshToken })
+                            });
+                        } catch (error) {
+                            console.error('Logout error:', error);
+                        }
+                    }
+                    
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    this.isAuthenticated = false;
+                    this.user = null;
+                    this.userName = '';
+                    this.userInitials = '';
+                    
+                    // Show success message
+                    this.showNotification('Successfully logged out!', 'info');
+                },
+                
+                showNotification(message, type = 'info') {
+                    // Create notification element
+                    const notification = document.createElement('div');
+                    notification.className = `fixed top-4 right-4 p-4 rounded-md shadow-lg z-50 ${
+                        type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' :
+                        type === 'error' ? 'bg-red-100 text-red-800 border border-red-200' :
+                        'bg-blue-100 text-blue-800 border border-blue-200'
+                    }`;
+                    notification.textContent = message;
+                    
+                    document.body.appendChild(notification);
+                    
+                    // Remove after 3 seconds
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 3000);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

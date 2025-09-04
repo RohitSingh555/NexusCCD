@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}TailwindCSS Test - Central Client Database{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="text-center mb-8">
+        <h1 class="text-4xl font-bold text-primary-600 mb-4">TailwindCSS Test Page</h1>
+        <p class="text-lg text-secondary-600">Testing if TailwindCSS is working properly</p>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div class="card">
+            <h3 class="text-xl font-semibold text-secondary-900 mb-2">Primary Colors</h3>
+            <div class="space-y-2">
+                <div class="w-full h-8 bg-primary-500 rounded"></div>
+                <div class="w-full h-8 bg-primary-600 rounded"></div>
+                <div class="w-full h-8 bg-primary-700 rounded"></div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3 class="text-xl font-semibold text-secondary-900 mb-2">Secondary Colors</h3>
+            <div class="space-y-2">
+                <div class="w-full h-8 bg-secondary-500 rounded"></div>
+                <div class="w-full h-8 bg-secondary-600 rounded"></div>
+                <div class="w-full h-8 bg-secondary-700 rounded"></div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h3 class="text-xl font-semibold text-secondary-900 mb-2">Buttons</h3>
+            <div class="space-y-2">
+                <button class="btn-primary w-full">Primary Button</button>
+                <button class="btn-secondary w-full">Secondary Button</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h3 class="text-xl font-semibold text-secondary-900 mb-4">Responsive Grid Test</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div class="bg-primary-100 p-4 rounded-lg text-center">
+                <div class="text-2xl font-bold text-primary-600">1</div>
+                <div class="text-sm text-primary-800">Item 1</div>
+            </div>
+            <div class="bg-primary-100 p-4 rounded-lg text-center">
+                <div class="text-2xl font-bold text-primary-600">2</div>
+                <div class="text-sm text-primary-800">Item 2</div>
+            </div>
+            <div class="bg-primary-100 p-4 rounded-lg text-center">
+                <div class="text-2xl font-bold text-primary-600">3</div>
+                <div class="text-sm text-primary-800">Item 3</div>
+            </div>
+            <div class="bg-primary-100 p-4 rounded-lg text-center">
+                <div class="text-2xl font-bold text-primary-600">4</div>
+                <div class="text-sm text-primary-800">Item 4</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="text-center mt-8">
+        <a href="{% url 'home' %}" class="btn-primary text-lg px-8 py-3">
+            Back to Home
+        </a>
+    </div>
+</div>
+{% endblock %}
