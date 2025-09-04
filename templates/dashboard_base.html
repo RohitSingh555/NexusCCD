@@ -1,0 +1,354 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Central Client Database{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Akzidenz+Grotesk:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="{% static 'css/custom.css' %}" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // Fred Victor Brand Colors
+                        brand: {
+                            sky: '#4E84C4',
+                            lime: '#D5E04D',
+                            orange: '#F48024',
+                            darkBlue: '#1B4F8F',
+                            moss: '#778837',
+                            burntOrange: '#D15F27',
+                            charcoal: '#404041',
+                        },
+                        // Semantic color system based on brand
+                        primary: {
+                            50: '#f0f4ff',
+                            100: '#e0e9ff',
+                            200: '#c7d6ff',
+                            300: '#a5b8ff',
+                            400: '#7c94ff',
+                            500: '#4E84C4', // Sky Blue
+                            600: '#3d6ba0',
+                            700: '#345a8a',
+                            800: '#2d4a73',
+                            900: '#1B4F8F', // Dark Blue
+                        },
+                        secondary: {
+                            50: '#f9fdf0',
+                            100: '#f2f9e0',
+                            200: '#e4f3c1',
+                            300: '#d1ed9e',
+                            400: '#D5E04D', // Lime
+                            500: '#b8c73a',
+                            600: '#9aa52f',
+                            700: '#778837', // Moss
+                            800: '#5d6b2c',
+                            900: '#4a5523',
+                        },
+                        accent: {
+                            50: '#fff7ed',
+                            100: '#ffedd5',
+                            200: '#ffd7aa',
+                            300: '#ffba74',
+                            400: '#F48024', // Bright Orange
+                            500: '#d15f27', // Burnt Orange
+                            600: '#b54d1f',
+                            700: '#983b17',
+                            800: '#7b2d0f',
+                            900: '#5e1f07',
+                        },
+                        neutral: {
+                            50: '#fafafa',
+                            100: '#f5f5f5',
+                            200: '#e5e5e5',
+                            300: '#d4d4d4',
+                            400: '#a3a3a3',
+                            500: '#737373',
+                            600: '#525252',
+                            700: '#404041', // Charcoal
+                            800: '#262626',
+                            900: '#171717',
+                        }
+                    },
+                    fontFamily: {
+                        'akzidenz': ['Akzidenz Grotesk', 'Arial', 'sans-serif'],
+                        'sans': ['Akzidenz Grotesk', 'Arial', 'sans-serif'],
+                        'header': ['Akzidenz Grotesk', 'Arial', 'sans-serif'],
+                        'subheader': ['Akzidenz Grotesk', 'Arial', 'sans-serif'],
+                        'body': ['Akzidenz Grotesk', 'Arial', 'sans-serif'],
+                    },
+                    fontSize: {
+                        'xs': ['0.75rem', { lineHeight: '1rem' }],
+                        'sm': ['0.875rem', { lineHeight: '1.25rem' }],
+                        'base': ['1rem', { lineHeight: '1.5rem' }],
+                        'lg': ['1.125rem', { lineHeight: '1.75rem' }],
+                        'xl': ['1.25rem', { lineHeight: '1.75rem' }],
+                        '2xl': ['1.5rem', { lineHeight: '2rem' }],
+                        '3xl': ['1.875rem', { lineHeight: '2.25rem' }],
+                        '4xl': ['2.25rem', { lineHeight: '2.5rem' }],
+                        '5xl': ['3rem', { lineHeight: '1' }],
+                        '6xl': ['3.75rem', { lineHeight: '1' }],
+                    },
+                    fontWeight: {
+                        'light': '300',
+                        'normal': '400',
+                        'medium': '500',
+                        'semibold': '600',
+                        'bold': '700',
+                        'black': '900',
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="h-full bg-neutral-50 font-body" x-data="dashboardApp()">
+    <!-- Loading Overlay -->
+    <div x-show="loading" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <span class="text-gray-700">Loading...</span>
+        </div>
+    </div>
+
+    <div class="h-screen flex" x-data="{ sidebarOpen: false }">
+        <!-- Mobile sidebar overlay -->
+        <div x-show="sidebarOpen" x-transition class="fixed inset-0 z-40 md:hidden" @click="sidebarOpen = false">
+            <div class="absolute inset-0 bg-gray-600 opacity-75"></div>
+        </div>
+        
+        <!-- Sidebar -->
+        <div class="hidden md:flex md:w-64 md:flex-col fixed inset-y-0 left-0 z-30" :class="{'flex': sidebarOpen, 'hidden': !sidebarOpen}" @click.away="sidebarOpen = false">
+            <div class="flex flex-col h-full w-64 pt-6 bg-white border-r border-neutral-200 shadow-lg">
+                <!-- Logo -->
+                <div class="flex items-center justify-center flex-shrink-0 px-6 mb-8">
+                    <a href="{% url 'dashboard' %}" class="group">
+                        <img src="{% static 'images/logo_1-removebg-preview.png' %}" alt="Fred Victor" class="h-16 w-auto group-hover:scale-105 transition-transform duration-200">
+                    </a>
+                </div>
+                
+                <!-- Navigation -->
+                <div class="flex-grow flex flex-col overflow-y-auto">
+                    <nav class="flex-1 px-3 space-y-2 pb-6">
+                        <!-- Dashboard -->
+                        <a href="{% url 'dashboard' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if request.resolver_match.url_name == 'dashboard' %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
+                            <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v6H8V5z"></path>
+                            </svg>
+                            <span class="font-bold font-subheader">Dashboard</span>
+                        </a>
+
+                        <!-- Clients -->
+                        <a href="{% url 'clients:list' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'clients' in request.resolver_match.namespace %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
+                            <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                            </svg>
+                            <span class="font-bold font-subheader">Clients</span>
+                        </a>
+
+                        <!-- Programs & Services -->
+                        <a href="{% url 'programs:list' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'programs' in request.resolver_match.namespace %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
+                            <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                            </svg>
+                            <span class="font-bold font-subheader">Programs & Services</span>
+                        </a>
+
+                        <!-- Departments -->
+                        <a href="{% url 'core:departments' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'departments' in request.resolver_match.url_name %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
+                            <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                            </svg>
+                            <span class="font-bold font-subheader">Departments</span>
+                        </a>
+
+                        <!-- Enrollments -->
+                        <a href="{% url 'core:enrollments' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'enrollments' in request.resolver_match.url_name %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
+                            <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <span class="font-bold font-subheader">Enrollments</span>
+                        </a>
+
+                        <!-- Restrictions -->
+                        <a href="{% url 'core:restrictions' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'restrictions' in request.resolver_match.url_name %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
+                            <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                            <span class="font-bold font-subheader">Restrictions</span>
+                        </a>
+
+                        <!-- Approvals -->
+                        <a href="{% url 'core:approvals' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'approvals' in request.resolver_match.url_name %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
+                            <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <span class="font-bold font-subheader">Approvals</span>
+                            {% if pending_approvals_count > 0 %}
+                            <span class="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-accent-400 rounded-full ml-auto">{{ pending_approvals_count }}</span>
+                            {% endif %}
+                        </a>
+
+                        <!-- Reports -->
+                        <a href="{% url 'reports:list' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'reports' in request.resolver_match.namespace %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
+                            <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                            <span class="font-bold font-subheader">Reports</span>
+                        </a>
+
+                        <!-- Audit Log -->
+                        <a href="{% url 'core:audit_log' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'audit_log' in request.resolver_match.url_name %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
+                            <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                            </svg>
+                            <span class="font-bold font-subheader">Audit Log</span>
+                        </a>
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex flex-col w-0 flex-1 ml-0 md:ml-64">
+            <!-- Top Navigation -->
+            <div class="fixed top-0 right-0 left-0 md:left-64 z-20 flex-shrink-0 flex h-16 bg-white shadow-sm border-b border-neutral-200">
+                <button type="button" @click="sidebarOpen = !sidebarOpen" class="px-4 border-r border-neutral-200 text-neutral-500 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-sky md:hidden">
+                    <span class="sr-only">Open sidebar</span>
+                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                    </svg>
+                </button>
+                
+                <div class="flex-1 px-6 flex justify-between items-center">
+                    <div class="flex-1 flex items-center">
+                        <h1 class="text-xl font-black text-neutral-800 tracking-tight uppercase font-header">{% block page_title %}Dashboard{% endblock %}</h1>
+                    </div>
+                    
+                    <div class="ml-4 flex items-center md:ml-6">
+                        <!-- User Dropdown -->
+                        <div class="relative" x-data="{ userMenuOpen: false }">
+                            <button @click="userMenuOpen = !userMenuOpen" class="max-w-xs bg-white flex items-center text-sm rounded-xl px-3 py-2 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200">
+                                <div class="h-8 w-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm">
+                                    <span class="text-white font-bold text-xs" x-text="userInitials"></span>
+                                </div>
+                                <span class="ml-3 text-neutral-700 font-bold" x-text="userName"></span>
+                                <svg class="ml-2 h-4 w-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+                            
+                            <div x-show="userMenuOpen" @click.away="userMenuOpen = false" x-transition class="origin-top-right absolute right-0 mt-2 w-48 rounded-xl shadow-lg py-2 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none border border-neutral-200">
+                                <a href="#" class="block px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-bold">Profile</a>
+                                <a href="#" class="block px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-bold">Settings</a>
+                                <div class="border-t border-neutral-100 my-1"></div>
+                                <button @click="logout()" class="block w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-bold">Sign out</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Page Content -->
+            <main class="flex-1 relative overflow-y-auto focus:outline-none pt-16">
+                {% if messages %}
+                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                        {% for message in messages %}
+                            <div class="rounded-md p-4 mb-4 {% if message.tags == 'error' %}bg-red-50 border border-red-200{% elif message.tags == 'success' %}bg-green-50 border border-green-200{% else %}bg-blue-50 border border-blue-200{% endif %}">
+                                <div class="flex">
+                                    <div class="ml-3">
+                                        <p class="text-sm font-bold {% if message.tags == 'error' %}text-red-800{% elif message.tags == 'success' %}text-green-800{% else %}text-blue-800{% endif %}">
+                                            {{ message }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <script>
+        function dashboardApp() {
+            return {
+                // State
+                loading: false,
+                user: null,
+                userName: '',
+                userInitials: '',
+                
+                // Methods
+                async init() {
+                    await this.checkAuthStatus();
+                },
+                
+                async checkAuthStatus() {
+                    const token = localStorage.getItem('access_token');
+                    if (token) {
+                        try {
+                            const response = await fetch('/core/api/auth/profile/', {
+                                headers: {
+                                    'Authorization': `Bearer ${token}`,
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                            
+                            if (response.ok) {
+                                const data = await response.json();
+                                this.user = data.user;
+                                this.userName = `${data.user.first_name} ${data.user.last_name}`;
+                                this.userInitials = `${data.user.first_name[0]}${data.user.last_name[0]}`.toUpperCase();
+                            } else {
+                                this.logout();
+                            }
+                        } catch (error) {
+                            console.error('Auth check failed:', error);
+                            this.logout();
+                        }
+                    } else {
+                        // Redirect to login if no token
+                        window.location.href = '/';
+                    }
+                },
+                
+                async logout() {
+                    const refreshToken = localStorage.getItem('refresh_token');
+                    
+                    if (refreshToken) {
+                        try {
+                            await fetch('/core/api/auth/logout/', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ refresh: refreshToken })
+                            });
+                        } catch (error) {
+                            console.error('Logout error:', error);
+                        }
+                    }
+                    
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    
+                    // Clear cookies
+                    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                    document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+                    
+                    window.location.href = '/';
+                }
+            }
+        }
+    </script>
+</body>
+</html>

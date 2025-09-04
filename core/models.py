@@ -63,6 +63,13 @@ class Department(BaseModel):
     
     class Meta:
         db_table = 'departments'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['name'],
+                name='unique_lowercase_name',
+                condition=models.Q(name__isnull=False)
+            )
+        ]
     
     def __str__(self):
         return self.name
@@ -82,12 +89,25 @@ class Role(BaseModel):
 
 class Staff(BaseModel):
     user = models.OneToOneField('core.User', on_delete=models.CASCADE, related_name='staff_profile', null=True, blank=True)
+    first_name = models.CharField(max_length=100, db_index=True, null=True, blank=True)
+    last_name = models.CharField(max_length=100, db_index=True, null=True, blank=True)
+    email = models.EmailField(unique=True, db_index=True, null=True, blank=True)
+    active = models.BooleanField(default=True, db_index=True)
     
     class Meta:
         db_table = 'staff'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['email'],
+                name='unique_staff_email',
+                condition=models.Q(email__isnull=False)
+            )
+        ]
     
     def __str__(self):
-        return f"{self.user.first_name} {self.user.last_name}"
+        if self.user:
+            return f"{self.user.first_name} {self.user.last_name}"
+        return f"{self.first_name} {self.last_name}"
 
 
 class StaffRole(BaseModel):
@@ -148,6 +168,12 @@ class Client(BaseModel):
     
     class Meta:
         db_table = 'clients'
+        indexes = [
+            models.Index(fields=['first_name', 'last_name', 'dob'], name='client_name_dob_idx'),
+            models.Index(fields=['uid_external'], name='client_uid_external_idx'),
+            models.Index(fields=['email'], name='client_email_idx'),
+            models.Index(fields=['phone_number'], name='client_phone_idx'),
+        ]
     
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
@@ -161,6 +187,12 @@ class ClientProgramEnrollment(BaseModel):
     
     class Meta:
         db_table = 'client_program_enrollments'
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(end_date__gte=models.F('start_date')),
+                name='end_date_after_start_date'
+            )
+        ]
     
     def __str__(self):
         return f"{self.client} - {self.program.name}"
@@ -207,6 +239,15 @@ class ServiceRestriction(BaseModel):
     
     class Meta:
         db_table = 'service_restrictions'
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(scope='org', program__isnull=True) |
+                    models.Q(scope='program', program__isnull=False)
+                ),
+                name='valid_scope_program_combination'
+            )
+        ]
     
     def __str__(self):
         return f"{self.client} - {self.get_scope_display()}"

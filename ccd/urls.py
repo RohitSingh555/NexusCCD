@@ -3,10 +3,12 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.views.generic import TemplateView
+from core.views import home, dashboard
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', TemplateView.as_view(template_name='home.html'), name='home'),
+    path('', home, name='home'),
+    path('dashboard/', dashboard, name='dashboard'),
     path('test/', TemplateView.as_view(template_name='test.html'), name='test'),
     path('core/', include('core.urls')),
     path('clients/', include('clients.urls')),

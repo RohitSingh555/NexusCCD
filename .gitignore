@@ -117,3 +117,4 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+fresh_db_1.sqlite3
