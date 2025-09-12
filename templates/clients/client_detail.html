@@ -157,16 +157,27 @@
                         </p>
                     </div>
                     <div class="md:col-span-2">
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Address</label>
-                        <p class="text-lg text-neutral-900 font-body">
-                            {% if client.address %}
-                                {% for key, value in client.address.items %}
-                                    {% if value %}{{ value }}{% if not forloop.last %}, {% endif %}{% endif %}
+                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Addresses</label>
+                        {% if client.addresses %}
+                            <div class="space-y-3">
+                                {% for address in client.addresses %}
+                                    <div class="border border-neutral-200 rounded-lg p-4 bg-neutral-50">
+                                        <div class="flex items-start justify-between mb-2">
+                                            <h4 class="text-sm font-bold text-neutral-800 font-subheader">
+                                                {{ address.type|title|default:"Address" }} Address
+                                            </h4>
+                                        </div>
+                                        <div class="text-sm text-neutral-700 font-body">
+                                            <div>{{ address.street }}</div>
+                                            <div>{{ address.city }}, {{ address.state }} {{ address.zip }}</div>
+                                            {% if address.country %}<div>{{ address.country }}</div>{% endif %}
+                                        </div>
+                                    </div>
                                 {% endfor %}
-                            {% else %}
-                                —
-                            {% endif %}
-                        </p>
+                            </div>
+                        {% else %}
+                            <p class="text-lg text-neutral-500 font-body">—</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>

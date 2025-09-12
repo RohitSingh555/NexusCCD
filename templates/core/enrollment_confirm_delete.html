@@ -14,7 +14,7 @@
                 <h1 class="text-3xl font-bold text-neutral-800 font-header">Delete Enrollment</h1>
                 <p class="text-neutral-600 mt-2 font-body">This action cannot be undone</p>
             </div>
-            <a href="{% url 'core:enrollments_detail' enrollment.external_id %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+            <a href="{% url 'core:enrollments_detail' object.external_id %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                 </svg>
@@ -51,30 +51,30 @@
         <div class="flex items-center mb-6">
             <div class="w-16 h-16 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm mr-6">
                 <span class="text-2xl font-bold text-white">
-                    {{ enrollment.client.first_name|first|upper }}{{ enrollment.client.last_name|first|upper }}
+                    {{ object.client.first_name|first|upper }}{{ object.client.last_name|first|upper }}
                 </span>
             </div>
             <div>
                 <h2 class="text-2xl font-bold text-neutral-800 font-header">
-                    {{ enrollment.client.first_name }} {{ enrollment.client.last_name }}
+                    {{ object.client.first_name }} {{ object.client.last_name }}
                 </h2>
-                <p class="text-lg text-neutral-600 font-body">{{ enrollment.program.name }}</p>
-                <p class="text-sm text-neutral-500 font-body">{{ enrollment.program.department.name }}</p>
+                <p class="text-lg text-neutral-600 font-body">{{ object.program.name }}</p>
+                <p class="text-sm text-neutral-500 font-body">{{ object.program.department.name }}</p>
             </div>
         </div>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
                 <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Start Date</label>
-                <p class="text-lg text-neutral-900 font-body">{{ enrollment.start_date|date:"F d, Y" }}</p>
+                <p class="text-lg text-neutral-900 font-body">{{ object.start_date|date:"F d, Y" }}</p>
             </div>
             <div>
                 <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">End Date</label>
-                <p class="text-lg text-neutral-900 font-body">{{ enrollment.end_date|date:"F d, Y"|default:"Active" }}</p>
+                <p class="text-lg text-neutral-900 font-body">{{ object.end_date|date:"F d, Y"|default:"Active" }}</p>
             </div>
             <div>
                 <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Status</label>
-                {% if enrollment.end_date %}
+                {% if object.end_date %}
                     <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-neutral-100 text-neutral-800">
                         Completed
                     </span>
@@ -86,7 +86,7 @@
             </div>
             <div>
                 <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Enrollment ID</label>
-                <p class="text-sm text-neutral-900 font-mono font-body">{{ enrollment.external_id }}</p>
+                <p class="text-sm text-neutral-900 font-mono font-body">{{ object.external_id }}</p>
             </div>
         </div>
     </div>
@@ -116,7 +116,7 @@
 
         <!-- Form Actions -->
         <div class="flex justify-end space-x-4">
-            <a href="{% url 'core:enrollments_detail' enrollment.external_id %}" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+            <a href="{% url 'core:enrollments_detail' object.external_id %}" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                 Cancel
             </a>
             <button type="submit" 

@@ -163,8 +163,14 @@ class Client(BaseModel):
     image = models.URLField(max_length=500, null=True, blank=True)
     phone_number = models.CharField(max_length=20, null=True, blank=True, db_index=True)
     email = models.EmailField(null=True, blank=True, db_index=True)
-    address = models.JSONField(default=dict)
+    addresses = models.JSONField(default=list, help_text="List of addresses with type, street, city, state, zip, country")
     uid_external = models.CharField(max_length=255, null=True, blank=True, unique=True, db_index=True)
+    
+    def save(self, *args, **kwargs):
+        # Auto-generate external ID if not provided
+        if not self.uid_external:
+            self.uid_external = str(uuid.uuid4())
+        super().save(*args, **kwargs)
     
     class Meta:
         db_table = 'clients'

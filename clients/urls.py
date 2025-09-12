@@ -9,4 +9,7 @@ urlpatterns = [
     path('create/', views.ClientCreateView.as_view(), name='create'),
     path('<uuid:external_id>/edit/', views.ClientUpdateView.as_view(), name='edit'),
     path('<uuid:external_id>/delete/', views.ClientDeleteView.as_view(), name='delete'),
+    path('upload/', views.ClientUploadView.as_view(), name='upload'),
+    path('upload/process/', views.upload_clients, name='upload_process'),
+    path('download-sample/<str:file_type>/', views.download_sample, name='download_sample'),
 ]

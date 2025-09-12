@@ -1,0 +1,11 @@
+first_name,last_name,email,phone_number,dob,preferred_name,alias,gender,sexual_orientation,race,immigration_status,languages_spoken,street,city,state,zip,country
+John,Smith,john.smith@email.com,(555) 123-4567,1985-03-15,Johnny,JS,Male,Straight,White,Citizen,"English, Spanish",123 Main Street,New York,NY,10001,USA
+Maria,Garcia,maria.garcia@email.com,(555) 234-5678,1990-07-22,Maria,MG,Female,Straight,Hispanic,Permanent Resident,"Spanish, English",456 Oak Avenue,Los Angeles,CA,90210,USA
+David,Johnson,david.johnson@email.com,(555) 345-6789,1978-11-08,Dave,DJ,Male,Gay,Black,Citizen,English,789 Pine Street,Chicago,IL,60601,USA
+Sarah,Williams,sarah.williams@email.com,(555) 456-7890,1992-05-14,Sarah,SW,Female,Bisexual,Asian,Citizen,"English, Mandarin",321 Elm Street,Seattle,WA,98101,USA
+Michael,Brown,michael.brown@email.com,(555) 567-8901,1987-09-30,Mike,MB,Male,Straight,White,Citizen,"English, French",654 Maple Drive,Boston,MA,02101,USA
+Lisa,Davis,lisa.davis@email.com,(555) 678-9012,1995-01-12,Lisa,LD,Female,Straight,Native American,Citizen,"English, Navajo",987 Cedar Lane,Phoenix,AZ,85001,USA
+James,Wilson,james.wilson@email.com,(555) 789-0123,1983-12-03,Jim,JW,Male,Straight,White,Citizen,"English, German",147 Birch Street,Denver,CO,80201,USA
+Jennifer,Martinez,jennifer.martinez@email.com,(555) 890-1234,1991-06-18,Jen,JM,Female,Lesbian,Hispanic,Citizen,"English, Spanish",258 Spruce Avenue,Miami,FL,33101,USA
+Robert,Anderson,robert.anderson@email.com,(555) 901-2345,1989-04-25,Rob,RA,Male,Straight,Black,Citizen,English,369 Walnut Street,Atlanta,GA,30301,USA
+Amanda,Taylor,amanda.taylor@email.com,(555) 012-3456,1993-08-07,Mandy,AT,Female,Straight,White,Citizen,"English, Italian",741 Cherry Lane,Portland,OR,97201,USA

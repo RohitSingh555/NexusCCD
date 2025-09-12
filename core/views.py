@@ -13,6 +13,7 @@ from django.contrib import messages
 from django.urls import reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from .models import Client, Program, Staff, PendingChange, ClientProgramEnrollment, Department, ServiceRestriction
+from .forms import EnrollmentForm
 
 User = get_user_model()
 
@@ -326,19 +327,23 @@ class EnrollmentDetailView(DetailView):
 
 class EnrollmentCreateView(CreateView):
     model = ClientProgramEnrollment
+    form_class = EnrollmentForm
     template_name = 'core/enrollment_form.html'
-    fields = ['client', 'program', 'start_date', 'end_date']
     success_url = reverse_lazy('core:enrollments')
     
     def form_valid(self, form):
         messages.success(self.request, 'Enrollment created successfully.')
         return super().form_valid(form)
+    
+    def form_invalid(self, form):
+        messages.error(self.request, 'Please correct the errors below.')
+        return super().form_invalid(form)
 
 
 class EnrollmentUpdateView(UpdateView):
     model = ClientProgramEnrollment
+    form_class = EnrollmentForm
     template_name = 'core/enrollment_form.html'
-    fields = ['client', 'program', 'start_date', 'end_date']
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:enrollments')
@@ -346,6 +351,10 @@ class EnrollmentUpdateView(UpdateView):
     def form_valid(self, form):
         messages.success(self.request, 'Enrollment updated successfully.')
         return super().form_valid(form)
+    
+    def form_invalid(self, form):
+        messages.error(self.request, 'Please correct the errors below.')
+        return super().form_invalid(form)
 
 
 class EnrollmentDeleteView(DeleteView):

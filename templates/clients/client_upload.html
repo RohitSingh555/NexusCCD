@@ -1,0 +1,497 @@
+{% extends 'dashboard_base.html' %}
+{% load static %}
+
+{% block title %}Upload Clients{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-neutral-50 py-8">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-neutral-900 font-header">Upload Clients</h1>
+                    <p class="mt-2 text-lg text-neutral-600 font-body">Import client data from CSV or Excel files</p>
+                </div>
+                <a href="{% url 'clients:list' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Back to Clients
+                </a>
+            </div>
+        </div>
+
+        <!-- Upload Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-neutral-200 overflow-hidden">
+            <!-- Upload Area -->
+            <div class="p-8" x-data="uploadManager()">
+                {% csrf_token %}
+                <!-- File Drop Zone -->
+                <div 
+                    class="border-2 border-dashed border-neutral-300 rounded-xl p-12 text-center transition-all duration-300 hover:border-brand-sky hover:bg-brand-sky/5"
+                    :class="{ 'border-brand-sky bg-brand-sky/10': isDragging, 'border-green-500 bg-green-50': fileSelected }"
+                    @dragover.prevent="isDragging = true"
+                    @dragleave.prevent="isDragging = false"
+                    @drop.prevent="handleFileDrop($event)"
+                    @click="openFileDialog()"
+                >
+                    <input 
+                        type="file" 
+                        x-ref="fileInput"
+                        @change="handleFileSelect($event)"
+                        accept=".csv,.xlsx,.xls"
+                        class="hidden"
+                    >
+                    
+                    <!-- Upload Icon -->
+                    <div class="mx-auto w-16 h-16 mb-4" :class="{ 'animate-bounce': isDragging }">
+                        <svg class="w-full h-full text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                    </div>
+                    
+                    <!-- Upload Text -->
+                    <div x-show="!fileSelected">
+                        <h3 class="text-xl font-bold text-neutral-900 font-header mb-2">Drop files here or click to browse</h3>
+                        <p class="text-neutral-600 font-body mb-4">Support for CSV, XLSX, and XLS files</p>
+                        <div class="inline-flex items-center px-4 py-2 bg-brand-sky text-white text-sm font-bold rounded-lg">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            Choose File
+                        </div>
+                    </div>
+                    
+                    <!-- Selected File -->
+                    <div x-show="fileSelected" class="space-y-4">
+                        <div class="flex items-center justify-center">
+                            <div class="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold text-green-800 font-header">File Selected</h3>
+                            <p class="text-green-600 font-body" x-text="selectedFile?.name"></p>
+                            <p class="text-sm text-green-500 font-body" x-text="formatFileSize(selectedFile?.size)"></p>
+                        </div>
+                        <button @click="clearFile()" class="text-sm text-red-600 hover:text-red-800 font-bold">
+                            Remove file
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Upload Progress -->
+                <div x-show="isUploading" class="mt-8 space-y-4">
+                    <div class="bg-blue-50 border border-blue-200 rounded-xl p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
+                            <h3 class="text-lg font-bold text-blue-800 font-header">Processing Upload...</h3>
+                        </div>
+                        
+                        <!-- Progress Steps -->
+                        <div class="space-y-3">
+                            <div class="flex items-center" :class="{ 'text-green-600': currentStep >= 1, 'text-blue-600': currentStep === 1, 'text-neutral-400': currentStep < 1 }">
+                                <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3" 
+                                     :class="{ 'bg-green-500 border-green-500 text-white': currentStep > 1, 'bg-blue-500 border-blue-500 text-white': currentStep === 1, 'border-current': currentStep < 1 }">
+                                    <svg x-show="currentStep > 1" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <span x-show="currentStep <= 1" class="text-xs font-bold">1</span>
+                                </div>
+                                <span class="font-body">Validating file format...</span>
+                            </div>
+                            
+                            <div class="flex items-center" :class="{ 'text-green-600': currentStep >= 2, 'text-blue-600': currentStep === 2, 'text-neutral-400': currentStep < 2 }">
+                                <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3" 
+                                     :class="{ 'bg-green-500 border-green-500 text-white': currentStep > 2, 'bg-blue-500 border-blue-500 text-white': currentStep === 2, 'border-current': currentStep < 2 }">
+                                    <svg x-show="currentStep > 2" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <span x-show="currentStep <= 2" class="text-xs font-bold">2</span>
+                                </div>
+                                <span class="font-body">Reading and parsing data...</span>
+                            </div>
+                            
+                            <div class="flex items-center" :class="{ 'text-green-600': currentStep >= 3, 'text-blue-600': currentStep === 3, 'text-neutral-400': currentStep < 3 }">
+                                <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3" 
+                                     :class="{ 'bg-green-500 border-green-500 text-white': currentStep > 3, 'bg-blue-500 border-blue-500 text-white': currentStep === 3, 'border-current': currentStep < 3 }">
+                                    <svg x-show="currentStep > 3" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <span x-show="currentStep <= 3" class="text-xs font-bold">3</span>
+                                </div>
+                                <span class="font-body">Processing client records...</span>
+                            </div>
+                            
+                            <div class="flex items-center" :class="{ 'text-green-600': currentStep >= 4, 'text-blue-600': currentStep === 4, 'text-neutral-400': currentStep < 4 }">
+                                <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center mr-3" 
+                                     :class="{ 'bg-green-500 border-green-500 text-white': currentStep > 4, 'bg-blue-500 border-blue-500 text-white': currentStep === 4, 'border-current': currentStep < 4 }">
+                                    <svg x-show="currentStep > 4" class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <span x-show="currentStep <= 4" class="text-xs font-bold">4</span>
+                                </div>
+                                <span class="font-body">Saving to database...</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Progress Bar -->
+                        <div class="mt-6">
+                            <div class="bg-blue-200 rounded-full h-2 overflow-hidden">
+                                <div class="bg-blue-500 h-2 rounded-full transition-all duration-500 ease-out" 
+                                     :style="`width: ${(currentStep / 4) * 100}%`"></div>
+                            </div>
+                            <p class="text-sm text-blue-600 font-body mt-2 text-center" x-text="`${Math.round((currentStep / 4) * 100)}% Complete`"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Button -->
+                <div class="mt-8 flex justify-center">
+                    <button 
+                        @click="uploadFile()" 
+                        :disabled="!fileSelected || isUploading"
+                        class="px-8 py-3 bg-brand-sky text-white text-lg font-bold rounded-xl hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                        :class="{ 'animate-pulse': isUploading }"
+                    >
+                        <span x-show="!isUploading">Upload Clients</span>
+                        <span x-show="isUploading" class="flex items-center">
+                            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Processing...
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions Card -->
+        <div class="mt-8 bg-white rounded-2xl shadow-sm border border-neutral-200 overflow-hidden">
+            <div class="p-8">
+                <h2 class="text-xl font-bold text-neutral-900 font-header mb-6">File Format Requirements</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Required Columns -->
+                    <div>
+                        <h3 class="text-lg font-bold text-neutral-800 font-subheader mb-4">Required Columns</h3>
+                        <div class="space-y-2">
+                            <div class="flex items-center text-sm text-neutral-700 font-body">
+                                <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
+                                first_name
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-700 font-body">
+                                <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
+                                last_name
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-700 font-body">
+                                <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
+                                email
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-700 font-body">
+                                <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
+                                phone_number
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-700 font-body">
+                                <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
+                                dob (YYYY-MM-DD)
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Optional Columns -->
+                    <div>
+                        <h3 class="text-lg font-bold text-neutral-800 font-subheader mb-4">Optional Columns</h3>
+                        <div class="space-y-2">
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                preferred_name
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                alias
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                gender
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                languages_spoken (comma-separated)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                street, city, state, zip, country
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Sample Download -->
+                <div class="mt-8 pt-6 border-t border-neutral-200">
+                    <h3 class="text-lg font-bold text-neutral-800 font-subheader mb-4">Sample Files</h3>
+                    <div class="flex space-x-4">
+                        <a href="{% url 'clients:download_sample' 'csv' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-lg text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            Download CSV Sample
+                        </a>
+                        <a href="{% url 'clients:download_sample' 'xlsx' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-lg text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            Download Excel Sample
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success Modal -->
+<div id="successModal" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-neutral-500 bg-opacity-75 transition-opacity" onclick="hideSuccessModal()"></div>
+        
+        <div class="inline-block align-bottom bg-white rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-6 pt-6 pb-4">
+                <div class="flex items-center">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                        <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-4">
+                        <h3 class="text-lg font-bold text-neutral-900 font-header">Upload Successful!</h3>
+                        <p class="text-sm text-neutral-600 font-body">Your client data has been processed successfully.</p>
+                    </div>
+                </div>
+                <div class="mt-4" id="successMessage"></div>
+            </div>
+            <div class="bg-neutral-50 px-6 py-4 flex justify-end space-x-3">
+                <button onclick="hideSuccessModal(); window.location.href = '{% url 'clients:list' %}'" class="px-4 py-2 bg-brand-sky text-white text-sm font-bold rounded-lg hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200">
+                    View Clients
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function uploadManager() {
+    return {
+        isDragging: false,
+        fileSelected: false,
+        selectedFile: null,
+        isUploading: false,
+        currentStep: 0,
+        successMessage: '',
+        
+        handleFileDrop(event) {
+            this.isDragging = false;
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                this.handleFile(files[0]);
+            }
+        },
+        
+        handleFileSelect(event) {
+            const files = event.target.files;
+            if (files.length > 0) {
+                this.handleFile(files[0]);
+            }
+        },
+        
+        handleFile(file) {
+            const allowedTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+            const allowedExtensions = ['csv', 'xlsx', 'xls'];
+            const fileExtension = file.name.split('.').pop().toLowerCase();
+            
+            if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
+                alert('Please select a CSV or Excel file.');
+                return;
+            }
+            
+            this.selectedFile = file;
+            this.fileSelected = true;
+        },
+        
+        openFileDialog() {
+            this.$refs.fileInput.click();
+        },
+        
+        clearFile() {
+            this.selectedFile = null;
+            this.fileSelected = false;
+            this.$refs.fileInput.value = '';
+        },
+        
+        formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        },
+        
+        getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        },
+        
+        async uploadFile() {
+            if (!this.selectedFile) return;
+            
+            this.isUploading = true;
+            this.currentStep = 0;
+            
+            const formData = new FormData();
+            formData.append('file', this.selectedFile);
+            
+            try {
+                // Simulate progress steps
+                this.currentStep = 1;
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                this.currentStep = 2;
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                this.currentStep = 3;
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                this.currentStep = 4;
+                
+                // Get CSRF token
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                                 document.querySelector('meta[name=csrf-token]')?.getAttribute('content') ||
+                                 this.getCookie('csrftoken');
+                
+                const response = await fetch('{% url "clients:upload_process" %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Create a more informative message based on results
+                    let message = result.message;
+                    if (result.stats.skipped > 0 && result.stats.created === 0 && result.stats.updated === 0) {
+                        message = `All ${result.stats.total_rows} rows were duplicates and have been handled appropriately.`;
+                    } else if (result.stats.skipped > 0) {
+                        message = `Upload completed! ${result.stats.skipped} duplicates were found and handled.`;
+                    }
+                    
+                    this.successMessage = `
+                        <div class="mt-4 space-y-3">
+                            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <div class="flex items-center">
+                                    <svg class="w-5 h-5 text-green-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <span class="text-green-800 font-bold">${message}</span>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                                <div class="bg-neutral-50 rounded-lg p-3">
+                                    <div class="text-neutral-600 font-body">Total Rows</div>
+                                    <div class="text-2xl font-bold text-neutral-900 font-header">${result.stats.total_rows}</div>
+                                </div>
+                                <div class="bg-green-50 rounded-lg p-3">
+                                    <div class="text-green-600 font-body">Created</div>
+                                    <div class="text-2xl font-bold text-green-800 font-header">${result.stats.created}</div>
+                                </div>
+                                <div class="bg-blue-50 rounded-lg p-3">
+                                    <div class="text-blue-600 font-body">Updated</div>
+                                    <div class="text-2xl font-bold text-blue-800 font-header">${result.stats.updated}</div>
+                                </div>
+                                <div class="bg-yellow-50 rounded-lg p-3">
+                                    <div class="text-yellow-600 font-body">Skipped (Duplicates)</div>
+                                    <div class="text-2xl font-bold text-yellow-800 font-header">${result.stats.skipped}</div>
+                                </div>
+                                <div class="bg-red-50 rounded-lg p-3">
+                                    <div class="text-red-600 font-body">Errors</div>
+                                    <div class="text-2xl font-bold text-red-800 font-header">${result.stats.errors}</div>
+                                </div>
+                            </div>
+                            ${result.duplicate_details && result.duplicate_details.length > 0 ? `
+                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                                    <h4 class="font-bold text-blue-800 mb-3">Duplicate Handling Details:</h4>
+                                    <div class="space-y-2 max-h-40 overflow-y-auto">
+                                        ${result.duplicate_details.map(dup => `
+                                            <div class="flex items-start justify-between p-2 bg-white rounded border border-blue-100">
+                                                <div class="flex-1">
+                                                    <div class="flex items-center space-x-2">
+                                                        <span class="text-sm font-bold text-blue-900">${dup.client_name}</span>
+                                                        <span class="text-xs px-2 py-1 rounded-full ${dup.type === 'updated' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">
+                                                            ${dup.type === 'updated' ? 'Updated' : 'Skipped'}
+                                                        </span>
+                                                    </div>
+                                                    <div class="text-xs text-blue-700 mt-1">
+                                                        <strong>Reason:</strong> ${dup.reason}
+                                                    </div>
+                                                    <div class="text-xs text-blue-600 mt-1">
+                                                        <strong>Matched with:</strong> ${dup.existing_name}
+                                                    </div>
+                                                    <div class="text-xs text-blue-500 mt-1">
+                                                        <strong>Match field:</strong> ${dup.match_field}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    ${result.duplicate_details.length >= 20 ? '<p class="text-xs text-blue-600 mt-2">Showing first 20 duplicates...</p>' : ''}
+                                </div>
+                            ` : ''}
+                            ${result.errors && result.errors.length > 0 ? `
+                                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                                    <h4 class="font-bold text-red-800 mb-2">Errors Found:</h4>
+                                    <ul class="text-sm text-red-700 space-y-1">
+                                        ${result.errors.map(error => `<li>• ${error}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                    
+                    // Show success modal
+                    document.getElementById('successMessage').innerHTML = this.successMessage;
+                    document.getElementById('successModal').style.display = 'block';
+                } else {
+                    alert(`Upload failed: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                alert('Upload failed. Please try again.');
+            } finally {
+                this.isUploading = false;
+                this.currentStep = 0;
+            }
+        }
+    }
+}
+
+function hideSuccessModal() {
+    document.getElementById('successModal').style.display = 'none';
+}
+</script>
+{% endblock %}
