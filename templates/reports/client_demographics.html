@@ -1,0 +1,181 @@
+{% extends 'dashboard_base.html' %}
+{% load static %}
+
+{% block title %}Client Demographics Report - Central Client Database{% endblock %}
+
+{% block page_title %}Client Demographics Report{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-neutral-800 font-header">Client Demographics Report</h1>
+            <p class="text-neutral-600 mt-2 font-body">Age, gender, and demographic breakdowns of client population</p>
+        </div>
+        <div class="flex space-x-3">
+            <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Export Data
+            </button>
+            <a href="{% url 'reports:list' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Back to Reports
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Total Clients</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ total_clients }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-lime to-brand-moss rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Most Common Age Group</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">
+                        {% for age_group, count in age_groups.items %}
+                            {% if forloop.first %}{{ age_group }}{% endif %}
+                        {% endfor %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Gender Distribution</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">
+                        {% for gender, count in gender_counts.items %}
+                            {% if forloop.first %}{{ gender }}{% endif %}
+                        {% endfor %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Age Distribution Chart -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">Age Distribution</h2>
+            </div>
+            
+            <div class="space-y-4">
+                {% for age_group, count in age_groups.items %}
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-bold text-neutral-700 font-body">{{ age_group }}</span>
+                    <div class="flex items-center">
+                        <div class="w-32 bg-neutral-200 rounded-full h-2 mr-3">
+                            <div class="bg-gradient-to-r from-brand-sky to-brand-darkBlue h-2 rounded-full" style="width: {% widthratio count total_clients 100 %}%"></div>
+                        </div>
+                        <span class="text-sm font-bold text-neutral-900 font-body w-12 text-right">{{ count }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Gender Distribution Chart -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-brand-lime to-brand-moss rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">Gender Distribution</h2>
+            </div>
+            
+            <div class="space-y-4">
+                {% for gender, count in gender_counts.items %}
+                <div class="flex items-center justify-between">
+                    <span class="text-sm font-bold text-neutral-700 font-body">{{ gender }}</span>
+                    <div class="flex items-center">
+                        <div class="w-32 bg-neutral-200 rounded-full h-2 mr-3">
+                            <div class="bg-gradient-to-r from-brand-lime to-brand-moss h-2 rounded-full" style="width: {% widthratio count total_clients 100 %}%"></div>
+                        </div>
+                        <span class="text-sm font-bold text-neutral-900 font-body w-12 text-right">{{ count }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Breakdown Table -->
+    <div class="mt-8 bg-white rounded-xl shadow-sm border border-neutral-200">
+        <div class="px-6 py-4 border-b border-neutral-200">
+            <h3 class="text-lg font-bold text-neutral-900 font-subheader">Detailed Demographics Breakdown</h3>
+            <p class="text-sm text-neutral-600 font-body">Complete breakdown of client demographics by age and gender</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-neutral-200">
+                <thead class="bg-neutral-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Age Group</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Count</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Percentage</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Visual</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-neutral-200">
+                    {% for age_group, count in age_groups.items %}
+                    <tr class="hover:bg-neutral-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold text-neutral-900 font-body">{{ age_group }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">{{ count }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {% widthratio count total_clients 100 %}%
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="w-24 bg-neutral-200 rounded-full h-2">
+                                <div class="bg-gradient-to-r from-brand-sky to-brand-darkBlue h-2 rounded-full" style="width: {% widthratio count total_clients 100 %}%"></div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -3,36 +3,149 @@
 
 {% block title %}Departments - Central Client Database{% endblock %}
 
+{% block page_title %}Departments{% endblock %}
+
 {% block content %}
-<div class="p-6">
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-secondary-900">Departments</h1>
-        <p class="text-secondary-600 mt-2">Manage organizational departments and their programs.</p>
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-neutral-800 font-header">Departments</h1>
+            <p class="text-neutral-600 mt-2 font-body">Manage organizational departments and divisions</p>
+        </div>
+        <div class="flex space-x-3">
+            <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+                </svg>
+                Filter
+            </button>
+            <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Export
+            </button>
+            <a href="{% url 'core:departments_create' %}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                Add New Department
+            </a>
+        </div>
     </div>
 
-    <div class="bg-white rounded-lg shadow-sm border border-secondary-200">
-        <div class="px-6 py-4 border-b border-secondary-200">
-            <div class="flex items-center justify-between">
-                <h3 class="text-lg font-semibold text-secondary-900">All Departments</h3>
-                <button class="btn-primary">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                    </svg>
-                    Add Department
-                </button>
-            </div>
-        </div>
-        <div class="p-6">
-            <div class="text-center py-12">
-                <svg class="mx-auto h-12 w-12 text-secondary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                </svg>
-                <h3 class="mt-2 text-sm font-medium text-secondary-900">No departments yet</h3>
-                <p class="mt-1 text-sm text-secondary-500">Get started by creating your first department.</p>
-                <div class="mt-6">
-                    <button class="btn-primary">Create Department</button>
+    <!-- Department Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Total Departments</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ total_departments }}</p>
                 </div>
             </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-lime to-brand-moss rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Total Programs</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ total_programs }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Total Staff</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ total_staff }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-xl shadow-sm border border-neutral-200">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-neutral-200">
+                <thead class="bg-neutral-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Department Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Owner</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Programs</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Staff</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Created</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-neutral-200">
+                    {% for department in departments %}
+                    <tr class="hover:bg-neutral-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="w-10 h-10 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-lg flex items-center justify-center shadow-sm">
+                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                    </svg>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="text-sm font-bold text-neutral-900 font-body">
+                                        {{ department.name }}
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {{ department.owner|default:"—" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-sky text-white">
+                                {{ department.program_count|default:0 }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-lime text-neutral-800">
+                                {{ department.staff_count|default:0 }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
+                            {{ department.created_at|date:"M d, Y" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold">
+                            <a href="{% url 'core:departments_detail' department.external_id %}" class="text-brand-sky hover:text-brand-darkBlue mr-3 font-body">View</a>
+                            <a href="{% url 'core:departments_edit' department.external_id %}" class="text-neutral-600 hover:text-neutral-900 mr-3 font-body">Edit</a>
+                            <a href="{% url 'core:departments_delete' department.external_id %}" class="text-accent-500 hover:text-accent-600 font-body">Delete</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-4 text-center text-neutral-500 font-body">
+                            No departments found. <a href="{% url 'core:departments_create' %}" class="text-brand-sky hover:text-brand-darkBlue font-bold">Add your first department</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

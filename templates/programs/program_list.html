@@ -1,57 +1,86 @@
-{% extends 'base.html' %}
+{% extends 'dashboard_base.html' %}
 {% load static %}
 
-{% block title %}Programs - Central Client Database{% endblock %}
+{% block title %}Programs & Services - Central Client Database{% endblock %}
+
+{% block page_title %}Programs & Services{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="flex justify-between items-center mb-8">
         <div>
-            <h1 class="text-3xl font-bold text-secondary-900">Programs & Services</h1>
-            <p class="text-secondary-600 mt-2">Manage programs and track capacity</p>
+            <h1 class="text-3xl font-bold text-neutral-800 font-header">Programs & Services</h1>
+            <p class="text-neutral-600 mt-2 font-body">Manage programs and service offerings</p>
         </div>
-        <a href="{% url 'programs:create' %}" class="btn-primary">
+        <a href="{% url 'programs:create' %}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
             Add New Program
         </a>
     </div>
     
-    <div class="card">
+    <div class="bg-white rounded-xl shadow-sm border border-neutral-200">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-secondary-200">
-                <thead class="bg-secondary-50">
+            <table class="min-w-full divide-y divide-neutral-200">
+                <thead class="bg-neutral-50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Program</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Department</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Location</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Capacity</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Actions</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Program Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Department</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Location</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Capacity</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Enrollments</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Created</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Actions</th>
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-secondary-200">
+                <tbody class="bg-white divide-y divide-neutral-200">
                     {% for program in programs %}
-                    <tr class="hover:bg-secondary-50">
+                    <tr class="hover:bg-neutral-50">
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm font-medium text-secondary-900">{{ program.name }}</div>
+                            <div class="flex items-center">
+                                <div class="w-10 h-10 bg-gradient-to-br from-brand-lime to-brand-moss rounded-lg flex items-center justify-center shadow-sm">
+                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                    </svg>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="text-sm font-bold text-neutral-900 font-body">
+                                        {{ program.name }}
+                                    </div>
+                                </div>
+                            </div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
                             {{ program.department.name }}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
                             {{ program.location }}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
                             {{ program.capacity_current }}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <a href="{% url 'programs:detail' program.external_id %}" class="text-primary-600 hover:text-primary-900 mr-3">View</a>
-                            <a href="{% url 'programs:edit' program.external_id %}" class="text-secondary-600 hover:text-secondary-900 mr-3">Edit</a>
-                            <a href="{% url 'programs:delete' program.external_id %}" class="text-red-600 hover:text-red-900">Delete</a>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="w-16 bg-neutral-200 rounded-full h-2 mr-2">
+                                    <div class="bg-brand-sky h-2 rounded-full" style="width: {{ program.occupancy_percentage|default:0 }}%"></div>
+                                </div>
+                                <span class="text-sm text-neutral-600 font-body">{{ program.current_enrollments|default:0 }}/{{ program.capacity_current }}</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
+                            {{ program.created_at|date:"M d, Y" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold">
+                            <a href="{% url 'programs:detail' program.external_id %}" class="text-brand-sky hover:text-brand-darkBlue mr-3 font-body">View</a>
+                            <a href="{% url 'programs:edit' program.external_id %}" class="text-neutral-600 hover:text-neutral-900 mr-3 font-body">Edit</a>
+                            <a href="{% url 'programs:delete' program.external_id %}" class="text-accent-500 hover:text-accent-600 font-body">Delete</a>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="px-6 py-4 text-center text-secondary-500">
-                            No programs found. <a href="{% url 'programs:create' %}" class="text-primary-600 hover:text-primary-900">Add your first program</a>
+                        <td colspan="7" class="px-6 py-4 text-center text-neutral-500 font-body">
+                            No programs found. <a href="{% url 'programs:create' %}" class="text-brand-sky hover:text-brand-darkBlue font-bold">Add your first program</a>
                         </td>
                     </tr>
                     {% endfor %}

@@ -1,0 +1,219 @@
+{% extends 'dashboard_base.html' %}
+{% load static %}
+
+{% block title %}Program Performance Metrics Report - Central Client Database{% endblock %}
+
+{% block page_title %}Program Performance Metrics Report{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-neutral-800 font-header">Program Performance Metrics Report</h1>
+            <p class="text-neutral-600 mt-2 font-body">Program effectiveness and KPIs</p>
+        </div>
+        <div class="flex space-x-3">
+            <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Export Data
+            </button>
+            <a href="{% url 'reports:list' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Back to Reports
+            </a>
+        </div>
+    </div>
+
+    <!-- Performance Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Total Programs</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ program_metrics|length }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-lime to-brand-moss rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Avg Completion Rate</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">
+                        {% for metric in program_metrics %}{{ metric.completion_rate }}{% if not forloop.last %} + {% endif %}{% endfor %}%
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Top Performer</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">
+                        {% for metric in program_metrics %}{{ metric.completion_rate }}{% if forloop.first %}%{% endif %}{% endfor %}
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Program Performance Table -->
+    <div class="bg-white rounded-xl shadow-sm border border-neutral-200">
+        <div class="px-6 py-4 border-b border-neutral-200">
+            <h3 class="text-lg font-bold text-neutral-900 font-subheader">Program Performance Metrics</h3>
+            <p class="text-sm text-neutral-600 font-body">Detailed performance analysis for each program</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-neutral-200">
+                <thead class="bg-neutral-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Program</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Department</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Total Enrollments</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Completed</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Completion Rate</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Performance</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-neutral-200">
+                    {% for metric in program_metrics %}
+                    <tr class="hover:bg-neutral-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm">
+                                    <span class="text-sm font-bold text-white">
+                                        {{ metric.program.name|first|upper }}
+                                    </span>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="text-sm font-bold text-neutral-900 font-body">{{ metric.program.name }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {{ metric.program.department.name }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {{ metric.total_enrollments }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {{ metric.completed_enrollments }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="w-20 bg-neutral-200 rounded-full h-2 mr-3">
+                                    <div class="h-2 rounded-full {% if metric.completion_rate >= 80 %}bg-gradient-to-r from-brand-lime to-brand-moss{% elif metric.completion_rate >= 60 %}bg-gradient-to-r from-brand-orange to-brand-burntOrange{% else %}bg-gradient-to-r from-brand-sky to-brand-darkBlue{% endif %}" style="width: {{ metric.completion_rate }}%"></div>
+                                </div>
+                                <span class="text-sm font-bold text-neutral-900 font-body">{{ metric.completion_rate }}%</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if metric.completion_rate >= 80 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-lime text-white">
+                                    Excellent
+                                </span>
+                            {% elif metric.completion_rate >= 60 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-orange text-white">
+                                    Good
+                                </span>
+                            {% elif metric.completion_rate >= 40 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-sky text-white">
+                                    Fair
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral-100 text-neutral-800">
+                                    Needs Improvement
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if metric.total_enrollments == 0 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral-100 text-neutral-800">
+                                    No Data
+                                </span>
+                            {% elif metric.completion_rate >= 80 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-800">
+                                    High Performance
+                                </span>
+                            {% elif metric.completion_rate >= 60 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                                    Performing Well
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800">
+                                    Under Review
+                                </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-4 text-center text-neutral-500 font-body">
+                            No program performance data found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Performance Insights -->
+    <div class="mt-8 bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+        <div class="flex items-center mb-6">
+            <div class="w-10 h-10 bg-gradient-to-br from-secondary-400 to-secondary-700 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                </svg>
+            </div>
+            <h2 class="text-xl font-bold text-neutral-800 font-header">Performance Insights</h2>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="p-4 bg-neutral-50 rounded-lg">
+                <h3 class="text-lg font-bold text-neutral-800 font-header mb-2">Top Performers</h3>
+                <p class="text-sm text-neutral-600 font-body mb-3">
+                    Programs with completion rates above 80% are considered high performers. 
+                    These programs demonstrate effective structure and client engagement.
+                </p>
+            </div>
+            
+            <div class="p-4 bg-neutral-50 rounded-lg">
+                <h3 class="text-lg font-bold text-neutral-800 font-header mb-2">Improvement Areas</h3>
+                <p class="text-sm text-neutral-600 font-body mb-3">
+                    Programs with completion rates below 60% may benefit from program evaluation, 
+                    client feedback analysis, and structural improvements.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

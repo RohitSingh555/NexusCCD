@@ -3,31 +3,164 @@
 
 {% block title %}Pending Approvals - Central Client Database{% endblock %}
 
+{% block page_title %}Pending Approvals{% endblock %}
+
 {% block content %}
-<div class="p-6">
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-secondary-900">Pending Approvals</h1>
-        <p class="text-secondary-600 mt-2">Review and approve pending changes from managers and leaders.</p>
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-neutral-800 font-header">Pending Approvals</h1>
+            <p class="text-neutral-600 mt-2 font-body">Review and approve pending changes</p>
+        </div>
+        <div class="flex space-x-3">
+            <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+                </svg>
+                Filter
+            </button>
+            <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Export
+            </button>
+        </div>
     </div>
 
-    <div class="bg-white rounded-lg shadow-sm border border-secondary-200">
-        <div class="px-6 py-4 border-b border-secondary-200">
-            <div class="flex items-center justify-between">
-                <h3 class="text-lg font-semibold text-secondary-900">All Pending Changes</h3>
-                <div class="flex space-x-2">
-                    <button class="btn-secondary">Filter</button>
-                    <button class="btn-secondary">Export</button>
+    <!-- Approval Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-accent-400 to-accent-600 rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Pending</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ pending_count }}</p>
                 </div>
             </div>
         </div>
-        <div class="p-6">
-            <div class="text-center py-12">
-                <svg class="mx-auto h-12 w-12 text-secondary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <h3 class="mt-2 text-sm font-medium text-secondary-900">No pending approvals</h3>
-                <p class="mt-1 text-sm text-secondary-500">All changes have been reviewed and processed.</p>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-lime to-brand-moss rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Approved</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ approved_count }}</p>
+                </div>
             </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Declined</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ declined_count }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">This Week</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ this_week_count }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-xl shadow-sm border border-neutral-200">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-neutral-200">
+                <thead class="bg-neutral-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Entity</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Change Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Requested By</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Requested Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-neutral-200">
+                    {% for approval in approvals %}
+                    <tr class="hover:bg-neutral-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="w-10 h-10 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-lg flex items-center justify-center shadow-sm">
+                                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    </svg>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="text-sm font-bold text-neutral-900 font-body">
+                                        {{ approval.entity|title }}
+                                    </div>
+                                    <div class="text-sm text-neutral-500 font-body">
+                                        ID: {{ approval.entity_id|truncatechars:8 }}
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {% if approval.action == 'create' %}bg-brand-lime text-neutral-800{% elif approval.action == 'update' %}bg-brand-sky text-white{% elif approval.action == 'delete' %}bg-accent-400 text-white{% else %}bg-neutral-100 text-neutral-800{% endif %}">
+                                {{ approval.get_action_display }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {{ approval.requested_by.first_name }} {{ approval.requested_by.last_name }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
+                            {{ approval.created_at|date:"M d, Y H:i" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {% if approval.status == 'pending' %}bg-accent-400 text-white{% elif approval.status == 'approved' %}bg-brand-lime text-neutral-800{% else %}bg-neutral-100 text-neutral-800{% endif %}">
+                                {{ approval.get_status_display }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold">
+                            <a href="{% url 'core:approvals_detail' approval.external_id %}" class="text-brand-sky hover:text-brand-darkBlue mr-3 font-body">Review</a>
+                            {% if approval.status == 'pending' %}
+                            <a href="{% url 'core:approvals_approve' approval.external_id %}" class="text-brand-lime hover:text-brand-moss mr-3 font-body">Approve</a>
+                            <a href="{% url 'core:approvals_decline' approval.external_id %}" class="text-accent-500 hover:text-accent-600 font-body">Decline</a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-4 text-center text-neutral-500 font-body">
+                            No pending approvals found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

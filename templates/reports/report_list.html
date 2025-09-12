@@ -1,32 +1,273 @@
-{% extends 'base.html' %}
+{% extends 'dashboard_base.html' %}
 {% load static %}
 
-{% block title %}Reports - Central Client Database{% endblock %}
+{% block title %}Reports & Analytics - Central Client Database{% endblock %}
+
+{% block page_title %}Reports & Analytics{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-secondary-900">Reports</h1>
-        <p class="text-secondary-600 mt-2">Generate reports and analytics</p>
-    </div>
-    
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {% for report in reports %}
-        <div class="card hover:shadow-md transition-shadow duration-200">
-            <div class="flex items-center mb-4">
-                <div class="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
-                    <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-                    </svg>
-                </div>
-                <h3 class="text-lg font-semibold text-secondary-900 ml-4">{{ report.name }}</h3>
-            </div>
-            <p class="text-secondary-600 mb-4">{{ report.description }}</p>
-            <a href="{% url 'reports:'|add:report.url %}" class="btn-primary w-full text-center">
-                View Report
-            </a>
+    <!-- Page Header -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-neutral-800 font-header">Reports & Analytics</h1>
+            <p class="text-neutral-600 mt-2 font-body">Generate insights and track organizational performance</p>
         </div>
-        {% endfor %}
+        <div class="flex space-x-3">
+            <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
+                </svg>
+                Filter Reports
+            </button>
+            <button class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                Create Custom Report
+            </button>
+        </div>
+    </div>
+
+    <!-- Quick Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Total Clients -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Total Clients</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ total_clients }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Programs -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-lime to-brand-moss rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Active Programs</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ active_programs }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Enrollment Rate -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Enrollment Rate</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ enrollment_rate }}%</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending Approvals -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-accent-400 to-accent-600 rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Pending Approvals</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ pending_approvals }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Categories -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <!-- Client Reports -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200">
+            <div class="px-6 py-4 border-b border-neutral-200">
+                <h3 class="text-lg font-bold text-neutral-900 font-subheader">Client Reports</h3>
+                <p class="text-sm text-neutral-600 font-body">Generate client-focused analytics and insights</p>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <a href="{% url 'reports:client_demographics' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
+                        <div class="flex-shrink-0">
+                            <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-bold text-neutral-900 font-body">Client Demographics</p>
+                            <p class="text-xs text-neutral-500 font-body">Age, gender, and demographic breakdowns</p>
+                        </div>
+                    </a>
+
+                    <a href="{% url 'reports:client_enrollment_history' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
+                        <div class="flex-shrink-0">
+                            <div class="w-10 h-10 bg-gradient-to-br from-brand-lime to-brand-moss rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-bold text-neutral-900 font-body">Enrollment History</p>
+                            <p class="text-xs text-neutral-500 font-body">Client program participation over time</p>
+                        </div>
+                    </a>
+
+                    <a href="{% url 'reports:client_outcomes' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
+                        <div class="flex-shrink-0">
+                            <div class="w-10 h-10 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-bold text-neutral-900 font-body">Client Outcomes</p>
+                            <p class="text-xs text-neutral-500 font-body">Success rates and outcome measurements</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Program Reports -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200">
+            <div class="px-6 py-4 border-b border-neutral-200">
+                <h3 class="text-lg font-bold text-neutral-900 font-subheader">Program Reports</h3>
+                <p class="text-sm text-neutral-600 font-body">Analyze program performance and capacity</p>
+            </div>
+            <div class="p-6">
+                <div class="space-y-4">
+                    <a href="{% url 'reports:program_capacity' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
+                        <div class="flex-shrink-0">
+                            <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-bold text-neutral-900 font-body">Capacity Analysis</p>
+                            <p class="text-xs text-neutral-500 font-body">Program utilization and capacity metrics</p>
+                        </div>
+                    </a>
+
+                    <a href="{% url 'reports:program_performance' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
+                        <div class="flex-shrink-0">
+                            <div class="w-10 h-10 bg-gradient-to-br from-brand-lime to-brand-moss rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-bold text-neutral-900 font-body">Performance Metrics</p>
+                            <p class="text-xs text-neutral-500 font-body">Program effectiveness and KPIs</p>
+                        </div>
+                    </a>
+
+                    <a href="{% url 'reports:department_summary' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
+                        <div class="flex-shrink-0">
+                            <div class="w-10 h-10 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-bold text-neutral-900 font-body">Department Summary</p>
+                            <p class="text-xs text-neutral-500 font-body">Department-wide statistics and insights</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Reports -->
+    <div class="bg-white rounded-xl shadow-sm border border-neutral-200">
+        <div class="px-6 py-4 border-b border-neutral-200">
+            <h3 class="text-lg font-bold text-neutral-900 font-subheader">Recent Reports</h3>
+            <p class="text-sm text-neutral-600 font-body">Your recently generated reports</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-neutral-200">
+                <thead class="bg-neutral-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Report Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Generated By</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-neutral-200">
+                    {% for report in recent_reports %}
+                    <tr class="hover:bg-neutral-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm">
+                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                    </svg>
+                                </div>
+                                <div class="ml-3">
+                                    <div class="text-sm font-bold text-neutral-900 font-body">{{ report.name }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral-100 text-neutral-800">
+                                {{ report.type }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {{ report.generated_by.first_name }} {{ report.generated_by.last_name }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
+                            {{ report.created_at|date:"M d, Y H:i" }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold">
+                            <a href="{% url 'reports:view' report.id %}" class="text-brand-sky hover:text-brand-darkBlue mr-3 font-body">View</a>
+                            <a href="{% url 'reports:download' report.id %}" class="text-neutral-600 hover:text-neutral-900 mr-3 font-body">Download</a>
+                            <a href="{% url 'reports:delete' report.id %}" class="text-accent-500 hover:text-accent-600 font-body">Delete</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-4 text-center text-neutral-500 font-body">
+                            No recent reports found. <a href="#" class="text-brand-sky hover:text-brand-darkBlue font-bold">Generate your first report</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 {% endblock %}

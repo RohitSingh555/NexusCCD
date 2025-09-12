@@ -1,0 +1,124 @@
+{% extends 'dashboard_base.html' %}
+{% load static %}
+
+{% block title %}{% if object %}Edit Enrollment{% else %}Add New Enrollment{% endif %} - Central Client Database{% endblock %}
+
+{% block page_title %}{% if object %}Edit Enrollment{% else %}Add New Enrollment{% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-neutral-800 font-header">
+                    {% if object %}Edit Enrollment{% else %}Add New Enrollment{% endif %}
+                </h1>
+                <p class="text-neutral-600 mt-2 font-body">
+                    {% if object %}Update enrollment information{% else %}Create a new client program enrollment{% endif %}
+                </p>
+            </div>
+            <a href="{% url 'core:enrollments' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Back to Enrollments
+            </a>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <form method="post" class="space-y-8">
+        {% csrf_token %}
+        
+        <!-- Enrollment Information Section -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">Enrollment Information</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label for="{{ form.client.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Client *</label>
+                    <select name="{{ form.client.name }}" id="{{ form.client.id_for_label }}" required class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Client</option>
+                        {% for client in form.client.field.queryset %}
+                            <option value="{{ client.id }}" {% if form.client.value == client.id %}selected{% endif %}>
+                                {{ client.first_name }} {{ client.last_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    {% if form.client.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.client.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.program.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Program *</label>
+                    <select name="{{ form.program.name }}" id="{{ form.program.id_for_label }}" required class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Program</option>
+                        {% for program in form.program.field.queryset %}
+                            <option value="{{ program.id }}" {% if form.program.value == program.id %}selected{% endif %}>
+                                {{ program.name }} - {{ program.department.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    {% if form.program.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.program.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.start_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Start Date *</label>
+                    <input type="date" name="{{ form.start_date.name }}" id="{{ form.start_date.id_for_label }}" value="{{ form.start_date.value|default:'' }}" required class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.start_date.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.start_date.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.end_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">End Date</label>
+                    <input type="date" name="{{ form.end_date.name }}" id="{{ form.end_date.id_for_label }}" value="{{ form.end_date.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    <p class="mt-1 text-sm text-neutral-500 font-body">Leave blank for active enrollment</p>
+                    {% if form.end_date.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.end_date.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end space-x-4 pt-6">
+            <a href="{% url 'core:enrollments' %}" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                Cancel
+            </a>
+            <button type="submit" class="px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                {% if object %}Update Enrollment{% else %}Create Enrollment{% endif %}
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+    /* Custom form field styling */
+    input[type="date"],
+    select {
+        @apply w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body;
+    }
+    
+    input[type="date"]:focus,
+    select:focus {
+        @apply ring-2 ring-brand-sky border-transparent;
+    }
+    
+    /* Error state styling */
+    input:invalid, select:invalid {
+        @apply border-red-300 focus:ring-red-500;
+    }
+</style>
+{% endblock %}

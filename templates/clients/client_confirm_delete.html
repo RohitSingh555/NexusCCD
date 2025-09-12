@@ -1,0 +1,161 @@
+{% extends 'dashboard_base.html' %}
+{% load static %}
+
+{% block title %}Delete {{ client.first_name }} {{ client.last_name }} - Central Client Database{% endblock %}
+
+{% block page_title %}Delete Client{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-neutral-800 font-header">Delete Client</h1>
+                <p class="text-neutral-600 mt-2 font-body">This action cannot be undone</p>
+            </div>
+            <a href="{% url 'clients:detail' client.external_id %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Back to Client
+            </a>
+        </div>
+    </div>
+
+    <!-- Warning Card -->
+    <div class="bg-red-50 border border-red-200 rounded-xl p-6 mb-8">
+        <div class="flex items-start">
+            <div class="flex-shrink-0">
+                <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+            </div>
+            <div class="ml-3">
+                <h3 class="text-lg font-bold text-red-800 font-header">Warning: This action cannot be undone</h3>
+                <p class="text-red-700 mt-2 font-body">
+                    Deleting this client will permanently remove all their information from the system, including:
+                </p>
+                <ul class="list-disc list-inside text-red-700 mt-2 space-y-1 font-body">
+                    <li>Personal information and demographics</li>
+                    <li>Contact details</li>
+                    <li>Program enrollments</li>
+                    <li>Service restrictions</li>
+                    <li>All associated records</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Client Information Card -->
+    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
+        <div class="flex items-center mb-6">
+            <div class="w-16 h-16 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm mr-6">
+                {% if client.image %}
+                    <img src="{{ client.image }}" alt="{{ client.first_name }} {{ client.last_name }}" class="w-16 h-16 rounded-xl object-cover">
+                {% else %}
+                    <span class="text-2xl font-bold text-white">
+                        {{ client.first_name|first|upper }}{{ client.last_name|first|upper }}
+                    </span>
+                {% endif %}
+            </div>
+            <div>
+                <h2 class="text-2xl font-bold text-neutral-800 font-header">
+                    {{ client.first_name }} {{ client.last_name }}
+                </h2>
+                {% if client.preferred_name %}
+                <p class="text-lg text-neutral-600 font-body">Preferred Name: {{ client.preferred_name }}</p>
+                {% endif %}
+                {% if client.email %}
+                <p class="text-sm text-neutral-500 font-body">{{ client.email }}</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Date of Birth</label>
+                <p class="text-lg text-neutral-900 font-body">{{ client.dob|date:"F d, Y" }}</p>
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Client ID</label>
+                <p class="text-sm text-neutral-900 font-mono font-body">{{ client.external_id }}</p>
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Phone Number</label>
+                <p class="text-lg text-neutral-900 font-body">{{ client.phone_number|default:"—" }}</p>
+            </div>
+            <div>
+                <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Created</label>
+                <p class="text-sm text-neutral-900 font-body">{{ client.created_at|date:"M d, Y" }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Form -->
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+        
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <h3 class="text-lg font-bold text-neutral-800 font-header mb-4">Confirm Deletion</h3>
+            <p class="text-neutral-600 mb-6 font-body">
+                To confirm deletion, please type the client's full name below:
+            </p>
+            
+            <div class="mb-6">
+                <label for="confirmation_name" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">
+                    Type "{{ client.first_name }} {{ client.last_name }}" to confirm
+                </label>
+                <input type="text" 
+                       id="confirmation_name" 
+                       name="confirmation_name" 
+                       required 
+                       class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent font-body"
+                       placeholder="Enter full name to confirm deletion">
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end space-x-4">
+            <a href="{% url 'clients:detail' client.external_id %}" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                Cancel
+            </a>
+            <button type="submit" 
+                    id="delete-button"
+                    disabled
+                    class="px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+                Delete Client Permanently
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmationInput = document.getElementById('confirmation_name');
+    const deleteButton = document.getElementById('delete-button');
+    const expectedName = '{{ client.first_name }} {{ client.last_name }}';
+    
+    confirmationInput.addEventListener('input', function() {
+        if (this.value.trim() === expectedName) {
+            deleteButton.disabled = false;
+            deleteButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            deleteButton.disabled = true;
+            deleteButton.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    });
+    
+    // Prevent accidental form submission
+    document.querySelector('form').addEventListener('submit', function(e) {
+        if (confirmationInput.value.trim() !== expectedName) {
+            e.preventDefault();
+            alert('Please type the exact name to confirm deletion.');
+        }
+    });
+});
+</script>
+{% endblock %}

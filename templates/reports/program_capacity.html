@@ -1,0 +1,191 @@
+{% extends 'dashboard_base.html' %}
+{% load static %}
+
+{% block title %}Program Capacity Analysis Report - Central Client Database{% endblock %}
+
+{% block page_title %}Program Capacity Analysis Report{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-neutral-800 font-header">Program Capacity Analysis Report</h1>
+            <p class="text-neutral-600 mt-2 font-body">Program utilization and capacity metrics</p>
+        </div>
+        <div class="flex space-x-3">
+            <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Export Data
+            </button>
+            <a href="{% url 'reports:list' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Back to Reports
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Total Programs</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">{{ total_programs }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-lime to-brand-moss rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Total Capacity</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">
+                        {% for data in program_data %}{{ data.capacity }}{% if not forloop.last %} + {% endif %}{% endfor %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Occupied</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">
+                        {% for data in program_data %}{{ data.occupied }}{% if not forloop.last %} + {% endif %}{% endfor %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-12 h-12 bg-gradient-to-br from-accent-400 to-accent-600 rounded-xl flex items-center justify-center shadow-sm">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Avg Utilization</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">
+                        {% for data in program_data %}{{ data.utilization }}{% if not forloop.last %} + {% endif %}{% endfor %}%
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Program Capacity Table -->
+    <div class="bg-white rounded-xl shadow-sm border border-neutral-200">
+        <div class="px-6 py-4 border-b border-neutral-200">
+            <h3 class="text-lg font-bold text-neutral-900 font-subheader">Program Capacity Analysis</h3>
+            <p class="text-sm text-neutral-600 font-body">Detailed capacity and utilization metrics for each program</p>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-neutral-200">
+                <thead class="bg-neutral-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Program</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Department</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Capacity</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Occupied</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Vacant</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Utilization</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-neutral-200">
+                    {% for data in program_data %}
+                    <tr class="hover:bg-neutral-50">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm">
+                                    <span class="text-sm font-bold text-white">
+                                        {{ data.program.name|first|upper }}
+                                    </span>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="text-sm font-bold text-neutral-900 font-body">{{ data.program.name }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {{ data.program.department.name }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {{ data.capacity }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {{ data.occupied }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {{ data.vacant }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="w-20 bg-neutral-200 rounded-full h-2 mr-3">
+                                    <div class="h-2 rounded-full {% if data.utilization >= 80 %}bg-gradient-to-r from-brand-lime to-brand-moss{% elif data.utilization >= 60 %}bg-gradient-to-r from-brand-orange to-brand-burntOrange{% else %}bg-gradient-to-r from-brand-sky to-brand-darkBlue{% endif %}" style="width: {{ data.utilization }}%"></div>
+                                </div>
+                                <span class="text-sm font-bold text-neutral-900 font-body">{{ data.utilization }}%</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            {% if data.utilization >= 90 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800">
+                                    Over Capacity
+                                </span>
+                            {% elif data.utilization >= 80 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-orange text-white">
+                                    Near Capacity
+                                </span>
+                            {% elif data.utilization >= 60 %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-lime text-white">
+                                    Good Utilization
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-sky text-white">
+                                    Available Capacity
+                                </span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-4 text-center text-neutral-500 font-body">
+                            No program data found.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

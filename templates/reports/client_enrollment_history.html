@@ -1,41 +1,36 @@
 {% extends 'dashboard_base.html' %}
 {% load static %}
 
-{% block title %}Enrollments - Central Client Database{% endblock %}
+{% block title %}Client Enrollment History Report - Central Client Database{% endblock %}
 
-{% block page_title %}Enrollments{% endblock %}
+{% block page_title %}Client Enrollment History Report{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
     <div class="flex justify-between items-center mb-8">
         <div>
-            <h1 class="text-3xl font-bold text-neutral-800 font-header">Client Enrollments</h1>
-            <p class="text-neutral-600 mt-2 font-body">Track client program enrollments and status</p>
+            <h1 class="text-3xl font-bold text-neutral-800 font-header">Client Enrollment History Report</h1>
+            <p class="text-neutral-600 mt-2 font-body">Client program participation over time</p>
         </div>
         <div class="flex space-x-3">
             <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
-                </svg>
-                Filter
-            </button>
-            <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                 </svg>
-                Export
+                Export Data
             </button>
-            <a href="{% url 'core:enrollments_create' %}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+            <a href="{% url 'reports:list' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                 </svg>
-                New Enrollment
+                Back to Reports
             </a>
         </div>
     </div>
 
-    <!-- Enrollment Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
@@ -57,13 +52,19 @@
                 <div class="flex-shrink-0">
                     <div class="w-12 h-12 bg-gradient-to-br from-brand-lime to-brand-moss rounded-xl flex items-center justify-center shadow-sm">
                         <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                     </div>
                 </div>
                 <div class="ml-4">
-                    <p class="text-sm font-bold text-neutral-600 font-subheader">Active</p>
-                    <p class="text-2xl font-black text-neutral-900 font-header">{{ active_enrollments }}</p>
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Active Enrollments</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">
+                        {% for enrollment in enrollments %}
+                            {% if enrollment.end_date is None %}
+                                {% if forloop.first %}{{ forloop.counter0|add:1 }}{% endif %}
+                            {% endif %}
+                        {% endfor %}
+                    </p>
                 </div>
             </div>
         </div>
@@ -73,35 +74,30 @@
                 <div class="flex-shrink-0">
                     <div class="w-12 h-12 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-xl flex items-center justify-center shadow-sm">
                         <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                     </div>
                 </div>
                 <div class="ml-4">
-                    <p class="text-sm font-bold text-neutral-600 font-subheader">Completed</p>
-                    <p class="text-2xl font-black text-neutral-900 font-header">{{ completed_enrollments }}</p>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-            <div class="flex items-center">
-                <div class="flex-shrink-0">
-                    <div class="w-12 h-12 bg-gradient-to-br from-accent-400 to-accent-600 rounded-xl flex items-center justify-center shadow-sm">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-                        </svg>
-                    </div>
-                </div>
-                <div class="ml-4">
-                    <p class="text-sm font-bold text-neutral-600 font-subheader">Success Rate</p>
-                    <p class="text-2xl font-black text-neutral-900 font-header">{{ success_rate }}%</p>
+                    <p class="text-sm font-bold text-neutral-600 font-subheader">Completed Enrollments</p>
+                    <p class="text-2xl font-black text-neutral-900 font-header">
+                        {% for enrollment in enrollments %}
+                            {% if enrollment.end_date is not None %}
+                                {% if forloop.first %}{{ forloop.counter0|add:1 }}{% endif %}
+                            {% endif %}
+                        {% endfor %}
+                    </p>
                 </div>
             </div>
         </div>
     </div>
-    
+
+    <!-- Enrollment History Table -->
     <div class="bg-white rounded-xl shadow-sm border border-neutral-200">
+        <div class="px-6 py-4 border-b border-neutral-200">
+            <h3 class="text-lg font-bold text-neutral-900 font-subheader">Enrollment History</h3>
+            <p class="text-sm text-neutral-600 font-body">Complete history of client program enrollments</p>
+        </div>
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-neutral-200">
                 <thead class="bg-neutral-50">
@@ -112,7 +108,7 @@
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Start Date</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">End Date</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Status</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Actions</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Duration</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-neutral-200">
@@ -146,25 +142,27 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             {% if enrollment.end_date %}
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral-100 text-neutral-800">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-lime text-white">
                                     Completed
                                 </span>
                             {% else %}
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-lime text-neutral-800">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-sky text-white">
                                     Active
                                 </span>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold">
-                            <a href="{% url 'core:enrollments_detail' enrollment.external_id %}" class="text-brand-sky hover:text-brand-darkBlue mr-3 font-body">View</a>
-                            <a href="{% url 'core:enrollments_edit' enrollment.external_id %}" class="text-neutral-600 hover:text-neutral-900 mr-3 font-body">Edit</a>
-                            <a href="{% url 'core:enrollments_delete' enrollment.external_id %}" class="text-accent-500 hover:text-accent-600 font-body">Delete</a>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {% if enrollment.end_date %}
+                                {{ enrollment.start_date|timesince:enrollment.end_date }}
+                            {% else %}
+                                {{ enrollment.start_date|timesince }}
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
                         <td colspan="7" class="px-6 py-4 text-center text-neutral-500 font-body">
-                            No enrollments found. <a href="{% url 'core:enrollments_create' %}" class="text-brand-sky hover:text-brand-darkBlue font-bold">Create your first enrollment</a>
+                            No enrollment history found.
                         </td>
                     </tr>
                     {% endfor %}
