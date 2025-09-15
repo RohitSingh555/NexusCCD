@@ -121,28 +121,73 @@
                 </div>
                 
                 <div>
-                    <label for="{{ form.race.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Race</label>
-                    <input type="text" name="{{ form.race.name }}" id="{{ form.race.id_for_label }}" value="{{ form.race.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.race.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.race.errors.0 }}</div>
+                    <label for="{{ form.ethnicity.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Ethnicity</label>
+                    <div class="space-y-2">
+                        <div class="flex items-center space-x-2">
+                            <input type="text" x-model="newEthnicity" @keydown.enter.prevent="addEthnicity()" placeholder="Add an ethnicity" class="flex-1 px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            <button type="button" @click="addEthnicity()" class="px-4 py-2 bg-brand-sky text-white text-sm font-bold rounded-lg hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-brand-sky transition-all duration-200">
+                                Add
+                            </button>
+                        </div>
+                        <div class="flex flex-wrap gap-2" x-show="ethnicities.length > 0">
+                            <template x-for="(ethnicity, index) in ethnicities" :key="index">
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-neutral-100 text-neutral-800">
+                                    <span x-text="ethnicity"></span>
+                                    <button type="button" @click="removeEthnicity(index)" class="ml-2 text-neutral-500 hover:text-red-600">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                    </button>
+                                </span>
+                            </template>
+                        </div>
+                        <input type="hidden" name="ethnicity" :value="JSON.stringify(ethnicities)">
+                    </div>
+                    {% if form.ethnicity.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.ethnicity.errors.0 }}</div>
                     {% endif %}
                 </div>
                 
                 <div>
-                    <label for="{{ form.immigration_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Immigration Status</label>
-                    <select name="{{ form.immigration_status.name }}" id="{{ form.immigration_status.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Immigration Status</option>
-                        <option value="Citizen" {% if form.immigration_status.value == 'Citizen' %}selected{% endif %}>Citizen</option>
-                        <option value="Permanent Resident" {% if form.immigration_status.value == 'Permanent Resident' %}selected{% endif %}>Permanent Resident</option>
-                        <option value="Refugee" {% if form.immigration_status.value == 'Refugee' %}selected{% endif %}>Refugee</option>
-                        <option value="Temporary Resident" {% if form.immigration_status.value == 'Temporary Resident' %}selected{% endif %}>Temporary Resident</option>
-                        <option value="Student" {% if form.immigration_status.value == 'Student' %}selected{% endif %}>Student</option>
-                        <option value="Worker" {% if form.immigration_status.value == 'Worker' %}selected{% endif %}>Worker</option>
-                        <option value="Other" {% if form.immigration_status.value == 'Other' %}selected{% endif %}>Other</option>
-                        <option value="Unknown" {% if form.immigration_status.value == 'Unknown' %}selected{% endif %}>Unknown</option>
+                    <label for="{{ form.citizenship_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Citizenship Status</label>
+                    <select name="{{ form.citizenship_status.name }}" id="{{ form.citizenship_status.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Citizenship Status</option>
+                        <option value="Citizen" {% if form.citizenship_status.value == 'Citizen' %}selected{% endif %}>Citizen</option>
+                        <option value="Permanent Resident" {% if form.citizenship_status.value == 'Permanent Resident' %}selected{% endif %}>Permanent Resident</option>
+                        <option value="Refugee" {% if form.citizenship_status.value == 'Refugee' %}selected{% endif %}>Refugee</option>
+                        <option value="Temporary Resident" {% if form.citizenship_status.value == 'Temporary Resident' %}selected{% endif %}>Temporary Resident</option>
+                        <option value="Student" {% if form.citizenship_status.value == 'Student' %}selected{% endif %}>Student</option>
+                        <option value="Worker" {% if form.citizenship_status.value == 'Worker' %}selected{% endif %}>Worker</option>
+                        <option value="Other" {% if form.citizenship_status.value == 'Other' %}selected{% endif %}>Other</option>
+                        <option value="Unknown" {% if form.citizenship_status.value == 'Unknown' %}selected{% endif %}>Unknown</option>
                     </select>
-                    {% if form.immigration_status.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.immigration_status.errors.0 }}</div>
+                    {% if form.citizenship_status.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.citizenship_status.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.indigenous_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Indigenous Status</label>
+                    <select name="{{ form.indigenous_status.name }}" id="{{ form.indigenous_status.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Indigenous Status</option>
+                        <option value="First Nations" {% if form.indigenous_status.value == 'First Nations' %}selected{% endif %}>First Nations</option>
+                        <option value="Métis" {% if form.indigenous_status.value == 'Métis' %}selected{% endif %}>Métis</option>
+                        <option value="Inuit" {% if form.indigenous_status.value == 'Inuit' %}selected{% endif %}>Inuit</option>
+                        <option value="Indigenous - Other" {% if form.indigenous_status.value == 'Indigenous - Other' %}selected{% endif %}>Indigenous - Other</option>
+                        <option value="Non-Indigenous" {% if form.indigenous_status.value == 'Non-Indigenous' %}selected{% endif %}>Non-Indigenous</option>
+                        <option value="Prefer not to say" {% if form.indigenous_status.value == 'Prefer not to say' %}selected{% endif %}>Prefer not to say</option>
+                        <option value="Unknown" {% if form.indigenous_status.value == 'Unknown' %}selected{% endif %}>Unknown</option>
+                    </select>
+                    {% if form.indigenous_status.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.indigenous_status.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.country_of_birth.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Country of Birth</label>
+                    <input type="text" name="{{ form.country_of_birth.name }}" id="{{ form.country_of_birth.id_for_label }}" value="{{ form.country_of_birth.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.country_of_birth.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.country_of_birth.errors.0 }}</div>
                     {% endif %}
                 </div>
                 
@@ -189,20 +234,17 @@
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <label for="{{ form.phone_number.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Phone Number</label>
-                    <input type="tel" name="{{ form.phone_number.name }}" id="{{ form.phone_number.id_for_label }}" value="{{ form.phone_number.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.phone_number.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.phone_number.errors.0 }}</div>
-                    {% endif %}
+                    <label for="contact_phone" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Contact Information: Phone #</label>
+                    <input type="tel" x-model="contactInfo.phone" placeholder="Enter phone number" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                 </div>
                 
                 <div>
-                    <label for="{{ form.email.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Email Address</label>
-                    <input type="email" name="{{ form.email.name }}" id="{{ form.email.id_for_label }}" value="{{ form.email.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.email.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.email.errors.0 }}</div>
-                    {% endif %}
+                    <label for="contact_email" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Contact Information: Email Address</label>
+                    <input type="email" x-model="contactInfo.email" placeholder="Enter email address" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                 </div>
+                
+                <!-- Hidden input for form submission -->
+                <input type="hidden" name="contact_information" :value="JSON.stringify(contactInfo)">
                 
                 <div class="md:col-span-2">
                     <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Addresses</label>
@@ -342,6 +384,9 @@
         return {
             languages: {{ form.languages_spoken.value|default:"[]"|safe }},
             newLanguage: '',
+            ethnicities: {{ form.ethnicity.value|default:"[]"|safe }},
+            newEthnicity: '',
+            contactInfo: {{ form.contact_information.value|default:"{}"|safe }},
             
             init() {
                 // Initialize languages from form data
@@ -352,6 +397,26 @@
                         this.languages = [];
                     }
                 }
+                
+                // Initialize ethnicities from form data
+                if (typeof this.ethnicities === 'string') {
+                    try {
+                        this.ethnicities = JSON.parse(this.ethnicities);
+                    } catch (e) {
+                        this.ethnicities = [];
+                    }
+                }
+                
+                // Initialize contact info from form data
+                if (typeof this.contactInfo === 'string') {
+                    try {
+                        this.contactInfo = JSON.parse(this.contactInfo);
+                    } catch (e) {
+                        this.contactInfo = { phone: '', email: '' };
+                    }
+                }
+                if (!this.contactInfo.phone) this.contactInfo.phone = '';
+                if (!this.contactInfo.email) this.contactInfo.email = '';
             },
             
             addLanguage() {
@@ -363,6 +428,17 @@
             
             removeLanguage(index) {
                 this.languages.splice(index, 1);
+            },
+            
+            addEthnicity() {
+                if (this.newEthnicity.trim() && !this.ethnicities.includes(this.newEthnicity.trim())) {
+                    this.ethnicities.push(this.newEthnicity.trim());
+                    this.newEthnicity = '';
+                }
+            },
+            
+            removeEthnicity(index) {
+                this.ethnicities.splice(index, 1);
             }
         }
     }

@@ -123,11 +123,19 @@ class StaffRole(BaseModel):
 
 
 class Program(BaseModel):
+    STATUS_CHOICES = [
+        ('active', 'Active'),
+        ('inactive', 'Inactive'),
+        ('suggested', 'Suggested'),
+    ]
+    
     name = models.CharField(max_length=255, db_index=True)
     department = models.ForeignKey(Department, on_delete=models.CASCADE, db_index=True)
     location = models.CharField(max_length=255, db_index=True)
     capacity_current = models.PositiveIntegerField(default=0)
     capacity_effective_date = models.DateField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', db_index=True)
+    description = models.TextField(null=True, blank=True)
     
     class Meta:
         db_table = 'programs'
@@ -158,11 +166,12 @@ class Client(BaseModel):
     gender = models.CharField(max_length=50, db_index=True)
     sexual_orientation = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     languages_spoken = models.JSONField(default=list)
-    race = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    immigration_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    ethnicity = models.JSONField(default=list, help_text="List of ethnicities (multi-select)")
+    citizenship_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    indigenous_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    country_of_birth = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     image = models.URLField(max_length=500, null=True, blank=True)
-    phone_number = models.CharField(max_length=20, null=True, blank=True, db_index=True)
-    email = models.EmailField(null=True, blank=True, db_index=True)
+    contact_information = models.JSONField(default=dict, help_text="Contact information with phone and email")
     addresses = models.JSONField(default=list, help_text="List of addresses with type, street, city, state, zip, country")
     uid_external = models.CharField(max_length=255, null=True, blank=True, unique=True, db_index=True)
     
@@ -172,13 +181,24 @@ class Client(BaseModel):
             self.uid_external = str(uuid.uuid4())
         super().save(*args, **kwargs)
     
+    @property
+    def email(self):
+        """Get email from contact_information"""
+        return self.contact_information.get('email', '') if self.contact_information else ''
+    
+    @property
+    def phone(self):
+        """Get phone from contact_information"""
+        return self.contact_information.get('phone', '') if self.contact_information else ''
+    
     class Meta:
         db_table = 'clients'
         indexes = [
             models.Index(fields=['first_name', 'last_name', 'dob'], name='client_name_dob_idx'),
             models.Index(fields=['uid_external'], name='client_uid_external_idx'),
-            models.Index(fields=['email'], name='client_email_idx'),
-            models.Index(fields=['phone_number'], name='client_phone_idx'),
+            models.Index(fields=['citizenship_status'], name='client_citizenship_status_idx'),
+            models.Index(fields=['indigenous_status'], name='client_indigenous_status_idx'),
+            models.Index(fields=['country_of_birth'], name='client_country_of_birth_idx'),
         ]
     
     def __str__(self):
@@ -186,10 +206,20 @@ class Client(BaseModel):
 
 
 class ClientProgramEnrollment(BaseModel):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+        ('suspended', 'Suspended'),
+    ]
+    
     client = models.ForeignKey(Client, on_delete=models.CASCADE, db_index=True)
     program = models.ForeignKey(Program, on_delete=models.CASCADE, db_index=True)
     start_date = models.DateField(db_index=True)
     end_date = models.DateField(null=True, blank=True, db_index=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
+    notes = models.TextField(null=True, blank=True)
     
     class Meta:
         db_table = 'client_program_enrollments'
@@ -201,20 +231,42 @@ class ClientProgramEnrollment(BaseModel):
         ]
     
     def __str__(self):
-        return f"{self.client} - {self.program.name}"
+        return f"{self.client} - {self.program.name} ({self.status})"
 
 
 class Intake(BaseModel):
+    SOURCE_CHOICES = [
+        ('SMIS', 'SMIS'),
+        ('EMHWare', 'EMHWare'),
+        ('FFAI', 'FFAI'),
+    ]
+    
+    HOUSING_STATUS_CHOICES = [
+        ('homeless', 'Homeless'),
+        ('at_risk', 'At Risk of Homelessness'),
+        ('stably_housed', 'Stably Housed'),
+        ('unknown', 'Unknown'),
+    ]
+    
     client = models.ForeignKey(Client, on_delete=models.CASCADE, db_index=True)
     program = models.ForeignKey(Program, on_delete=models.CASCADE, db_index=True)
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, db_index=True, null=True, blank=True)
     intake_date = models.DateField(db_index=True)
-    source_system = models.CharField(max_length=100, db_index=True)
+    intake_database = models.CharField(max_length=100, db_index=True, default='CCD')
+    referral_source = models.CharField(max_length=20, choices=SOURCE_CHOICES, db_index=True, default='SMIS')
+    intake_housing_status = models.CharField(max_length=20, choices=HOUSING_STATUS_CHOICES, db_index=True, default='unknown')
+    notes = models.TextField(null=True, blank=True)
     
     class Meta:
         db_table = 'intakes'
+        indexes = [
+            models.Index(fields=['intake_date'], name='intake_date_idx'),
+            models.Index(fields=['referral_source'], name='intake_source_idx'),
+            models.Index(fields=['intake_housing_status'], name='intake_housing_idx'),
+        ]
     
     def __str__(self):
-        return f"{self.client} - {self.program.name} - {self.intake_date}"
+        return f"{self.client} - {self.program.name} ({self.intake_date})"
 
 
 class Discharge(BaseModel):

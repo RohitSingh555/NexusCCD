@@ -1,6 +1,10 @@
 from django.shortcuts import render
 from django.views.generic import ListView, TemplateView
 from django.http import HttpResponse
+from django.utils import timezone
+from django.db import models
+from datetime import datetime, date
+import csv
 from core.models import Client, Program, ClientProgramEnrollment, PendingChange
 
 class ReportListView(ListView):
@@ -37,29 +41,133 @@ class VacancyTrackerView(TemplateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        
+        # Get date filter from query parameters
+        as_of_date = self.request.GET.get('as_of_date')
+        if as_of_date:
+            try:
+                as_of_date = datetime.strptime(as_of_date, '%Y-%m-%d').date()
+            except ValueError:
+                as_of_date = timezone.now().date()
+        else:
+            as_of_date = timezone.now().date()
+        
+        # Get department filter
+        department_id = self.request.GET.get('department')
+        
         programs = Program.objects.all()
+        if department_id:
+            programs = programs.filter(department_id=department_id)
+        
         program_data = []
         for program in programs:
+            # Get active enrollments as of the specified date
             active_enrollments = ClientProgramEnrollment.objects.filter(
-                program=program, 
-                end_date__isnull=True
+                program=program,
+                start_date__lte=as_of_date
+            ).filter(
+                models.Q(end_date__isnull=True) | models.Q(end_date__gt=as_of_date)
             ).count()
+            
+            # Use capacity_current for now (can be enhanced to use capacity_effective_date)
+            capacity = program.capacity_current
+            occupied = active_enrollments
+            vacant = capacity - occupied
+            
             program_data.append({
                 'program': program,
-                'capacity': program.capacity_current,
-                'occupied': active_enrollments,
-                'vacant': program.capacity_current - active_enrollments
+                'capacity': capacity,
+                'occupied': occupied,
+                'vacant': vacant,
+                'utilization': round((occupied / capacity * 100) if capacity > 0 else 0, 1)
             })
+        
         context['program_data'] = program_data
+        context['as_of_date'] = as_of_date
+        context['departments'] = Program.objects.values_list('department_id', 'department__name').distinct()
+        context['selected_department'] = department_id
         return context
 
 class ReportExportView(TemplateView):
     def get(self, request, report_type):
         if report_type == 'organizational-summary':
-            return HttpResponse("CSV export for organizational summary", content_type='text/csv')
+            return self.export_organizational_summary(request)
         elif report_type == 'vacancy-tracker':
-            return HttpResponse("CSV export for vacancy tracker", content_type='text/csv')
+            return self.export_vacancy_tracker(request)
         return HttpResponse("Report not found", status=404)
+    
+    def export_vacancy_tracker(self, request):
+        # Get the same data as the view
+        as_of_date = request.GET.get('as_of_date')
+        if as_of_date:
+            try:
+                as_of_date = datetime.strptime(as_of_date, '%Y-%m-%d').date()
+            except ValueError:
+                as_of_date = timezone.now().date()
+        else:
+            as_of_date = timezone.now().date()
+        
+        department_id = request.GET.get('department')
+        
+        programs = Program.objects.all()
+        if department_id:
+            programs = programs.filter(department_id=department_id)
+        
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="vacancy_tracker_{as_of_date.strftime("%Y%m%d")}.csv"'
+        
+        writer = csv.writer(response)
+        
+        # Write header
+        writer.writerow([
+            'Program Name',
+            'Department',
+            'Location',
+            'Capacity',
+            'Occupied',
+            'Available',
+            'Utilization %',
+            'As Of Date'
+        ])
+        
+        # Write data rows
+        for program in programs:
+            active_enrollments = ClientProgramEnrollment.objects.filter(
+                program=program,
+                start_date__lte=as_of_date
+            ).filter(
+                models.Q(end_date__isnull=True) | models.Q(end_date__gt=as_of_date)
+            ).count()
+            
+            capacity = program.capacity_current
+            occupied = active_enrollments
+            vacant = capacity - occupied
+            utilization = round((occupied / capacity * 100) if capacity > 0 else 0, 1)
+            
+            writer.writerow([
+                program.name,
+                program.department.name if program.department else '',
+                program.location,
+                capacity,
+                occupied,
+                vacant,
+                f"{utilization}%",
+                as_of_date.strftime('%Y-%m-%d')
+            ])
+        
+        return response
+    
+    def export_organizational_summary(self, request):
+        # Placeholder for organizational summary export
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="organizational_summary.csv"'
+        writer = csv.writer(response)
+        writer.writerow(['Report', 'Value'])
+        writer.writerow(['Total Clients', Client.objects.count()])
+        writer.writerow(['Total Programs', Program.objects.count()])
+        writer.writerow(['Active Enrollments', ClientProgramEnrollment.objects.filter(end_date__isnull=True).count()])
+        return response
 
 
 # Additional Report Views

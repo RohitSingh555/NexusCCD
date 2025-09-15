@@ -56,18 +56,18 @@ class ProgramStaffAdmin(admin.ModelAdmin):
 @admin.register(Client)
 class ClientAdmin(admin.ModelAdmin):
     list_display = ['first_name', 'last_name', 'preferred_name', 'dob', 'gender', 'created_at']
-    search_fields = ['first_name', 'last_name', 'preferred_name', 'alias', 'email', 'phone_number']
-    list_filter = ['gender', 'race', 'immigration_status', 'created_at']
+    search_fields = ['first_name', 'last_name', 'preferred_name', 'alias', 'country_of_birth']
+    list_filter = ['gender', 'citizenship_status', 'indigenous_status', 'country_of_birth', 'created_at']
     readonly_fields = ['external_id', 'created_at', 'updated_at']
     fieldsets = (
         ('Basic Information', {
             'fields': ('first_name', 'last_name', 'preferred_name', 'alias', 'dob')
         }),
         ('Demographics', {
-            'fields': ('gender', 'sexual_orientation', 'race', 'immigration_status', 'languages_spoken')
+            'fields': ('gender', 'sexual_orientation', 'ethnicity', 'citizenship_status', 'indigenous_status', 'country_of_birth', 'languages_spoken')
         }),
         ('Contact Information', {
-            'fields': ('phone_number', 'email', 'address', 'image')
+            'fields': ('contact_information', 'addresses', 'image')
         }),
         ('System Information', {
             'fields': ('uid_external', 'external_id', 'created_at', 'updated_at')
@@ -77,17 +77,17 @@ class ClientAdmin(admin.ModelAdmin):
 
 @admin.register(ClientProgramEnrollment)
 class ClientProgramEnrollmentAdmin(admin.ModelAdmin):
-    list_display = ['client', 'program', 'start_date', 'end_date', 'created_at']
+    list_display = ['client', 'program', 'start_date', 'end_date', 'status', 'created_at']
     search_fields = ['client__first_name', 'client__last_name', 'program__name']
-    list_filter = ['start_date', 'end_date', 'created_at']
+    list_filter = ['start_date', 'end_date', 'status', 'created_at']
     readonly_fields = ['external_id', 'created_at', 'updated_at']
 
 
 @admin.register(Intake)
 class IntakeAdmin(admin.ModelAdmin):
-    list_display = ['client', 'program', 'intake_date', 'source_system', 'created_at']
-    search_fields = ['client__first_name', 'client__last_name', 'program__name', 'source_system']
-    list_filter = ['intake_date', 'source_system', 'created_at']
+    list_display = ['client', 'program', 'intake_date', 'referral_source', 'intake_housing_status', 'created_at']
+    search_fields = ['client__first_name', 'client__last_name', 'program__name', 'intake_database']
+    list_filter = ['intake_date', 'referral_source', 'intake_housing_status', 'created_at']
     readonly_fields = ['external_id', 'created_at', 'updated_at']
 
 

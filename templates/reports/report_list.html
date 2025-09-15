@@ -163,6 +163,20 @@
             </div>
             <div class="p-6">
                 <div class="space-y-4">
+                    <a href="{% url 'reports:organizational_summary' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
+                        <div class="flex-shrink-0">
+                            <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-bold text-neutral-900 font-body">Organizational Summary</p>
+                            <p class="text-xs text-neutral-500 font-body">Client demographics and program statistics</p>
+                        </div>
+                    </a>
+
                     <a href="{% url 'reports:program_capacity' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
                         <div class="flex-shrink-0">
                             <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
@@ -191,9 +205,23 @@
                         </div>
                     </a>
 
-                    <a href="{% url 'reports:department_summary' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
+                    <a href="{% url 'reports:vacancy_tracker' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
                         <div class="flex-shrink-0">
                             <div class="w-10 h-10 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
+                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-bold text-neutral-900 font-body">Vacancy Tracker</p>
+                            <p class="text-xs text-neutral-500 font-body">Program capacity and enrollment tracking</p>
+                        </div>
+                    </a>
+
+                    <a href="{% url 'reports:department_summary' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
+                        <div class="flex-shrink-0">
+                            <div class="w-10 h-10 bg-gradient-to-br from-accent-400 to-accent-600 rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
                                 <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                                 </svg>

@@ -1,0 +1,87 @@
+{% if is_paginated and paginator.count >= 10 %}
+<div class="flex items-center justify-between px-6 py-4 bg-white border-t border-neutral-100">
+    <!-- Mobile pagination -->
+    <div class="flex justify-between flex-1 sm:hidden">
+        {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}" class="inline-flex items-center px-3 py-2 text-sm font-medium text-neutral-600 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 hover:text-neutral-900 transition-colors duration-200">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+                Previous
+            </a>
+        {% endif %}
+        {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}" class="inline-flex items-center px-3 py-2 text-sm font-medium text-neutral-600 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 hover:text-neutral-900 transition-colors duration-200">
+                Next
+                <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </a>
+        {% endif %}
+    </div>
+
+    <!-- Desktop pagination -->
+    <div class="hidden sm:flex sm:items-center sm:justify-between sm:flex-1">
+        <div class="flex items-center space-x-2">
+            <p class="text-sm text-neutral-600">
+                Showing
+                <span class="font-semibold text-neutral-900">{{ page_obj.start_index }}</span>
+                to
+                <span class="font-semibold text-neutral-900">{{ page_obj.end_index }}</span>
+                of
+                <span class="font-semibold text-neutral-900">{{ paginator.count }}</span>
+                results
+            </p>
+        </div>
+        
+        <nav class="flex items-center space-x-1" aria-label="Pagination">
+            <!-- Previous button -->
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" class="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-neutral-600 bg-white border border-neutral-200 rounded-full hover:bg-neutral-50 hover:text-neutral-900 transition-all duration-200 hover:scale-105">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                </a>
+            {% else %}
+                <span class="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-neutral-300 bg-neutral-50 border border-neutral-200 rounded-full cursor-not-allowed">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                </span>
+            {% endif %}
+
+            <!-- Page numbers -->
+            {% for i in paginator.page_range %}
+                {% if page_obj.number == i %}
+                    <a href="?page={{ i }}" aria-current="page" class="inline-flex items-center justify-center w-8 h-8 text-sm font-semibold text-white bg-brand-sky border border-brand-sky rounded-full hover:bg-brand-darkBlue transition-all duration-200 hover:scale-105 shadow-sm">
+                        {{ i }}
+                    </a>
+                {% elif i > page_obj.number|add:'-3' and i < page_obj.number|add:'3' or i == 1 or i == paginator.num_pages %}
+                    <a href="?page={{ i }}" class="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-neutral-600 bg-white border border-neutral-200 rounded-full hover:bg-neutral-50 hover:text-neutral-900 transition-all duration-200 hover:scale-105">
+                        {{ i }}
+                    </a>
+                {% elif i == page_obj.number|add:'-3' or i == page_obj.number|add:'3' %}
+                    <span class="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-neutral-400">
+                        ...
+                    </span>
+                {% endif %}
+            {% endfor %}
+
+            <!-- Next button -->
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" class="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-neutral-600 bg-white border border-neutral-200 rounded-full hover:bg-neutral-50 hover:text-neutral-900 transition-all duration-200 hover:scale-105">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </a>
+            {% else %}
+                <span class="inline-flex items-center justify-center w-8 h-8 text-sm font-medium text-neutral-300 bg-neutral-50 border border-neutral-200 rounded-full cursor-not-allowed">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                </span>
+            {% endif %}
+        </nav>
+    </div>
+</div>
+{% endif %}

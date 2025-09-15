@@ -7,7 +7,7 @@ class StaffListView(ListView):
     model = Staff
     template_name = 'staff/staff_list.html'
     context_object_name = 'staff'
-    paginate_by = 20
+    paginate_by = 10
 
 class StaffDetailView(DetailView):
     model = Staff

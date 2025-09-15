@@ -6,7 +6,9 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
-from core.models import Client
+from django.views.decorators.csrf import csrf_protect
+from django.utils.decorators import method_decorator
+from core.models import Client, Program, Department, Intake, ClientProgramEnrollment
 from .forms import ClientForm
 import pandas as pd
 import json
@@ -22,7 +24,7 @@ class ClientListView(ListView):
     model = Client
     template_name = 'clients/client_list.html'
     context_object_name = 'clients'
-    paginate_by = 20
+    paginate_by = 10
 
 class ClientDetailView(DetailView):
     model = Client
@@ -95,6 +97,9 @@ def upload_clients(request):
                 'success': False, 
                 'error': f'Missing required columns: {", ".join(missing_columns)}'
             }, status=400)
+        
+        # Check for intake-related columns
+        has_intake_data = any(col in df.columns for col in ['program_name', 'source', 'intake_date'])
         
         # Process the data
         created_count = 0
@@ -172,6 +177,94 @@ def upload_clients(request):
             
             # If we get here, the data is essentially the same
             return True
+        
+        def process_intake_data(client, row, index):
+            """Process intake data for a client"""
+            try:
+                program_name = str(row.get('program_name', '')).strip() if pd.notna(row.get('program_name', '')) else ''
+                program_department = str(row.get('program_department', '')).strip() if pd.notna(row.get('program_department', '')) else ''
+                source = str(row.get('source', '')).strip() if pd.notna(row.get('source', '')) else 'SMIS'
+                intake_date = pd.to_datetime(row.get('intake_date', datetime.now().date())).date() if pd.notna(row.get('intake_date', '')) else datetime.now().date()
+                intake_database = str(row.get('intake_database', '')).strip() if pd.notna(row.get('intake_database', '')) else 'CCD'
+                referral_source = str(row.get('referral_source', '')).strip() if pd.notna(row.get('referral_source', '')) else source
+                intake_housing_status = str(row.get('intake_housing_status', '')).strip() if pd.notna(row.get('intake_housing_status', '')) else 'unknown'
+                
+                if not program_name:
+                    logger.warning(f"No program name provided for client {client.first_name} {client.last_name}")
+                    return
+                
+                # Get or create department
+                department = None
+                if program_department:
+                    department, created = Department.objects.get_or_create(
+                        name=program_department,
+                        defaults={'owner': 'System'}
+                    )
+                    if created:
+                        logger.info(f"Created new department: {program_department}")
+                else:
+                    # Default to Social Services if no department specified
+                    department, created = Department.objects.get_or_create(
+                        name='Social Services',
+                        defaults={'owner': 'System'}
+                    )
+                
+                # Get or create program
+                program, created = Program.objects.get_or_create(
+                    name=program_name,
+                    department=department,
+                    defaults={
+                        'location': 'TBD',
+                        'status': 'suggested' if created else 'active',
+                        'description': f'Program created from intake data - {source}'
+                    }
+                )
+                
+                if created:
+                    logger.info(f"Created new program: {program_name} (status: suggested)")
+                else:
+                    # If program exists but is suggested, keep it as suggested
+                    if program.status == 'suggested':
+                        logger.info(f"Program {program_name} already exists with suggested status")
+                
+                # Create intake record
+                intake, created = Intake.objects.get_or_create(
+                    client=client,
+                    program=program,
+                    defaults={
+                        'department': department,
+                        'intake_date': intake_date,
+                        'intake_database': intake_database,
+                        'referral_source': referral_source,
+                        'intake_housing_status': intake_housing_status,
+                        'notes': f'Intake created from {source} upload'
+                    }
+                )
+                
+                if created:
+                    logger.info(f"Created intake record for {client.first_name} {client.last_name} in {program_name}")
+                else:
+                    logger.info(f"Intake record already exists for {client.first_name} {client.last_name} in {program_name}")
+                
+                # Create enrollment with pending status
+                enrollment, created = ClientProgramEnrollment.objects.get_or_create(
+                    client=client,
+                    program=program,
+                    defaults={
+                        'start_date': intake_date,
+                        'status': 'pending',
+                        'notes': f'Enrollment created from {source} intake'
+                    }
+                )
+                
+                if created:
+                    logger.info(f"Created pending enrollment for {client.first_name} {client.last_name} in {program_name}")
+                else:
+                    logger.info(f"Enrollment already exists for {client.first_name} {client.last_name} in {program_name}")
+                    
+            except Exception as e:
+                logger.error(f"Error processing intake data for row {index + 2}: {str(e)}")
+                errors.append(f"Row {index + 2} (Intake): {str(e)}")
         
         def find_duplicate_client(client_data):
             """Find duplicate client based on email, phone, and name similarity"""
@@ -374,6 +467,10 @@ def upload_clients(request):
                     client = Client.objects.create(**client_data)
                     created_count += 1
                     logger.info(f"Created new client: {client.email or client.phone_number}")
+                
+                # Process intake data if available
+                if has_intake_data and (duplicate_client is None or not is_duplicate):
+                    process_intake_data(client, row, index)
                     
             except Exception as e:
                 errors.append(f"Row {index + 2}: {str(e)}")
@@ -423,7 +520,14 @@ def download_sample(request, file_type):
             'city': 'New York',
             'state': 'NY',
             'zip': '10001',
-            'country': 'USA'
+            'country': 'USA',
+            'source': 'SMIS',
+            'program_name': 'Housing Assistance Program',
+            'program_department': 'Social Services',
+            'intake_date': '2024-01-15',
+            'intake_database': 'CCD',
+            'referral_source': 'SMIS',
+            'intake_housing_status': 'homeless'
         },
         {
             'first_name': 'Maria',
@@ -442,7 +546,14 @@ def download_sample(request, file_type):
             'city': 'Los Angeles',
             'state': 'CA',
             'zip': '90210',
-            'country': 'USA'
+            'country': 'USA',
+            'source': 'EMHWare',
+            'program_name': 'Job Training Program',
+            'program_department': 'Employment',
+            'intake_date': '2024-01-16',
+            'intake_database': 'CCD',
+            'referral_source': 'EMHWare',
+            'intake_housing_status': 'at_risk'
         },
         {
             'first_name': 'David',
@@ -461,7 +572,14 @@ def download_sample(request, file_type):
             'city': 'Chicago',
             'state': 'IL',
             'zip': '60601',
-            'country': 'USA'
+            'country': 'USA',
+            'source': 'FFAI',
+            'program_name': 'Mental Health Services',
+            'program_department': 'Healthcare',
+            'intake_date': '2024-01-17',
+            'intake_database': 'CCD',
+            'referral_source': 'FFAI',
+            'intake_housing_status': 'homeless'
         },
         {
             'first_name': 'Sarah',
@@ -480,7 +598,14 @@ def download_sample(request, file_type):
             'city': 'Seattle',
             'state': 'WA',
             'zip': '98101',
-            'country': 'USA'
+            'country': 'USA',
+            'source': 'FFAI',
+            'program_name': 'Mental Health Services',
+            'program_department': 'Healthcare',
+            'intake_date': '2024-01-17',
+            'intake_database': 'CCD',
+            'referral_source': 'FFAI',
+            'intake_housing_status': 'homeless'
         },
         {
             'first_name': 'Michael',
@@ -499,7 +624,14 @@ def download_sample(request, file_type):
             'city': 'Boston',
             'state': 'MA',
             'zip': '02101',
-            'country': 'USA'
+            'country': 'USA',
+            'source': 'FFAI',
+            'program_name': 'Mental Health Services',
+            'program_department': 'Healthcare',
+            'intake_date': '2024-01-17',
+            'intake_database': 'CCD',
+            'referral_source': 'FFAI',
+            'intake_housing_status': 'homeless'
         },
         {
             'first_name': 'Lisa',
@@ -518,7 +650,14 @@ def download_sample(request, file_type):
             'city': 'Phoenix',
             'state': 'AZ',
             'zip': '85001',
-            'country': 'USA'
+            'country': 'USA',
+            'source': 'FFAI',
+            'program_name': 'Mental Health Services',
+            'program_department': 'Healthcare',
+            'intake_date': '2024-01-17',
+            'intake_database': 'CCD',
+            'referral_source': 'FFAI',
+            'intake_housing_status': 'homeless'
         },
         {
             'first_name': 'James',
@@ -537,7 +676,14 @@ def download_sample(request, file_type):
             'city': 'Denver',
             'state': 'CO',
             'zip': '80201',
-            'country': 'USA'
+            'country': 'USA',
+            'source': 'FFAI',
+            'program_name': 'Mental Health Services',
+            'program_department': 'Healthcare',
+            'intake_date': '2024-01-17',
+            'intake_database': 'CCD',
+            'referral_source': 'FFAI',
+            'intake_housing_status': 'homeless'
         },
         {
             'first_name': 'Jennifer',
@@ -556,7 +702,14 @@ def download_sample(request, file_type):
             'city': 'Miami',
             'state': 'FL',
             'zip': '33101',
-            'country': 'USA'
+            'country': 'USA',
+            'source': 'FFAI',
+            'program_name': 'Mental Health Services',
+            'program_department': 'Healthcare',
+            'intake_date': '2024-01-17',
+            'intake_database': 'CCD',
+            'referral_source': 'FFAI',
+            'intake_housing_status': 'homeless'
         },
         {
             'first_name': 'Robert',
@@ -575,7 +728,14 @@ def download_sample(request, file_type):
             'city': 'Atlanta',
             'state': 'GA',
             'zip': '30301',
-            'country': 'USA'
+            'country': 'USA',
+            'source': 'FFAI',
+            'program_name': 'Mental Health Services',
+            'program_department': 'Healthcare',
+            'intake_date': '2024-01-17',
+            'intake_database': 'CCD',
+            'referral_source': 'FFAI',
+            'intake_housing_status': 'homeless'
         },
         {
             'first_name': 'Amanda',
@@ -619,3 +779,52 @@ def download_sample(request, file_type):
         return response
     else:
         return HttpResponse('Invalid file type', status=400)
+
+
+@csrf_protect
+@require_http_methods(["POST"])
+def bulk_delete_clients(request):
+    """Bulk delete clients"""
+    try:
+        import json
+        data = json.loads(request.body)
+        client_ids = data.get('client_ids', [])
+        
+        if not client_ids:
+            return JsonResponse({
+                'success': False, 
+                'error': 'No client IDs provided'
+            }, status=400)
+        
+        # Get clients to delete
+        clients_to_delete = Client.objects.filter(external_id__in=client_ids)
+        deleted_count = clients_to_delete.count()
+        
+        if deleted_count == 0:
+            return JsonResponse({
+                'success': False, 
+                'error': 'No clients found with provided IDs'
+            }, status=404)
+        
+        # Delete clients
+        clients_to_delete.delete()
+        
+        logger.info(f"Bulk deleted {deleted_count} clients: {client_ids}")
+        
+        return JsonResponse({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'Successfully deleted {deleted_count} client(s)'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False, 
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error in bulk delete: {str(e)}")
+        return JsonResponse({
+            'success': False, 
+            'error': f'An error occurred: {str(e)}'
+        }, status=500)

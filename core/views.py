@@ -229,7 +229,7 @@ class DepartmentListView(ListView):
     model = Department
     template_name = 'core/departments.html'
     context_object_name = 'departments'
-    paginate_by = 20
+    paginate_by = 10
     
     def get_queryset(self):
         return Department.objects.annotate(
@@ -294,7 +294,7 @@ class EnrollmentListView(ListView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollments.html'
     context_object_name = 'enrollments'
-    paginate_by = 20
+    paginate_by = 10
     
     def get_queryset(self):
         return ClientProgramEnrollment.objects.select_related(
@@ -374,7 +374,7 @@ class RestrictionListView(ListView):
     model = ServiceRestriction
     template_name = 'core/restrictions.html'
     context_object_name = 'restrictions'
-    paginate_by = 20
+    paginate_by = 10
     
     def get_queryset(self):
         return ServiceRestriction.objects.select_related(

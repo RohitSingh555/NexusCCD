@@ -102,12 +102,28 @@
                         <p class="text-lg text-neutral-900 font-body">{{ client.sexual_orientation|default:"—" }}</p>
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Race</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ client.race|default:"—" }}</p>
+                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Ethnicity</label>
+                        <div class="flex flex-wrap gap-2">
+                            {% for ethnicity in client.ethnicity %}
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-neutral-100 text-neutral-800">
+                                    {{ ethnicity }}
+                                </span>
+                            {% empty %}
+                                <p class="text-lg text-neutral-500 font-body">—</p>
+                            {% endfor %}
+                        </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Immigration Status</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ client.immigration_status|default:"—" }}</p>
+                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Citizenship Status</label>
+                        <p class="text-lg text-neutral-900 font-body">{{ client.citizenship_status|default:"—" }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Indigenous Status</label>
+                        <p class="text-lg text-neutral-900 font-body">{{ client.indigenous_status|default:"—" }}</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Country of Birth</label>
+                        <p class="text-lg text-neutral-900 font-body">{{ client.country_of_birth|default:"—" }}</p>
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Languages Spoken</label>
@@ -137,17 +153,17 @@
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Phone Number</label>
+                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Contact Information: Phone #</label>
                         <p class="text-lg text-neutral-900 font-body">
-                            {% if client.phone_number %}
-                                <a href="tel:{{ client.phone_number }}" class="text-brand-sky hover:text-brand-darkBlue">{{ client.phone_number }}</a>
+                            {% if client.phone %}
+                                <a href="tel:{{ client.phone }}" class="text-brand-sky hover:text-brand-darkBlue">{{ client.phone }}</a>
                             {% else %}
                                 —
                             {% endif %}
                         </p>
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Email Address</label>
+                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Contact Information: Email Address</label>
                         <p class="text-lg text-neutral-900 font-body">
                             {% if client.email %}
                                 <a href="mailto:{{ client.email }}" class="text-brand-sky hover:text-brand-darkBlue">{{ client.email }}</a>

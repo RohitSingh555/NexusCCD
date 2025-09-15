@@ -12,4 +12,5 @@ urlpatterns = [
     path('upload/', views.ClientUploadView.as_view(), name='upload'),
     path('upload/process/', views.upload_clients, name='upload_process'),
     path('download-sample/<str:file_type>/', views.download_sample, name='download_sample'),
+    path('bulk-delete/', views.bulk_delete_clients, name='bulk_delete'),
 ]
