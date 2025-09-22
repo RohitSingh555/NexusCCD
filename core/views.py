@@ -12,6 +12,9 @@ import json
 from django.contrib import messages
 from django.urls import reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+from datetime import datetime
 from .models import Client, Program, Staff, PendingChange, ClientProgramEnrollment, Department, ServiceRestriction
 from .forms import EnrollmentForm
 
@@ -93,27 +96,24 @@ def dashboard(request):
     # Get recent clients (last 10)
     recent_clients = Client.objects.order_by('-created_at')[:10]
     
-    # Get program status with enrollment counts
+    # Get program status with enrollment counts and capacity information
     programs = Program.objects.all()
     program_status = []
     
     for program in programs:
-        current_enrollments = ClientProgramEnrollment.objects.filter(
-            program=program,
-            start_date__lte=timezone.now().date(),
-            end_date__isnull=True
-        ).count()
-        
-        occupancy_percentage = 0
-        if program.capacity_current > 0:
-            occupancy_percentage = min((current_enrollments / program.capacity_current) * 100, 100)
+        current_enrollments = program.get_current_enrollments_count()
+        available_capacity = program.get_available_capacity()
+        capacity_percentage = program.get_capacity_percentage()
+        is_at_capacity = program.is_at_capacity()
         
         program_status.append({
             'name': program.name,
             'department': program.department,
             'capacity_current': program.capacity_current,
             'current_enrollments': current_enrollments,
-            'occupancy_percentage': occupancy_percentage
+            'available_capacity': available_capacity,
+            'capacity_percentage': round(capacity_percentage, 1),
+            'is_at_capacity': is_at_capacity
         })
     
     context = {
@@ -367,6 +367,68 @@ class EnrollmentDeleteView(DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, 'Enrollment deleted successfully.')
         return super().delete(request, *args, **kwargs)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def check_program_capacity(request):
+    """API endpoint to check program capacity for a specific date"""
+    try:
+        data = json.loads(request.body)
+        program_id = data.get('program_id')
+        start_date_str = data.get('start_date')
+        
+        if not program_id or not start_date_str:
+            return JsonResponse({
+                'success': False,
+                'error': 'Program ID and start date are required'
+            }, status=400)
+        
+        # Parse the date
+        try:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid date format. Use YYYY-MM-DD'
+            }, status=400)
+        
+        # Get the program
+        try:
+            program = Program.objects.get(id=program_id)
+        except Program.DoesNotExist:
+            return JsonResponse({
+                'success': False,
+                'error': 'Program not found'
+            }, status=404)
+        
+        # Get capacity information for the specific date
+        enrollments_on_date = program.get_enrollments_count_for_date(start_date)
+        available_capacity = program.get_available_capacity(start_date)
+        is_at_capacity = program.is_at_capacity(start_date)
+        capacity_percentage = program.get_capacity_percentage(start_date)
+        
+        return JsonResponse({
+            'success': True,
+            'program_name': program.name,
+            'capacity': program.capacity_current,
+            'enrollments_on_date': enrollments_on_date,
+            'available_capacity': available_capacity,
+            'is_at_capacity': is_at_capacity,
+            'capacity_percentage': round(capacity_percentage, 1),
+            'start_date_formatted': start_date.strftime('%B %d, %Y')
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Server error: {str(e)}'
+        }, status=500)
 
 
 # Service Restriction CRUD Views

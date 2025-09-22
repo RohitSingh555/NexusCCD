@@ -19,6 +19,9 @@ urlpatterns = [
     path('approvals/', views.approvals, name='approvals'),
     path('audit-log/', views.audit_log, name='audit_log'),
     
+    # API endpoints for capacity checking
+    path('check-program-capacity/', views.check_program_capacity, name='check_program_capacity'),
+    
     # Department CRUD views
     path('departments/create/', views.DepartmentCreateView.as_view(), name='departments_create'),
     path('departments/<uuid:external_id>/', views.DepartmentDetailView.as_view(), name='departments_detail'),

@@ -2,6 +2,7 @@ import uuid
 from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.base_user import BaseUserManager
+from django.utils import timezone
 
 
 class CustomUserManager(BaseUserManager):
@@ -142,6 +143,84 @@ class Program(BaseModel):
     
     def __str__(self):
         return f"{self.name} - {self.department.name}"
+    
+    def get_current_enrollments_count(self, as_of_date=None):
+        """Get the current number of active enrollments for this program"""
+        if as_of_date is None:
+            as_of_date = timezone.now().date()
+        
+        return ClientProgramEnrollment.objects.filter(
+            program=self,
+            start_date__lte=as_of_date
+        ).filter(
+            models.Q(end_date__isnull=True) | models.Q(end_date__gt=as_of_date)
+        ).count()
+    
+    def get_enrollments_count_for_date(self, enrollment_date):
+        """Get the number of enrollments that will be active on a specific date"""
+        return ClientProgramEnrollment.objects.filter(
+            program=self,
+            start_date__lte=enrollment_date
+        ).filter(
+            models.Q(end_date__isnull=True) | models.Q(end_date__gt=enrollment_date)
+        ).count()
+    
+    def get_available_capacity(self, as_of_date=None):
+        """Get the number of available spots in this program"""
+        if self.capacity_current <= 0:
+            return None  # No capacity limit
+        
+        if as_of_date:
+            current_enrollments = self.get_enrollments_count_for_date(as_of_date)
+        else:
+            current_enrollments = self.get_current_enrollments_count()
+        return max(0, self.capacity_current - current_enrollments)
+    
+    def is_at_capacity(self, as_of_date=None):
+        """Check if the program is at or over capacity"""
+        if self.capacity_current <= 0:
+            return False  # No capacity limit
+        
+        if as_of_date:
+            current_enrollments = self.get_enrollments_count_for_date(as_of_date)
+        else:
+            current_enrollments = self.get_current_enrollments_count()
+        return current_enrollments >= self.capacity_current
+    
+    def get_capacity_percentage(self, as_of_date=None):
+        """Get the capacity utilization percentage"""
+        if self.capacity_current <= 0:
+            return 0  # No capacity limit
+        
+        if as_of_date:
+            current_enrollments = self.get_enrollments_count_for_date(as_of_date)
+        else:
+            current_enrollments = self.get_current_enrollments_count()
+        return min(100, (current_enrollments / self.capacity_current) * 100)
+    
+    def can_enroll_client(self, client, start_date=None):
+        """Check if a client can be enrolled in this program"""
+        if start_date is None:
+            start_date = timezone.now().date()
+        
+        # Check if program is at capacity for the specific date
+        if self.is_at_capacity(start_date):
+            enrollments_on_date = self.get_enrollments_count_for_date(start_date)
+            return False, f"Program '{self.name}' is at full capacity on {start_date.strftime('%B %d, %Y')} ({enrollments_on_date}/{self.capacity_current} clients)."
+        
+        # Check if client is already enrolled in this program on the specific date
+        existing_enrollment = ClientProgramEnrollment.objects.filter(
+            client=client,
+            program=self,
+            start_date__lte=start_date
+        ).filter(
+            models.Q(end_date__isnull=True) | models.Q(end_date__gt=start_date)
+        ).exists()
+        
+        if existing_enrollment:
+            return False, f"Client is already enrolled in '{self.name}' program on {start_date.strftime('%B %d, %Y')}."
+        
+        return True, "Client can be enrolled."
 
 
 class ProgramStaff(BaseModel):

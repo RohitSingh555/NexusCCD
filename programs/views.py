@@ -8,6 +8,24 @@ class ProgramListView(ListView):
     template_name = 'programs/program_list.html'
     context_object_name = 'programs'
     paginate_by = 10
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Add capacity information for each program
+        programs_with_capacity = []
+        for program in context['programs']:
+            program_data = {
+                'program': program,
+                'current_enrollments': program.get_current_enrollments_count(),
+                'available_capacity': program.get_available_capacity(),
+                'capacity_percentage': round(program.get_capacity_percentage(), 1),
+                'is_at_capacity': program.is_at_capacity()
+            }
+            programs_with_capacity.append(program_data)
+        
+        context['programs_with_capacity'] = programs_with_capacity
+        return context
 
 class ProgramDetailView(DetailView):
     model = Program
