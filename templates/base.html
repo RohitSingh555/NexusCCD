@@ -78,6 +78,7 @@
                         <!-- Authenticated User Navigation -->
                         <div x-show="isAuthenticated" class="flex items-center space-x-6">
                             <a href="{% url 'clients:list' %}" class="nav-link">Clients</a>
+                            <a href="{% url 'clients:dedupe' %}" class="nav-link">Probable Duplicate Clients</a>
                             <a href="{% url 'programs:list' %}" class="nav-link">Programs</a>
                             <a href="{% url 'staff:list' %}" class="nav-link">Staff</a>
                             <a href="{% url 'reports:list' %}" class="nav-link">Reports</a>
@@ -129,6 +130,7 @@
                     <!-- Mobile Authenticated Navigation -->
                     <div x-show="isAuthenticated">
                         <a href="{% url 'clients:list' %}" class="block px-3 py-2 text-base font-medium text-secondary-600 hover:text-primary-600">Clients</a>
+                        <a href="{% url 'clients:dedupe' %}" class="block px-3 py-2 text-base font-medium text-secondary-600 hover:text-primary-600">Probable Duplicate Clients</a>
                         <a href="{% url 'programs:list' %}" class="block px-3 py-2 text-base font-medium text-secondary-600 hover:text-primary-600">Programs</a>
                         <a href="{% url 'staff:list' %}" class="block px-3 py-2 text-base font-medium text-secondary-600 hover:text-primary-600">Staff</a>
                         <a href="{% url 'reports:list' %}" class="block px-3 py-2 text-base font-medium text-secondary-600 hover:text-primary-600">Reports</a>
@@ -298,10 +300,6 @@
                     <div class="col-span-1 md:col-span-2">
                         <div class="flex items-center space-x-3 mb-4">
                             <img src="{% static 'images/logo_1-removebg-preview.png' %}" alt="Fred Victor" class="h-10 w-auto">
-                            <div>
-                                <span class="text-xl font-bold text-secondary-900">Central Client Database</span>
-                                <p class="text-xs text-secondary-600 -mt-1">Helping people rebuild their lives</p>
-                            </div>
                         </div>
                         <p class="text-secondary-600 text-sm max-w-md">
                             Streamline client management, program tracking, and service delivery with our comprehensive database solution.

@@ -10,6 +10,9 @@ ENVIRONMENT = config('ENVIRONMENT', default='development')
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
 
+# Fuzzy matching settings
+NICKNAME_MAPPINGS_FILE = os.path.join(BASE_DIR, 'nickname_mappings.json')
+
 
 # Application definition
 

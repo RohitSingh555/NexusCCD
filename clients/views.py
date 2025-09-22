@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView
 from django.urls import reverse_lazy
 from django.contrib import messages
@@ -8,7 +8,11 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
-from core.models import Client, Program, Department, Intake, ClientProgramEnrollment
+from django.db.models import Q
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
+from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate
+from core.fuzzy_matching import fuzzy_matcher
 from .forms import ClientForm
 import pandas as pd
 import json
@@ -40,7 +44,55 @@ class ClientCreateView(CreateView):
     success_url = reverse_lazy('clients:list')
     
     def form_valid(self, form):
-        messages.success(self.request, 'Client created successfully.')
+        client = form.save(commit=False)
+        
+        # Check for potential duplicates using fuzzy matching
+        client_data = {
+            'first_name': client.first_name,
+            'last_name': client.last_name,
+            'email': client.email,
+            'phone': client.phone,
+        }
+        
+        # Only check for duplicates if no unique identifiers (email/phone)
+        if not client.email and not client.phone:
+            existing_clients = Client.objects.exclude(id=client.id)
+            potential_duplicates = fuzzy_matcher.find_potential_duplicates(
+                client_data, existing_clients, similarity_threshold=0.7
+            )
+            
+            if potential_duplicates:
+                # Create duplicate warnings for manual review
+                for duplicate_client, match_type, similarity in potential_duplicates:
+                    confidence_level = fuzzy_matcher.get_duplicate_confidence_level(similarity)
+                    
+                    # Create or update duplicate record
+                    ClientDuplicate.objects.update_or_create(
+                        primary_client=duplicate_client,
+                        duplicate_client=client,
+                        defaults={
+                            'similarity_score': similarity,
+                            'match_type': match_type,
+                            'confidence_level': confidence_level,
+                            'match_details': {
+                                'primary_name': f"{duplicate_client.first_name} {duplicate_client.last_name}",
+                                'duplicate_name': f"{client.first_name} {client.last_name}",
+                                'primary_email': duplicate_client.email,
+                                'primary_phone': duplicate_client.phone,
+                            }
+                        }
+                    )
+                
+                messages.warning(
+                    self.request, 
+                    f'Client created with potential duplicates detected. Please review the Probable Duplicate Clients page.'
+                )
+            else:
+                messages.success(self.request, 'Client created successfully.')
+        else:
+            messages.success(self.request, 'Client created successfully.')
+        
+        client.save()
         return super().form_valid(form)
 
 class ClientUpdateView(UpdateView):
@@ -89,7 +141,7 @@ def upload_clients(request):
             return JsonResponse({'success': False, 'error': f'Error reading file: {str(e)}'}, status=400)
         
         # Validate required columns
-        required_columns = ['first_name', 'last_name', 'email', 'phone_number', 'dob']
+        required_columns = ['first_name', 'last_name', 'email', 'phone_number']
         missing_columns = [col for col in required_columns if col not in df.columns]
         
         if missing_columns:
@@ -143,7 +195,7 @@ def upload_clients(request):
             """Check if the new data is essentially the same as existing client data"""
             # Compare key fields to determine if this is truly a duplicate
             key_fields = ['first_name', 'last_name', 'preferred_name', 'alias', 'gender', 
-                         'sexual_orientation', 'race', 'immigration_status', 'dob']
+                         'sexual_orientation', 'citizenship_status', 'dob']
             
             for field in key_fields:
                 existing_value = getattr(existing_client, field, None)
@@ -173,6 +225,14 @@ def upload_clients(request):
             existing_addresses = existing_client.addresses or []
             new_addresses = new_data.get('addresses', [])
             if len(existing_addresses) != len(new_addresses):
+                return False
+            
+            # Compare contact information
+            existing_contact = existing_client.contact_information or {}
+            new_contact = new_data.get('contact_information', {})
+            if existing_contact.get('email') != new_contact.get('email'):
+                return False
+            if existing_contact.get('phone') != new_contact.get('phone'):
                 return False
             
             # If we get here, the data is essentially the same
@@ -268,27 +328,32 @@ def upload_clients(request):
         
         def find_duplicate_client(client_data):
             """Find duplicate client based on email, phone, and name similarity"""
-            email = client_data.get('email', '').strip()
-            phone = client_data.get('phone_number', '').strip()
+            contact_info = client_data.get('contact_information', {})
+            email = contact_info.get('email', '').strip()
+            phone = contact_info.get('phone', '').strip()
             full_name = f"{client_data.get('first_name', '')} {client_data.get('last_name', '')}".strip()
             
             # Priority 1: Exact email match
             if email:
-                exact_email_match = Client.objects.filter(email=email).first()
+                exact_email_match = Client.objects.filter(
+                    contact_information__email=email
+                ).first()
                 if exact_email_match:
                     return exact_email_match, "exact_email"
             
             # Priority 2: Exact phone match
             if phone:
-                exact_phone_match = Client.objects.filter(phone_number=phone).first()
+                exact_phone_match = Client.objects.filter(
+                    contact_information__phone=phone
+                ).first()
                 if exact_phone_match:
                     return exact_phone_match, "exact_phone"
             
             # Priority 3: Email and phone combination (if both provided)
             if email and phone:
                 email_phone_match = Client.objects.filter(
-                    email=email, 
-                    phone_number=phone
+                    contact_information__email=email,
+                    contact_information__phone=phone
                 ).first()
                 if email_phone_match:
                     return email_phone_match, "email_phone"
@@ -310,18 +375,33 @@ def upload_clients(request):
         for index, row in df.iterrows():
             try:
                 # Clean and prepare data
+                email = str(row['email']).strip() if pd.notna(row['email']) else ''
+                phone = str(row['phone_number']).strip() if pd.notna(row['phone_number']) else ''
+                
+                # Handle date of birth with default
+                try:
+                    if pd.notna(row['dob']) and str(row['dob']).strip():
+                        dob = pd.to_datetime(row['dob']).date()
+                    else:
+                        # Default to 1900-01-01 if no date provided
+                        dob = datetime(1900, 1, 1).date()
+                except:
+                    # If date parsing fails, use default
+                    dob = datetime(1900, 1, 1).date()
+                
                 client_data = {
                     'first_name': str(row['first_name']).strip() if pd.notna(row['first_name']) else '',
                     'last_name': str(row['last_name']).strip() if pd.notna(row['last_name']) else '',
-                    'email': str(row['email']).strip() if pd.notna(row['email']) else '',
-                    'phone_number': str(row['phone_number']).strip() if pd.notna(row['phone_number']) else '',
-                    'dob': pd.to_datetime(row['dob']).date() if pd.notna(row['dob']) else None,
+                    'dob': dob,
                     'preferred_name': str(row.get('preferred_name', '')).strip() if pd.notna(row.get('preferred_name', '')) else '',
                     'alias': str(row.get('alias', '')).strip() if pd.notna(row.get('alias', '')) else '',
-                    'gender': str(row.get('gender', '')).strip() if pd.notna(row.get('gender', '')) else '',
+                    'gender': str(row.get('gender', '')).strip() if pd.notna(row.get('gender', '')) else 'Unknown',
                     'sexual_orientation': str(row.get('sexual_orientation', '')).strip() if pd.notna(row.get('sexual_orientation', '')) else '',
-                    'race': str(row.get('race', '')).strip() if pd.notna(row.get('race', '')) else '',
-                    'immigration_status': str(row.get('immigration_status', '')).strip() if pd.notna(row.get('immigration_status', '')) else '',
+                    'citizenship_status': str(row.get('immigration_status', '')).strip() if pd.notna(row.get('immigration_status', '')) else '',
+                    'contact_information': {
+                        'email': email,
+                        'phone': phone,
+                    }
                 }
                 
                 # Handle languages_spoken (expect comma-separated string)
@@ -354,32 +434,62 @@ def upload_clients(request):
                 
                 # Check for duplicates using our custom logic
                 duplicate_client, match_type = find_duplicate_client(client_data)
+                client = None  # Initialize client variable
+                is_duplicate = False  # Initialize is_duplicate variable
                 
+                # Always create the client first
+                client = Client.objects.create(**client_data)
+                created_count += 1
+                logger.info(f"Created new client: {client.email or client.phone}")
+                
+                # If we found a potential duplicate, create a duplicate relationship for review
                 if duplicate_client:
                     client_name = f"{client_data.get('first_name', '')} {client_data.get('last_name', '')}".strip()
                     existing_name = f"{duplicate_client.first_name} {duplicate_client.last_name}".strip()
                     
                     if match_type == "exact_email":
-                        # Check if this is actually a duplicate (same data) or an update (different data)
+                        # Check if this is actually a duplicate (same data) or different data
                         is_duplicate = _is_duplicate_data(duplicate_client, client_data)
                         
                         if is_duplicate:
-                            # Same data - skip as duplicate
-                            skipped_count += 1
+                            # Same data - create duplicate relationship for review
+                            similarity = 1.0  # 100% match
+                            confidence_level = fuzzy_matcher.get_duplicate_confidence_level(similarity)
+                            
+                            ClientDuplicate.objects.update_or_create(
+                                primary_client=duplicate_client,
+                                duplicate_client=client,
+                                defaults={
+                                    'similarity_score': similarity,
+                                    'match_type': 'exact_email',
+                                    'confidence_level': confidence_level,
+                                    'match_details': {
+                                        'primary_name': f"{duplicate_client.first_name} {duplicate_client.last_name}",
+                                        'duplicate_name': f"{client.first_name} {client.last_name}",
+                                        'primary_email': duplicate_client.email,
+                                        'primary_phone': duplicate_client.phone,
+                                    }
+                                }
+                            )
+                            
                             duplicate_details.append({
-                                'type': 'skipped',
-                                'reason': 'Exact email match (duplicate data)',
+                                'type': 'created_with_duplicate',
+                                'reason': 'Exact email match - created with duplicate flag',
                                 'client_name': client_name,
                                 'existing_name': existing_name,
                                 'match_field': f"Email: {duplicate_client.email}"
                             })
-                            logger.info(f"Skipped duplicate client by exact email match: {duplicate_client.email}")
+                            logger.info(f"Created client with exact email duplicate flag: {duplicate_client.email}")
                         else:
-                            # Different data - update existing client
+                            # Different data - update existing client instead of creating new one
+                            client.delete()  # Remove the newly created client
+                            created_count -= 1  # Adjust count
+                            
                             for key, value in client_data.items():
-                                if key not in ['email']:  # Don't update email
+                                if key not in ['contact_information']:  # Don't update contact info
                                     setattr(duplicate_client, key, value)
                             duplicate_client.save()
+                            client = duplicate_client  # Set client for intake processing
                             updated_count += 1
                             duplicate_details.append({
                                 'type': 'updated',
@@ -390,86 +500,141 @@ def upload_clients(request):
                             })
                             logger.info(f"Updated client by exact email match: {duplicate_client.email}")
                     elif match_type == "exact_phone":
-                        # Check if this is actually a duplicate (same data) or an update (different data)
+                        # Check if this is actually a duplicate (same data) or different data
                         is_duplicate = _is_duplicate_data(duplicate_client, client_data)
                         
                         if is_duplicate:
-                            # Same data - skip as duplicate
-                            skipped_count += 1
+                            # Same data - create duplicate relationship for review
+                            similarity = 1.0  # 100% match
+                            confidence_level = fuzzy_matcher.get_duplicate_confidence_level(similarity)
+                            
+                            ClientDuplicate.objects.update_or_create(
+                                primary_client=duplicate_client,
+                                duplicate_client=client,
+                                defaults={
+                                    'similarity_score': similarity,
+                                    'match_type': 'exact_phone',
+                                    'confidence_level': confidence_level,
+                                    'match_details': {
+                                        'primary_name': f"{duplicate_client.first_name} {duplicate_client.last_name}",
+                                        'duplicate_name': f"{client.first_name} {client.last_name}",
+                                        'primary_email': duplicate_client.email,
+                                        'primary_phone': duplicate_client.phone,
+                                    }
+                                }
+                            )
+                            
                             duplicate_details.append({
-                                'type': 'skipped',
-                                'reason': 'Exact phone match (duplicate data)',
+                                'type': 'created_with_duplicate',
+                                'reason': 'Exact phone match - created with duplicate flag',
                                 'client_name': client_name,
                                 'existing_name': existing_name,
-                                'match_field': f"Phone: {duplicate_client.phone_number}"
+                                'match_field': f"Phone: {duplicate_client.phone}"
                             })
-                            logger.info(f"Skipped duplicate client by exact phone match: {duplicate_client.phone_number}")
+                            logger.info(f"Created client with exact phone duplicate flag: {duplicate_client.phone}")
                         else:
-                            # Different data - update existing client
+                            # Different data - update existing client instead of creating new one
+                            client.delete()  # Remove the newly created client
+                            created_count -= 1  # Adjust count
+                            
                             for key, value in client_data.items():
-                                if key not in ['phone_number']:  # Don't update phone
+                                if key not in ['contact_information']:  # Don't update contact info
                                     setattr(duplicate_client, key, value)
                             duplicate_client.save()
+                            client = duplicate_client  # Set client for intake processing
                             updated_count += 1
                             duplicate_details.append({
                                 'type': 'updated',
                                 'reason': 'Exact phone match (updated data)',
                                 'client_name': client_name,
                                 'existing_name': existing_name,
-                                'match_field': f"Phone: {duplicate_client.phone_number}"
+                                'match_field': f"Phone: {duplicate_client.phone}"
                             })
-                            logger.info(f"Updated client by exact phone match: {duplicate_client.phone_number}")
+                            logger.info(f"Updated client by exact phone match: {duplicate_client.phone}")
                     elif match_type.startswith("email_phone"):
-                        # Check if this is actually a duplicate (same data) or an update (different data)
+                        # Check if this is actually a duplicate (same data) or different data
                         is_duplicate = _is_duplicate_data(duplicate_client, client_data)
                         
                         if is_duplicate:
-                            # Same data - skip as duplicate
-                            skipped_count += 1
+                            # Same data - create duplicate relationship for review
+                            similarity = 1.0  # 100% match
+                            confidence_level = fuzzy_matcher.get_duplicate_confidence_level(similarity)
+                            
+                            ClientDuplicate.objects.update_or_create(
+                                primary_client=duplicate_client,
+                                duplicate_client=client,
+                                defaults={
+                                    'similarity_score': similarity,
+                                    'match_type': 'email_phone',
+                                    'confidence_level': confidence_level,
+                                    'match_details': {
+                                        'primary_name': f"{duplicate_client.first_name} {duplicate_client.last_name}",
+                                        'duplicate_name': f"{client.first_name} {client.last_name}",
+                                        'primary_email': duplicate_client.email,
+                                        'primary_phone': duplicate_client.phone,
+                                    }
+                                }
+                            )
+                            
                             duplicate_details.append({
-                                'type': 'skipped',
-                                'reason': 'Email and phone match (duplicate data)',
+                                'type': 'created_with_duplicate',
+                                'reason': 'Email and phone match - created with duplicate flag',
                                 'client_name': client_name,
                                 'existing_name': existing_name,
-                                'match_field': f"Email: {duplicate_client.email}, Phone: {duplicate_client.phone_number}"
+                                'match_field': f"Email: {duplicate_client.email}, Phone: {duplicate_client.phone}"
                             })
-                            logger.info(f"Skipped duplicate client by email+phone match: {duplicate_client.email}")
+                            logger.info(f"Created client with email+phone duplicate flag: {duplicate_client.email}")
                         else:
-                            # Different data - update existing client
+                            # Different data - update existing client instead of creating new one
+                            client.delete()  # Remove the newly created client
+                            created_count -= 1  # Adjust count
+                            
                             for key, value in client_data.items():
-                                if key not in ['email', 'phone_number']:  # Don't update email or phone
+                                if key not in ['contact_information']:  # Don't update contact info
                                     setattr(duplicate_client, key, value)
                             duplicate_client.save()
+                            client = duplicate_client  # Set client for intake processing
                             updated_count += 1
                             duplicate_details.append({
                                 'type': 'updated',
                                 'reason': 'Email and phone match (updated data)',
                                 'client_name': client_name,
                                 'existing_name': existing_name,
-                                'match_field': f"Email: {duplicate_client.email}, Phone: {duplicate_client.phone_number}"
+                                'match_field': f"Email: {duplicate_client.email}, Phone: {duplicate_client.phone}"
                             })
                             logger.info(f"Updated client by email+phone match: {duplicate_client.email}")
                     elif match_type.startswith("name_similarity"):
-                        # Skip - name is too similar to existing client
+                        # Create duplicate relationship for name similarity
                         similarity = float(match_type.split('_')[-1])
-                        skipped_count += 1
+                        confidence_level = fuzzy_matcher.get_duplicate_confidence_level(similarity)
+                        
+                        ClientDuplicate.objects.update_or_create(
+                            primary_client=duplicate_client,
+                            duplicate_client=client,
+                            defaults={
+                                'similarity_score': similarity,
+                                'match_type': 'name_similarity',
+                                'confidence_level': confidence_level,
+                                'match_details': {
+                                    'primary_name': f"{duplicate_client.first_name} {duplicate_client.last_name}",
+                                    'duplicate_name': f"{client.first_name} {client.last_name}",
+                                    'primary_email': duplicate_client.email,
+                                    'primary_phone': duplicate_client.phone,
+                                }
+                            }
+                        )
+                        
                         duplicate_details.append({
-                            'type': 'skipped',
-                            'reason': f'Name too similar ({similarity:.0%})',
+                            'type': 'created_with_duplicate',
+                            'reason': f'Name similarity ({similarity:.0%}) - created with duplicate flag',
                             'client_name': client_name,
                             'existing_name': existing_name,
                             'match_field': f"Similarity: {similarity:.0%}"
                         })
-                        logger.info(f"Skipped client due to name similarity ({similarity:.2f}): {client_data.get('first_name')} {client_data.get('last_name')}")
-                        continue
-                else:
-                    # No duplicate found, create new client
-                    client = Client.objects.create(**client_data)
-                    created_count += 1
-                    logger.info(f"Created new client: {client.email or client.phone_number}")
+                        logger.info(f"Created client with name similarity duplicate flag ({similarity:.2f}): {client_data.get('first_name')} {client_data.get('last_name')}")
                 
-                # Process intake data if available
-                if has_intake_data and (duplicate_client is None or not is_duplicate):
+                # Process intake data if available and we have a client
+                if has_intake_data and client is not None:
                     process_intake_data(client, row, index)
                     
             except Exception as e:
@@ -477,6 +642,8 @@ def upload_clients(request):
                 logger.error(f"Error processing row {index + 2}: {str(e)}")
         
         # Prepare response
+        duplicate_created_count = len([d for d in duplicate_details if d['type'] == 'created_with_duplicate'])
+        
         response_data = {
             'success': True,
             'message': f'Upload completed successfully!',
@@ -485,10 +652,16 @@ def upload_clients(request):
                 'created': created_count,
                 'updated': updated_count,
                 'skipped': skipped_count,
+                'duplicates_flagged': duplicate_created_count,
                 'errors': len(errors)
             },
             'duplicate_details': duplicate_details[:20],  # Limit to first 20 duplicates for display
-            'errors': errors[:10] if errors else []  # Limit to first 10 errors
+            'errors': errors[:10] if errors else [],  # Limit to first 10 errors
+            'notes': [
+                'Missing date of birth values were set to 1900-01-01',
+                'Missing gender values were set to "Unknown"',
+                f'{duplicate_created_count} clients were created with potential duplicate flags for review'
+            ] if created_count > 0 or updated_count > 0 or duplicate_created_count > 0 else []
         }
         
         return JsonResponse(response_data)
@@ -754,7 +927,14 @@ def download_sample(request, file_type):
             'city': 'Portland',
             'state': 'OR',
             'zip': '97201',
-            'country': 'USA'
+            'country': 'USA',
+            'source': 'SMIS',
+            'program_name': 'Housing Assistance Program',
+            'program_department': 'Social Services',
+            'intake_date': '2024-01-18',
+            'intake_database': 'CCD',
+            'referral_source': 'SMIS',
+            'intake_housing_status': 'stably_housed'
         }
     ]
     
@@ -826,5 +1006,176 @@ def bulk_delete_clients(request):
         logger.error(f"Error in bulk delete: {str(e)}")
         return JsonResponse({
             'success': False, 
+            'error': f'An error occurred: {str(e)}'
+        }, status=500)
+
+
+class ClientDedupeView(TemplateView):
+    """View for managing client duplicates"""
+    template_name = 'clients/client_dedupe.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get filter parameters
+        status_filter = self.request.GET.get('status', 'pending')
+        confidence_filter = self.request.GET.get('confidence', '')
+        
+        # Build query
+        duplicates_query = ClientDuplicate.objects.select_related(
+            'primary_client', 'duplicate_client'
+        ).all()
+        
+        if status_filter:
+            duplicates_query = duplicates_query.filter(status=status_filter)
+        
+        if confidence_filter:
+            duplicates_query = duplicates_query.filter(confidence_level=confidence_filter)
+        
+        # Order by confidence level and similarity score
+        duplicates_query = duplicates_query.order_by(
+            '-confidence_level', '-similarity_score', '-created_at'
+        )
+        
+        # Group duplicates by primary client for better organization
+        grouped_duplicates = {}
+        for duplicate in duplicates_query:
+            primary_id = duplicate.primary_client.id
+            if primary_id not in grouped_duplicates:
+                grouped_duplicates[primary_id] = {
+                    'primary_client': duplicate.primary_client,
+                    'duplicates': []
+                }
+            grouped_duplicates[primary_id]['duplicates'].append(duplicate)
+        
+        # Get statistics
+        total_duplicates = ClientDuplicate.objects.count()
+        pending_duplicates = ClientDuplicate.objects.filter(status='pending').count()
+        high_confidence_duplicates = ClientDuplicate.objects.filter(
+            confidence_level='high', status='pending'
+        ).count()
+        
+        context.update({
+            'grouped_duplicates': grouped_duplicates,
+            'status_filter': status_filter,
+            'confidence_filter': confidence_filter,
+            'status_choices': ClientDuplicate.STATUS_CHOICES,
+            'confidence_choices': ClientDuplicate.CONFIDENCE_LEVELS,
+            'total_duplicates': total_duplicates,
+            'pending_duplicates': pending_duplicates,
+            'high_confidence_duplicates': high_confidence_duplicates,
+        })
+        
+        return context
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+@require_http_methods(["POST"])
+def mark_duplicate_action(request, duplicate_id, action):
+    """Handle duplicate actions (confirm, not_duplicate, merge)"""
+    try:
+        duplicate = get_object_or_404(ClientDuplicate, id=duplicate_id)
+        
+        # Get the current user (you might need to adjust this based on your auth system)
+        reviewed_by = None
+        if hasattr(request, 'user') and request.user.is_authenticated:
+            # Try to get staff profile
+            try:
+                reviewed_by = request.user.staff_profile
+            except:
+                pass
+        
+        # Get notes from request
+        data = json.loads(request.body) if request.body else {}
+        notes = data.get('notes', '')
+        
+        if action == 'confirm':
+            duplicate.mark_as_duplicate(reviewed_by, notes)
+            message = f'Marked {duplicate.duplicate_client} as duplicate of {duplicate.primary_client}'
+        elif action == 'not_duplicate':
+            duplicate.mark_as_not_duplicate(reviewed_by, notes)
+            message = f'Confirmed {duplicate.duplicate_client} is not a duplicate of {duplicate.primary_client}'
+        elif action == 'merge':
+            duplicate.merge_clients(reviewed_by, notes)
+            message = f'Marked {duplicate.duplicate_client} for merging with {duplicate.primary_client}'
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid action'
+            }, status=400)
+        
+        return JsonResponse({
+            'success': True,
+            'message': message
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in mark_duplicate_action: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=500)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+@require_http_methods(["POST"])
+def bulk_duplicate_action(request):
+    """Handle bulk actions on duplicates"""
+    try:
+        data = json.loads(request.body)
+        duplicate_ids = data.get('duplicate_ids', [])
+        action = data.get('action', '')
+        notes = data.get('notes', '')
+        
+        if not duplicate_ids:
+            return JsonResponse({
+                'success': False,
+                'error': 'No duplicate IDs provided'
+            }, status=400)
+        
+        if not action:
+            return JsonResponse({
+                'success': False,
+                'error': 'No action specified'
+            }, status=400)
+        
+        # Get the current user
+        reviewed_by = None
+        if hasattr(request, 'user') and request.user.is_authenticated:
+            try:
+                reviewed_by = request.user.staff_profile
+            except:
+                pass
+        
+        # Get duplicates
+        duplicates = ClientDuplicate.objects.filter(id__in=duplicate_ids)
+        updated_count = 0
+        
+        for duplicate in duplicates:
+            if action == 'confirm':
+                duplicate.mark_as_duplicate(reviewed_by, notes)
+            elif action == 'not_duplicate':
+                duplicate.mark_as_not_duplicate(reviewed_by, notes)
+            elif action == 'merge':
+                duplicate.merge_clients(reviewed_by, notes)
+            else:
+                continue
+            updated_count += 1
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Updated {updated_count} duplicate(s)',
+            'updated_count': updated_count
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error in bulk_duplicate_action: {str(e)}")
+        return JsonResponse({
+            'success': False,
             'error': f'An error occurred: {str(e)}'
         }, status=500)

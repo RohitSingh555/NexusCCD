@@ -434,3 +434,96 @@ class PendingChange(BaseModel):
     
     def __str__(self):
         return f"{self.entity} change - {self.status}"
+
+
+class ClientDuplicate(BaseModel):
+    """Track potential duplicate clients for manual review"""
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending Review'),
+        ('confirmed_duplicate', 'Confirmed Duplicate'),
+        ('not_duplicate', 'Not Duplicate'),
+        ('merged', 'Merged'),
+    ]
+    
+    CONFIDENCE_LEVELS = [
+        ('high', 'High'),
+        ('medium', 'Medium'),
+        ('low', 'Low'),
+        ('very_low', 'Very Low'),
+    ]
+    
+    # The primary client (usually the one that was created first)
+    primary_client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='primary_duplicates', db_index=True)
+    # The potential duplicate client
+    duplicate_client = models.ForeignKey(Client, on_delete=models.CASCADE, related_name='duplicate_of', db_index=True)
+    # Similarity score (0-1)
+    similarity_score = models.FloatField(db_index=True)
+    # Type of match (similarity, nickname, etc.)
+    match_type = models.CharField(max_length=50, db_index=True)
+    # Confidence level based on similarity score
+    confidence_level = models.CharField(max_length=20, choices=CONFIDENCE_LEVELS, db_index=True)
+    # Status of the duplicate review
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending', db_index=True)
+    # Additional details about the match
+    match_details = models.JSONField(default=dict)
+    # Who reviewed this duplicate
+    reviewed_by = models.ForeignKey('core.Staff', on_delete=models.SET_NULL, null=True, blank=True, db_index=True)
+    # When it was reviewed
+    reviewed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    # Notes from the reviewer
+    review_notes = models.TextField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'client_duplicates'
+        unique_together = ['primary_client', 'duplicate_client']
+        indexes = [
+            models.Index(fields=['status', 'confidence_level']),
+            models.Index(fields=['similarity_score']),
+            models.Index(fields=['match_type']),
+        ]
+    
+    def __str__(self):
+        return f"{self.primary_client} <-> {self.duplicate_client} ({self.confidence_level})"
+    
+    def get_duplicate_group(self):
+        """Get all clients in the same duplicate group"""
+        # Find all duplicates that share either the primary or duplicate client
+        related_duplicates = ClientDuplicate.objects.filter(
+            models.Q(primary_client=self.primary_client) | 
+            models.Q(duplicate_client=self.primary_client) |
+            models.Q(primary_client=self.duplicate_client) | 
+            models.Q(duplicate_client=self.duplicate_client)
+        ).exclude(id=self.id)
+        
+        # Collect all unique clients in this group
+        clients = {self.primary_client, self.duplicate_client}
+        for dup in related_duplicates:
+            clients.add(dup.primary_client)
+            clients.add(dup.duplicate_client)
+        
+        return list(clients)
+    
+    def mark_as_duplicate(self, reviewed_by, notes=None):
+        """Mark this as a confirmed duplicate"""
+        self.status = 'confirmed_duplicate'
+        self.reviewed_by = reviewed_by
+        self.reviewed_at = timezone.now()
+        self.review_notes = notes
+        self.save()
+    
+    def mark_as_not_duplicate(self, reviewed_by, notes=None):
+        """Mark this as not a duplicate"""
+        self.status = 'not_duplicate'
+        self.reviewed_by = reviewed_by
+        self.reviewed_at = timezone.now()
+        self.review_notes = notes
+        self.save()
+    
+    def merge_clients(self, reviewed_by, notes=None):
+        """Mark this as merged (duplicate client will be merged into primary)"""
+        self.status = 'merged'
+        self.reviewed_by = reviewed_by
+        self.reviewed_at = timezone.now()
+        self.review_notes = notes
+        self.save()
