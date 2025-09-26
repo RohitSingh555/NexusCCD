@@ -3,6 +3,8 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from .models import ClientProgramEnrollment, Client, Program, ServiceRestriction
 from datetime import date
+from django.contrib.auth import get_user_model
+from .models import Staff, Department
 
 
 class EnrollmentForm(forms.ModelForm):
@@ -113,3 +115,177 @@ class EnrollmentForm(forms.ModelForm):
             raise ValidationError("📅 End date must be after start date. Please select a date after the start date.")
         
         return end_date
+
+User = get_user_model()
+
+class UserProfileForm(forms.ModelForm):
+    """Form for editing user profile information"""
+    remove_profile_photo = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Remove profile photo"
+    )
+    class Meta:
+        model = User
+        fields = ['first_name', 'last_name', 'email', 'username', 'profile_photo']
+        widgets = {
+            'first_name': forms.TextInput(attrs={
+                'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent',
+                'placeholder': 'Enter your first name'
+            }),
+            'last_name': forms.TextInput(attrs={
+                'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent',
+                'placeholder': 'Enter your last name'
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent',
+                'placeholder': 'Enter your email address'
+            }),
+            'username': forms.TextInput(attrs={
+                'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent',
+                'placeholder': 'Enter your username'
+            }),
+            'profile_photo': forms.FileInput(attrs={
+                'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent',
+                'accept': 'image/*'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['profile_photo'].required = False
+        self.fields['email'].required = False
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        if self.cleaned_data.get('remove_profile_photo'):
+            user.profile_photo.delete(save=False)  # Delete the file
+            user.profile_photo = None
+        if commit:
+            user.save()
+        return user
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if not email:
+            # If no email provided, use the existing email
+            return self.instance.email
+        # Check if email is already taken by another user
+        existing_user = User.objects.filter(email=email).exclude(pk=self.instance.pk).first()
+        if existing_user:
+            raise ValidationError("This email address is already in use by another user.")
+        return email
+
+    def clean_username(self):
+        username = self.cleaned_data.get('username')
+        if not username:
+            # If no username provided, use the existing username
+            return self.instance.username
+        existing_user = User.objects.filter(username=username).exclude(pk=self.instance.pk).first()
+        if existing_user:
+            raise ValidationError("This username is already taken by another user.")
+        return username
+
+    def clean_profile_photo(self):
+        profile_photo = self.cleaned_data.get('profile_photo')
+        if profile_photo:
+            # Check if it's a new uploaded file (has content_type) or existing file
+            if hasattr(profile_photo, 'content_type'):
+                # It's a new uploaded file
+
+                if profile_photo.size > 5 * 1024 * 1024:
+                    raise ValidationError("Profile photo must be smaller than 5MB.")
+                
+                # Check file type
+                allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+                if profile_photo.content_type not in allowed_types:
+                    raise ValidationError("Please upload a valid image file (JPEG, PNG, GIF, or WebP).")
+            # If it's an existing file (ImageFieldFile), we don't need to validate it again
+        return profile_photo
+
+class StaffProfileForm(forms.ModelForm):
+    """Form for editing staff profile information"""
+    class Meta:
+        model = Staff
+        fields = ['first_name', 'last_name', 'email', 'active']
+        widgets = {
+            'first_name': forms.TextInput(attrs={
+                'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent',
+                'placeholder': 'Enter your first name'
+            }),
+            'last_name': forms.TextInput(attrs={
+                'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent',
+                'placeholder': 'Enter your last name'
+            }),
+            'email': forms.EmailInput(attrs={
+                'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent',
+                'placeholder': 'Enter your email address'
+            }),
+            'active': forms.CheckboxInput(attrs={
+                'class': 'h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded'
+            }),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make fields optional
+        self.fields['first_name'].required = False
+        self.fields['last_name'].required = False
+        self.fields['email'].required = False
+        self.fields['active'].required = False
+
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        if email:
+            # Check if email is already taken by another staff member
+            existing_staff = Staff.objects.filter(email=email).exclude(pk=self.instance.pk).first()
+            if existing_staff:
+                raise ValidationError("This email address is already in use by another staff member.")
+        return email
+
+
+class PasswordChangeForm(forms.Form):
+    """Form for changing user password"""
+    current_password = forms.CharField(
+        widget=forms.PasswordInput(attrs={
+            'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent',
+            'placeholder': 'Enter your current password'
+        }),
+        label='Current Password'
+    )
+    new_password = forms.CharField(
+        widget=forms.PasswordInput(attrs={
+            'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent',
+            'placeholder': 'Enter your new password'
+        }),
+        label='New Password',
+        min_length=8,
+        help_text='Password must be at least 8 characters long.'
+    )
+    confirm_password = forms.CharField(
+        widget=forms.PasswordInput(attrs={
+            'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent',
+            'placeholder': 'Confirm your new password'
+        }),
+        label='Confirm New Password'
+    )
+
+    def __init__(self, user, *args, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_current_password(self):
+        current_password = self.cleaned_data.get('current_password')
+        if not self.user.check_password(current_password):
+            raise ValidationError("Current password is incorrect.")
+        return current_password
+
+    def clean(self):
+        cleaned_data = super().clean()
+        new_password = cleaned_data.get('new_password')
+        confirm_password = cleaned_data.get('confirm_password')
+
+        if new_password and confirm_password and new_password != confirm_password:
+            raise ValidationError("New passwords do not match.")
+
+        return cleaned_data

@@ -5,7 +5,7 @@ from .models import User, Staff, Role, Department, Program
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'external_id', 'email', 'username', 'first_name', 'last_name', 'is_active', 'created_at']
+        fields = ['id', 'external_id', 'email', 'username', 'first_name', 'last_name', 'profile_photo','is_active', 'created_at']
         read_only_fields = ['id', 'external_id', 'created_at']
 
 

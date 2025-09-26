@@ -1,0 +1,169 @@
+{% extends 'dashboard_base.html' %}
+
+{% block title %}Profile - Central Client Database{% endblock %}
+{% block page_title %}My Profile{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Profile Header -->
+    <div class="bg-white rounded-2xl shadow-sm border border-neutral-200 mb-8">
+        <div class="px-8 py-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-6">
+                    <!-- Profile Avatar -->
+                    <div class="relative">
+                        {% if user.profile_photo %}
+                            <img src="{{ user.profile_photo.url }}" alt="Profile Photo" class="h-20 w-20 rounded-full object-cover shadow-lg">
+                        {% else %}
+                            <div class="h-20 w-20 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-full flex items-center justify-center shadow-lg">
+                                <span class="text-white font-bold text-2xl">
+                                    {{ user.first_name.0 }}{{ user.last_name.0 }}
+                                </span>
+                            </div>
+                        {% endif %}
+                        <!-- Photo indicator -->
+                        <div class="absolute -bottom-1 -right-1 h-6 w-6 bg-brand-sky rounded-full flex items-center justify-center">
+                            <svg class="h-3 w-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <!-- Profile Info -->
+                    <div>
+                        <h1 class="text-2xl font-black text-neutral-800 font-header">{{ user.first_name }} {{ user.last_name }}</h1>
+                        <p class="text-neutral-600 font-bold">{{ user.email }}</p>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="flex items-center space-x-3">
+                    <a href="{% url 'core:edit_profile' %}" class="inline-flex items-center px-4 py-2 bg-brand-sky text-white rounded-xl font-bold hover:bg-brand-darkBlue transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                        Edit Profile
+                    </a>
+                    <a href="{% url 'core:change_password' %}" class="inline-flex items-center px-4 py-2 bg-neutral-100 text-neutral-700 rounded-xl font-bold hover:bg-neutral-200 transition-colors duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                        </svg>
+                        Change Password
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Details -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Personal Information -->
+        <div class="bg-white rounded-2xl shadow-sm border border-neutral-200">
+            <div class="px-8 py-6">
+                <h2 class="text-xl font-black text-neutral-800 font-header mb-6">Personal Information</h2>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-bold text-neutral-600 mb-1">Full Name</label>
+                        <p class="text-neutral-800 font-bold">{{ user.first_name }} {{ user.last_name }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-bold text-neutral-600 mb-1">Email Address</label>
+                        <p class="text-neutral-800 font-bold">{{ user.email }}</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-bold text-neutral-600 mb-1">Username</label>
+                        <p class="text-neutral-800 font-bold">{{ user.username }}</p>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+
+        <!-- Work Information -->
+        <div class="bg-white rounded-2xl shadow-sm border border-neutral-200">
+            <div class="px-8 py-6">
+                <h2 class="text-xl font-black text-neutral-800 font-header mb-6">Work Information</h2>
+                
+                <div class="space-y-4">
+                    {% if staff_profile %}
+                        
+                        {% if staff_profile.staffrole_set.exists %}
+                        <div>
+                            <label class="block text-sm font-bold text-neutral-600 mb-1">Roles</label>
+                            <div class="space-y-2">
+                                {% for staff_role in staff_profile.staffrole_set.all %}
+                                    <span class="inline-flex items-center px-3 py-1 bg-brand-lime text-brand-moss rounded-full text-sm font-bold">
+                                        {{ staff_role.role.name }}
+                                    </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <div>
+                            <label class="block text-sm font-bold text-neutral-600 mb-1">Member Since</label>
+                            <p class="text-neutral-800 font-bold">{{ user.created_at|date:"F d, Y" }}</p>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-8">
+                            <svg class="mx-auto h-12 w-12 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            <h3 class="mt-2 text-sm font-bold text-neutral-900">No staff profile</h3>
+                            <p class="mt-1 text-sm text-neutral-500">Complete your profile to access all features.</p>
+                            <div class="mt-6">
+                                <a href="{% url 'core:edit_profile' %}" class="inline-flex items-center px-4 py-2 bg-brand-sky text-white rounded-xl font-bold hover:bg-brand-darkBlue transition-colors duration-200">
+                                    Complete Profile
+                                </a>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Activity -->
+    <div class="bg-white rounded-2xl shadow-sm border border-neutral-200 mt-8">
+        <div class="px-8 py-6">
+            <h2 class="text-xl font-black text-neutral-800 font-header mb-6">Account Activity</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="text-center">
+                    <div class="h-12 w-12 bg-brand-sky bg-opacity-10 rounded-xl flex items-center justify-center mx-auto mb-3">
+                        <svg class="h-6 w-6 text-brand-sky" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 4V9a2 2 0 012-2h4a2 2 0 012 2v2m-6 4h8a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2-2v10a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <p class="text-2xl font-black text-neutral-800">{{ user.created_at|date:"M d, Y" }}</p>
+                    <p class="text-sm text-neutral-600 font-bold">Join Date</p>
+                </div>
+                
+                <div class="text-center">
+                    <div class="h-12 w-12 bg-brand-lime bg-opacity-20 rounded-xl flex items-center justify-center mx-auto mb-3">
+                        <svg class="h-6 w-6 text-brand-moss" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <p class="text-2xl font-black text-neutral-800">{{ user.last_login|date:"M d, Y"|default:"Never" }}</p>
+                    <p class="text-sm text-neutral-600 font-bold">Last Login</p>
+                </div>
+                
+                <div class="text-center">
+                    <div class="h-12 w-12 bg-accent-400 bg-opacity-20 rounded-xl flex items-center justify-center mx-auto mb-3">
+                        <svg class="h-6 w-6 text-accent-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <p class="text-2xl font-black text-neutral-800">{% if user.is_active %}Active{% else %}Inactive{% endif %}</p>
+                    <p class="text-sm text-neutral-600 font-bold">Account Status</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

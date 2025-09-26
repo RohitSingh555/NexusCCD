@@ -28,6 +28,7 @@ class User(AbstractUser):
     username = models.CharField(max_length=150, unique=True, db_index=True)
     first_name = models.CharField(max_length=150)
     last_name = models.CharField(max_length=150)
+    profile_photo = models.ImageField(upload_to='profile_photos/', null=True, blank=True)
     is_active = models.BooleanField(default=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

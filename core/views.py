@@ -17,6 +17,8 @@ from django.views.decorators.http import require_http_methods
 from datetime import datetime
 from .models import Client, Program, Staff, PendingChange, ClientProgramEnrollment, Department, ServiceRestriction
 from .forms import EnrollmentForm
+from .forms import UserProfileForm, StaffProfileForm, PasswordChangeForm
+
 
 User = get_user_model()
 
@@ -497,3 +499,88 @@ class RestrictionDeleteView(DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, 'Service restriction deleted successfully.')
         return super().delete(request, *args, **kwargs)
+
+
+@jwt_required
+def profile(request):
+    """User profile view"""
+    try:
+        staff_profile = request.user.staff_profile
+    except Staff.DoesNotExist:
+        staff_profile = None
+
+    context = {
+        'user': request.user,
+        'staff_profile': staff_profile,
+    }
+    
+    return render(request, 'core/profile.html', context)
+
+
+@jwt_required
+def edit_profile(request):
+    """Edit user profile view"""
+    try:
+        staff_profile = request.user.staff_profile
+    except Staff.DoesNotExist:
+        # Create a staff profile if it doesn't exist
+        staff_profile = Staff.objects.create(
+            user=request.user,
+            first_name=request.user.first_name,
+            last_name=request.user.last_name,
+        )
+
+    if request.method == 'POST':
+        user_form = UserProfileForm(request.POST, request.FILES, instance=request.user)
+        staff_form = StaffProfileForm(request.POST, instance=staff_profile)
+        
+        if user_form.is_valid() and staff_form.is_valid():
+            user = user_form.save()
+            staff = staff_form.save(commit=False)
+            
+            # Update staff name fields from user
+            staff.first_name = user.first_name
+            staff.last_name = user.last_name
+            staff.save()
+            
+            messages.success(request, 'Profile updated successfully!')
+            return redirect('core:profile')
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        user_form = UserProfileForm(instance=request.user)
+        staff_form = StaffProfileForm(instance=staff_profile)
+
+    context = {
+        'user_form': user_form,
+        'staff_form': staff_form,
+        'user': request.user,
+        'staff_profile': staff_profile,
+    }
+    
+    return render(request, 'core/edit_profile.html', context)
+
+
+@jwt_required
+def change_password(request):
+    """Change password view"""
+    if request.method == 'POST':
+        form = PasswordChangeForm(request.user, request.POST)
+        
+        if form.is_valid():
+            new_password = form.cleaned_data['new_password']
+            request.user.set_password(new_password)
+            request.user.save()
+            
+            messages.success(request, 'Password changed successfully! Please log in again with your new password.')
+            return redirect('home')
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = PasswordChangeForm(request.user)
+
+    context = {
+        'form': form,
+    }
+    
+    return render(request, 'core/change_password.html', context)

@@ -235,8 +235,11 @@
                         <!-- User Dropdown -->
                         <div class="relative" x-data="{ userMenuOpen: false }">
                             <button @click="userMenuOpen = !userMenuOpen" class="max-w-xs bg-white flex items-center text-sm rounded-xl px-3 py-2 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200">
-                                <div class="h-8 w-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm">
-                                    <span class="text-white font-bold text-xs" x-text="userInitials"></span>
+                                <div class="h-8 w-8 rounded-lg flex items-center justify-center shadow-sm overflow-hidden">
+                                    <img x-show="user && user.profile_photo" :src="user.profile_photo" :alt="userName" class="h-8 w-8 object-cover rounded-lg">
+                                    <div x-show="!user || !user.profile_photo" class="h-8 w-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-full flex items-center justify-center">
+                                        <span class="text-white font-bold text-xs" x-text="userInitials"></span>
+                                    </div>
                                 </div>
                                 <span class="ml-3 text-neutral-700 font-bold" x-text="userName"></span>
                                 <svg class="ml-2 h-4 w-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -245,8 +248,8 @@
                             </button>
                             
                             <div x-show="userMenuOpen" @click.away="userMenuOpen = false" x-transition class="origin-top-right absolute right-0 mt-2 w-48 rounded-xl shadow-lg py-2 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none border border-neutral-200">
-                                <a href="#" class="block px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-bold">Profile</a>
-                                <a href="#" class="block px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-bold">Settings</a>
+                                <a href="{% url 'core:profile' %}" class="block px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-bold">Profile</a>
+                                <a href="{% url 'core:edit_profile' %}" class="block px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-bold">Settings</a>
                                 <div class="border-t border-neutral-100 my-1"></div>
                                 <button @click="logout()" class="block w-full text-left px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-50 font-bold">Sign out</button>
                             </div>

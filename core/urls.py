@@ -11,6 +11,11 @@ urlpatterns = [
     path('api/auth/logout/', api_views.logout, name='logout'),
     path('api/auth/profile/', api_views.user_profile, name='user_profile'),
     path('api/debug/', api_views.debug_info, name='debug_info'),
+
+    # Profile views
+    path('profile/', views.profile, name='profile'),
+    path('profile/edit/', views.edit_profile, name='edit_profile'),
+    path('profile/password/', views.change_password, name='change_password'),
     
     # Main views
     path('departments/', views.departments, name='departments'),
@@ -40,3 +45,10 @@ urlpatterns = [
     path('restrictions/<uuid:external_id>/edit/', views.RestrictionUpdateView.as_view(), name='restrictions_edit'),
     path('restrictions/<uuid:external_id>/delete/', views.RestrictionDeleteView.as_view(), name='restrictions_delete'),
 ]
+
+# In your main urls.py, add:
+from django.conf import settings
+from django.conf.urls.static import static
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

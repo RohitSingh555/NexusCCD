@@ -1,12 +1,11 @@
-version: '3.8'
-
+version: "3.9"  # or "3.8", "3.7", etc.
 services:
   web:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
+##    ports:
+##      - "8000:8000"
     volumes:
       - .:/app
       - static_volume:/app/static
@@ -17,23 +16,25 @@ services:
       - .env.dev
     depends_on:
       - db
+      - redis
     command: python manage.py runserver 0.0.0.0:8000
 
   db:
     image: postgres:15
     environment:
-      POSTGRES_DB: ccd_dev
-      POSTGRES_USER: ccd
-      POSTGRES_PASSWORD: ccdpass
+      POSTGRES_DB: nexusccd_db
+      POSTGRES_USER: nexusccd_user
+      POSTGRES_PASSWORD: your_secure_password_here
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    # ports:
+    #  - "5433:5432"
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # ports:
+    #  - "6380:6379"
+
 
 volumes:
   postgres_data:
