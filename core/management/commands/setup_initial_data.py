@@ -9,24 +9,39 @@ class Command(BaseCommand):
         # Create default roles
         roles_data = [
             {
-                'name': 'Admin',
-                'description': 'Full system access',
-                'permissions': ['all']
+                'name': 'SuperAdmin',
+                'description': 'Full system access with all permissions',
+                'permissions': [
+                    'all',
+                    'manage_users',
+                    'manage_staff',
+                    'manage_clients',
+                    'manage_programs',
+                    'manage_departments',
+                    'view_reports',
+                    'manage_roles',
+                    'system_admin'
+                ]
             },
             {
-                'name': 'Manager',
-                'description': 'Department management access',
-                'permissions': ['view_all', 'edit_department', 'approve_changes']
+                'name': 'Staff',
+                'description': 'Staff member with operational access',
+                'permissions': [
+                    'view_clients',
+                    'edit_clients',
+                    'view_programs',
+                    'view_enrollments',
+                    'view_reports',
+                    'manage_own_profile'
+                ]
             },
             {
                 'name': 'User',
-                'description': 'Basic user access',
-                'permissions': ['view_clients', 'edit_clients', 'view_programs']
-            },
-            {
-                'name': 'Viewer',
-                'description': 'Read-only access',
-                'permissions': ['view_clients', 'view_programs']
+                'description': 'Basic user with limited access',
+                'permissions': [
+                    'view_own_profile',
+                    'edit_own_profile'
+                ]
             }
         ]
 
@@ -42,7 +57,7 @@ class Command(BaseCommand):
 
         # Create default departments
         departments_data = [
-            {'name': 'Administration', 'owner': 'System'},
+            {'name': 'Administration', 'owner': 'System Administrator'},
             {'name': 'Social Services', 'owner': 'Department Head'},
             {'name': 'Healthcare', 'owner': 'Medical Director'},
             {'name': 'Housing', 'owner': 'Housing Coordinator'},

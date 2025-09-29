@@ -16,4 +16,6 @@ urlpatterns = [
     path('dedupe/', views.ClientDedupeView.as_view(), name='dedupe'),
     path('dedupe/action/<int:duplicate_id>/<str:action>/', views.mark_duplicate_action, name='duplicate_action'),
     path('dedupe/bulk-action/', views.bulk_duplicate_action, name='bulk_duplicate_action'),
+    path('<uuid:external_id>/update-profile-picture/', views.update_profile_picture, name='update_profile_picture'),
+    path('<uuid:external_id>/remove-profile-picture/', views.remove_profile_picture, name='remove_profile_picture'),
 ]

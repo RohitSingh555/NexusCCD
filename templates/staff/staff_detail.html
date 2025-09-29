@@ -1,9 +1,9 @@
 {% extends 'dashboard_base.html' %}
 {% load static %}
 
-{% block title %}{{ staff_member.first_name }} {{ staff_member.last_name }} - Central Client Database{% endblock %}
+{% block title %}{% if staff_member.user %}{{ staff_member.user.first_name|default:staff_member.first_name|default:"N/A" }} {{ staff_member.user.last_name|default:staff_member.last_name|default:"N/A" }}{% else %}{{ staff_member.first_name|default:"N/A" }} {{ staff_member.last_name|default:"N/A" }}{% endif %} - Central Client Database{% endblock %}
 
-{% block page_title %}{{ staff_member.first_name }} {{ staff_member.last_name }}{% endblock %}
+{% block page_title %}{% if staff_member.user %}{{ staff_member.user.first_name|default:staff_member.first_name|default:"N/A" }} {{ staff_member.user.last_name|default:staff_member.last_name|default:"N/A" }}{% else %}{{ staff_member.first_name|default:"N/A" }} {{ staff_member.last_name|default:"N/A" }}{% endif %}{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -12,14 +12,28 @@
         <div class="flex items-center">
             <div class="w-16 h-16 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm mr-6">
                 <span class="text-2xl font-bold text-white">
-                    {{ staff_member.first_name|first|upper }}{{ staff_member.last_name|first|upper }}
+                    {% if staff_member.user %}
+                        {% if staff_member.user.first_name %}{{ staff_member.user.first_name|first|upper }}{% else %}?{% endif %}{% if staff_member.user.last_name %}{{ staff_member.user.last_name|first|upper }}{% else %}?{% endif %}
+                    {% else %}
+                        {% if staff_member.first_name %}{{ staff_member.first_name|first|upper }}{% else %}?{% endif %}{% if staff_member.last_name %}{{ staff_member.last_name|first|upper }}{% else %}?{% endif %}
+                    {% endif %}
                 </span>
             </div>
             <div>
                 <h1 class="text-3xl font-bold text-neutral-800 font-header">
-                    {{ staff_member.first_name }} {{ staff_member.last_name }}
+                    {% if staff_member.user %}
+                        {{ staff_member.user.first_name|default:staff_member.first_name|default:"N/A" }} {{ staff_member.user.last_name|default:staff_member.last_name|default:"N/A" }}
+                    {% else %}
+                        {{ staff_member.first_name|default:"N/A" }} {{ staff_member.last_name|default:"N/A" }}
+                    {% endif %}
                 </h1>
-                <p class="text-lg text-neutral-600 font-body">{{ staff_member.email }}</p>
+                <p class="text-lg text-neutral-600 font-body">
+                    {% if staff_member.user %}
+                        {{ staff_member.user.email|default:staff_member.email|default:"No email" }}
+                    {% else %}
+                        {{ staff_member.email|default:"No email" }}
+                    {% endif %}
+                </p>
             </div>
         </div>
         <div class="flex space-x-3">
@@ -55,16 +69,42 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">First Name</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ staff_member.first_name }}</p>
+                        <p class="text-lg text-neutral-900 font-body">
+                            {% if staff_member.user %}
+                                {{ staff_member.user.first_name|default:staff_member.first_name|default:"N/A" }}
+                            {% else %}
+                                {{ staff_member.first_name|default:"N/A" }}
+                            {% endif %}
+                        </p>
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Last Name</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ staff_member.last_name }}</p>
+                        <p class="text-lg text-neutral-900 font-body">
+                            {% if staff_member.user %}
+                                {{ staff_member.user.last_name|default:staff_member.last_name|default:"N/A" }}
+                            {% else %}
+                                {{ staff_member.last_name|default:"N/A" }}
+                            {% endif %}
+                        </p>
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Email Address</label>
                         <p class="text-lg text-neutral-900 font-body">
-                            <a href="mailto:{{ staff_member.email }}" class="text-brand-sky hover:text-brand-darkBlue">{{ staff_member.email }}</a>
+                            {% if staff_member.user %}
+                                {% if staff_member.user.email %}
+                                    <a href="mailto:{{ staff_member.user.email }}" class="text-brand-sky hover:text-brand-darkBlue">{{ staff_member.user.email }}</a>
+                                {% elif staff_member.email %}
+                                    <a href="mailto:{{ staff_member.email }}" class="text-brand-sky hover:text-brand-darkBlue">{{ staff_member.email }}</a>
+                                {% else %}
+                                    <span class="text-neutral-500">No email</span>
+                                {% endif %}
+                            {% else %}
+                                {% if staff_member.email %}
+                                    <a href="mailto:{{ staff_member.email }}" class="text-brand-sky hover:text-brand-darkBlue">{{ staff_member.email }}</a>
+                                {% else %}
+                                    <span class="text-neutral-500">No email</span>
+                                {% endif %}
+                            {% endif %}
                         </p>
                     </div>
                     <div>
@@ -155,6 +195,12 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
                         </svg>
                         Edit Staff
+                    </a>
+                    <a href="{% url 'staff:manage_roles' staff_member.external_id %}" class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-bold rounded-xl text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200 shadow-sm">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                        </svg>
+                        Manage Roles
                     </a>
                     <a href="{% url 'staff:delete' staff_member.external_id %}" class="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 text-sm font-bold rounded-xl text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-sm">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

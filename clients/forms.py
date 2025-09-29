@@ -8,13 +8,18 @@ class ClientForm(forms.ModelForm):
         model = Client
         fields = ['first_name', 'last_name', 'preferred_name', 'alias', 'dob', 'gender', 
                   'sexual_orientation', 'languages_spoken', 'ethnicity', 'citizenship_status', 
-                  'indigenous_status', 'country_of_birth', 'contact_information', 'addresses', 'image']
+                  'indigenous_status', 'country_of_birth', 'contact_information', 'addresses', 'image',
+                  'profile_picture']
         widgets = {
             'dob': forms.DateInput(attrs={'type': 'date'}),
             'languages_spoken': forms.HiddenInput(),
             'ethnicity': forms.HiddenInput(),
             'contact_information': forms.HiddenInput(),
             'addresses': forms.HiddenInput(),
+            'profile_picture': forms.FileInput(attrs={
+                'accept': 'image/*',
+                'class': 'hidden'
+            }),
         }
     
     def __init__(self, *args, **kwargs):
@@ -111,3 +116,19 @@ class ClientForm(forms.ModelForm):
                 raise forms.ValidationError("Invalid email format")
         
         return contact_info
+
+    def clean_profile_picture(self):
+        """Validate profile picture file"""
+        profile_picture = self.cleaned_data.get('profile_picture')
+        
+        if profile_picture:
+            # Check file size (5MB = 5 * 1024 * 1024 bytes)
+            max_size = 5 * 1024 * 1024  # 5MB in bytes
+            if profile_picture.size > max_size:
+                raise forms.ValidationError('File size must be less than 5MB')
+            
+            # Check file type
+            if not profile_picture.content_type.startswith('image/'):
+                raise forms.ValidationError('Please upload an image file')
+        
+        return profile_picture

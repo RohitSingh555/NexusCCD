@@ -1,0 +1,97 @@
+{% extends 'dashboard_base.html' %}
+{% load static %}
+
+{% block title %}Manage Roles - {{ staff_member.first_name }} {{ staff_member.last_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-neutral-800 font-header">
+                    Manage Roles - {{ staff_member.first_name }} {{ staff_member.last_name }}
+                </h1>
+                <p class="text-neutral-600 mt-2 font-body">
+                    Assign or remove roles for this staff member
+                </p>
+            </div>
+            <a href="{% url 'staff:detail' staff_member.external_id %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Back to Staff
+            </a>
+        </div>
+    </div>
+
+    <!-- Current Roles -->
+    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
+        <div class="flex items-center mb-6">
+            <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-4">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                </svg>
+            </div>
+            <h2 class="text-xl font-bold text-neutral-800 font-header">Current Roles</h2>
+        </div>
+        
+        {% if current_roles %}
+            <div class="flex flex-wrap gap-3">
+                {% for staff_role in current_roles %}
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-blue-100 text-blue-800">
+                        {{ staff_role.role.name }}
+                    </span>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-neutral-500 font-body">No roles assigned</p>
+        {% endif %}
+    </div>
+
+    <!-- Role Assignment Form -->
+    <form method="post" class="space-y-8">
+        {% csrf_token %}
+        
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">Assign Roles</h2>
+            </div>
+            
+            <div class="space-y-4">
+                {% for role in available_roles %}
+                    <div class="flex items-center">
+                        <input type="checkbox" 
+                               name="roles" 
+                               value="{{ role.id }}" 
+                               id="role_{{ role.id }}"
+                               class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded"
+                               {% for staff_role in current_roles %}{% if staff_role.role.id == role.id %}checked{% endif %}{% endfor %}>
+                        <label for="role_{{ role.id }}" class="ml-3 block text-sm font-medium text-neutral-900">
+                            <div class="font-bold">{{ role.name }}</div>
+                            <div class="text-sm text-neutral-500">{{ role.description }}</div>
+                        </label>
+                    </div>
+                {% empty %}
+                    <p class="text-neutral-500 font-body">No roles available</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-end space-x-4 pt-6">
+            <a href="{% url 'staff:detail' staff_member.external_id %}" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                Cancel
+            </a>
+            <button type="submit" class="px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                Update Roles
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}

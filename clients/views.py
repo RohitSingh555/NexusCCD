@@ -19,7 +19,7 @@ import json
 import uuid
 from datetime import datetime
 import logging
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
 
 logger = logging.getLogger(__name__)
@@ -332,7 +332,8 @@ def upload_clients(request):
             email = contact_info.get('email', '').strip()
             phone = contact_info.get('phone', '').strip()
             full_name = f"{client_data.get('first_name', '')} {client_data.get('last_name', '')}".strip()
-            
+            dob = client_data.get('dob', '')
+
             # Priority 1: Exact email match
             if email:
                 exact_email_match = Client.objects.filter(
@@ -369,6 +370,27 @@ def upload_clients(request):
                     # If names are very similar (80%+ similarity), consider it a duplicate
                     if similarity >= 0.8:
                         return client, f"name_similarity_{similarity:.2f}"
+
+            # Priority 5: Name + Date of Birth combination
+            if full_name and dob and dob != datetime(1900, 1, 1).date():  # Skip default DOB
+                name_dob_match = Client.objects.filter(
+                    first_name__iexact=client_data.get('first_name', '').strip(),
+                    last_name__iexact=client_data.get('last_name', '').strip(),
+                    dob=dob
+                ).first()
+                if name_dob_match:
+                    return name_dob_match, "name_dob_match"
+
+            # Priority 6: Date of Birth + Name similarity (if DOB is valid and not default)
+            if dob and dob != datetime(1900, 1, 1).date():
+                dob_clients = Client.objects.filter(dob=dob)
+                for client in dob_clients:
+                    client_full_name = f"{client.first_name} {client.last_name}".strip()
+                    similarity = calculate_name_similarity(full_name, client_full_name)
+                    
+                    # If names are similar (70%+ similarity) and DOB matches, consider it a duplicate
+                    if similarity >= 0.7:
+                        return client, f"dob_name_similarity_{similarity:.2f}"
             
             return None, None
         
@@ -603,6 +625,68 @@ def upload_clients(request):
                                 'match_field': f"Email: {duplicate_client.email}, Phone: {duplicate_client.phone}"
                             })
                             logger.info(f"Updated client by email+phone match: {duplicate_client.email}")
+
+                    elif match_type == "name_dob_match":
+                        # New: Name + DOB exact match
+                        similarity = 1.0  # 100% match
+                        confidence_level = fuzzy_matcher.get_duplicate_confidence_level(similarity)
+                        
+                        ClientDuplicate.objects.update_or_create(
+                            primary_client=duplicate_client,
+                            duplicate_client=client,
+                            defaults={
+                                'similarity_score': similarity,
+                                'match_type': 'name_dob_match',
+                                'confidence_level': confidence_level,
+                                'match_details': {
+                                    'primary_name': f"{duplicate_client.first_name} {duplicate_client.last_name}",
+                                    'duplicate_name': f"{client.first_name} {client.last_name}",
+                                    'primary_dob': duplicate_client.dob.strftime('%Y-%m-%d'),
+                                    'duplicate_dob': client.dob.strftime('%Y-%m-%d'),
+                                }
+                            }
+                        )
+                        
+                        duplicate_details.append({
+                            'type': 'created_with_duplicate',
+                            'reason': 'Exact name and date of birth match - created with duplicate flag',
+                            'client_name': client_name,
+                            'existing_name': existing_name,
+                            'match_field': f"Name: {existing_name}, DOB: {duplicate_client.dob.strftime('%Y-%m-%d')}"
+                        })
+                        logger.info(f"Created client with name+DOB duplicate flag: {existing_name} ({duplicate_client.dob})")
+                                    
+                    elif match_type.startswith("dob_name_similarity"):
+                        # New: DOB + Name similarity match
+                        similarity = float(match_type.split('_')[-1])
+                        confidence_level = fuzzy_matcher.get_duplicate_confidence_level(similarity)
+                        
+                        ClientDuplicate.objects.update_or_create(
+                            primary_client=duplicate_client,
+                            duplicate_client=client,
+                            defaults={
+                                'similarity_score': similarity,
+                                'match_type': 'dob_name_similarity',
+                                'confidence_level': confidence_level,
+                                'match_details': {
+                                    'primary_name': f"{duplicate_client.first_name} {duplicate_client.last_name}",
+                                    'duplicate_name': f"{client.first_name} {client.last_name}",
+                                    'primary_dob': duplicate_client.dob.strftime('%Y-%m-%d'),
+                                    'duplicate_dob': client.dob.strftime('%Y-%m-%d'),
+                                    'name_similarity': f"{similarity:.2f}"
+                                }
+                            }
+                        )
+                        
+                        duplicate_details.append({
+                            'type': 'created_with_duplicate',
+                            'reason': f'Date of birth match + name similarity ({similarity:.0%}) - created with duplicate flag',
+                            'client_name': client_name,
+                            'existing_name': existing_name,
+                            'match_field': f"DOB: {duplicate_client.dob.strftime('%Y-%m-%d')}, Name similarity: {similarity:.0%}"
+                        })
+                        logger.info(f"Created client with DOB+name similarity duplicate flag ({similarity:.2f}): {client_name}")
+                    
                     elif match_type.startswith("name_similarity"):
                         # Create duplicate relationship for name similarity
                         similarity = float(match_type.split('_')[-1])
@@ -1175,6 +1259,95 @@ def bulk_duplicate_action(request):
         }, status=400)
     except Exception as e:
         logger.error(f"Error in bulk_duplicate_action: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=500)
+
+
+# Update the update_profile_picture view
+@method_decorator(csrf_exempt, name='dispatch')
+@require_http_methods(["POST"])
+def update_profile_picture(request, external_id):
+    """Update client profile picture"""
+    try:
+        client = get_object_or_404(Client, external_id=external_id)
+        
+        # Handle file upload
+        if 'profile_picture' in request.FILES:
+            file = request.FILES['profile_picture']
+            
+            # Check file size (5MB = 5 * 1024 * 1024 bytes)
+            max_size = 5 * 1024 * 1024  # 5MB in bytes
+            if file.size > max_size:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'File size must be less than 5MB'
+                }, status=400)
+            
+            # Check file type
+            if not file.content_type.startswith('image/'):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Please upload an image file'
+                }, status=400)
+            
+            client.profile_picture = file
+            client.save()
+            return JsonResponse({
+                'success': True,
+                'profile_image_url': client.profile_picture.url,
+                'message': 'Profile picture updated successfully'
+            })
+        
+        # Handle URL update
+        elif 'image' in request.POST and request.POST['image']:
+            client.image = request.POST['image']
+            client.save()
+            return JsonResponse({
+                'success': True,
+                'profile_image_url': client.image,
+                'message': 'Profile picture URL updated successfully'
+            })
+        
+        else:
+            return JsonResponse({
+                'success': False,
+                'error': 'No file or URL provided'
+            }, status=400)
+            
+    except Exception as e:
+        logger.error(f"Error updating profile picture: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred: {str(e)}'
+        }, status=500)
+
+
+# Add this view for removing profile pictures
+@method_decorator(csrf_exempt, name='dispatch')
+@require_http_methods(["POST"])
+def remove_profile_picture(request, external_id):
+    """Remove client profile picture"""
+    try:
+        client = get_object_or_404(Client, external_id=external_id)
+        
+        # Remove the profile picture
+        if client.profile_picture:
+            client.profile_picture.delete()  # Delete the file from storage
+            client.profile_picture = None
+        
+        # Also clear the image URL
+        client.image = None
+        client.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Profile picture removed successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error removing profile picture: {str(e)}")
         return JsonResponse({
             'success': False,
             'error': f'An error occurred: {str(e)}'

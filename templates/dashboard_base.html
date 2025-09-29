@@ -135,7 +135,9 @@
                 <!-- Navigation -->
                 <div class="flex-grow flex flex-col overflow-y-auto">
                     <nav class="flex-1 px-3 space-y-2 pb-6">
+
                         <!-- Dashboard -->
+                        {% if user_permissions.can_view_dashboard|default:False %}
                         <a href="{% url 'dashboard' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if request.resolver_match.url_name == 'dashboard' %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
                             <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
@@ -143,48 +145,60 @@
                             </svg>
                             <span class="font-bold font-subheader">Dashboard</span>
                         </a>
+                        {% endif %}
 
-                        <!-- Clients -->
+                        <!-- Clients - Staff and above -->
+                        {% if user_permissions.can_view_clients|default:False %}
                         <a href="{% url 'clients:list' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'clients' in request.resolver_match.namespace %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
                             <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
                             </svg>
                             <span class="font-bold font-subheader">Clients</span>
                         </a>
+                        {% endif %}
 
-                        <!-- Programs & Services -->
+                        <!-- Programs & Services - Staff and above -->
+                        {% if user_permissions.can_view_programs|default:False %}
                         <a href="{% url 'programs:list' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'programs' in request.resolver_match.namespace %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
                             <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                             </svg>
                             <span class="font-bold font-subheader">Programs & Services</span>
                         </a>
+                        {% endif %}
 
-                        <!-- Departments -->
+                        <!-- Departments - Manager and above -->
+                        {% if user_permissions.can_view_departments|default:False %}
                         <a href="{% url 'core:departments' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'departments' in request.resolver_match.url_name %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
                             <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                             </svg>
                             <span class="font-bold font-subheader">Departments</span>
                         </a>
+                        {% endif %}
 
-                        <!-- Enrollments -->
+                        <!-- Enrollments - Staff and above -->
+                        {% if user_permissions.can_view_enrollments|default:False %}
                         <a href="{% url 'core:enrollments' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'enrollments' in request.resolver_match.url_name %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
                             <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                             </svg>
                             <span class="font-bold font-subheader">Enrollments</span>
                         </a>
+                        {% endif %}
 
-                        <!-- Restrictions -->
+                        <!-- Restrictions - Staff and above -->
+                        {% if user_permissions.can_view_restrictions|default:False %}
                         <a href="{% url 'core:restrictions' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'restrictions' in request.resolver_match.url_name %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
                             <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
                             </svg>
                             <span class="font-bold font-subheader">Restrictions</span>
                         </a>
+                        {% endif %}
 
-                        <!-- Approvals -->
+                        <!-- Approvals - Manager and above -->
+                        {% if user_permissions.can_view_approvals|default:False %}
                         <a href="{% url 'core:approvals' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'approvals' in request.resolver_match.url_name %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
                             <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -194,24 +208,40 @@
                             <span class="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-accent-400 rounded-full ml-auto">{{ pending_approvals_count }}</span>
                             {% endif %}
                         </a>
+                        {% endif %}
 
-                        <!-- Reports -->
+                        <!-- Reports - Staff and above -->
+                        {% if user_permissions.can_view_reports|default:False %}
                         <a href="{% url 'reports:list' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'reports' in request.resolver_match.namespace %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
                             <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                             </svg>
                             <span class="font-bold font-subheader">Reports</span>
                         </a>
+                        {% endif %}
 
-                        <!-- Audit Log -->
+                        <!-- Audit Log - Admin and above -->
+                        {% if user_permissions.can_view_audit_log|default:False %}
                         <a href="{% url 'core:audit_log' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'audit_log' in request.resolver_match.url_name %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
                             <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
                             </svg>
                             <span class="font-bold font-subheader">Audit Log</span>
                         </a>
+                        {% endif %}
+
+                        <!-- Staff Management - Admin and above -->
+                        {% if user_permissions.can_manage_users|default:False %}
+                        <a href="{% url 'staff:list' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'staff' in request.resolver_match.namespace %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
+                            <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                            </svg>
+                            <span class="font-bold font-subheader">Staff Management</span>
+                        </a>
+                        {% endif %}
                     </nav>
                 </div>
+
             </div>
         </div>
 

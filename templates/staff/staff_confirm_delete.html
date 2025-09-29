@@ -14,12 +14,21 @@
                 <h1 class="text-3xl font-bold text-neutral-800 font-header">Delete Staff</h1>
                 <p class="text-neutral-600 mt-2 font-body">This action cannot be undone</p>
             </div>
+            {% if staff_member.external_id %}
             <a href="{% url 'staff:detail' staff_member.external_id %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                 </svg>
                 Back to Staff
             </a>
+            {% else %}
+            <a href="{% url 'staff:list' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Back to Staff List
+            </a>
+            {% endif %}
         </div>
     </div>
 
@@ -100,22 +109,28 @@
             
             <div class="mb-6">
                 <label for="confirmation_name" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">
-                    Type "{{ staff_member.first_name }} {{ staff_member.last_name }}" to confirm
+                    Type "DELETE" to confirm
                 </label>
                 <input type="text" 
                        id="confirmation_name" 
                        name="confirmation_name" 
                        required 
                        class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent font-body"
-                       placeholder="Enter full name to confirm deletion">
+                       placeholder="Type DELETE to confirm">
             </div>
         </div>
 
         <!-- Form Actions -->
         <div class="flex justify-end space-x-4">
+            {% if staff_member.external_id %}
             <a href="{% url 'staff:detail' staff_member.external_id %}" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                 Cancel
             </a>
+            {% else %}
+            <a href="{% url 'staff:list' %}" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                Cancel
+            </a>
+            {% endif %}
             <button type="submit" 
                     id="delete-button"
                     disabled
@@ -130,28 +145,28 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const confirmationInput = document.getElementById('confirmation_name');
-    const deleteButton = document.getElementById('delete-button');
-    const expectedName = '{{ staff_member.first_name }} {{ staff_member.last_name }}';
-    
-    confirmationInput.addEventListener('input', function() {
-        if (this.value.trim() === expectedName) {
-            deleteButton.disabled = false;
-            deleteButton.classList.remove('opacity-50', 'cursor-not-allowed');
-        } else {
-            deleteButton.disabled = true;
-            deleteButton.classList.add('opacity-50', 'cursor-not-allowed');
-        }
+    document.addEventListener('DOMContentLoaded', function() {
+        const confirmationInput = document.getElementById('confirmation_name');
+        const deleteButton = document.getElementById('delete-button');
+        const expectedText = 'DELETE';
+        
+        confirmationInput.addEventListener('input', function() {
+            if (this.value.trim().toUpperCase() === expectedText) {
+                deleteButton.disabled = false;
+                deleteButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                deleteButton.disabled = true;
+                deleteButton.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        });
+        
+        // Prevent accidental form submission
+        document.querySelector('form').addEventListener('submit', function(e) {
+            if (confirmationInput.value.trim().toUpperCase() !== expectedText) {
+                e.preventDefault();
+                alert('Please type "DELETE" to confirm deletion.');
+            }
+        });
     });
-    
-    // Prevent accidental form submission
-    document.querySelector('form').addEventListener('submit', function(e) {
-        if (confirmationInput.value.trim() !== expectedName) {
-            e.preventDefault();
-            alert('Please type the exact name to confirm deletion.');
-        }
-    });
-});
-</script>
+    </script>
 {% endblock %}

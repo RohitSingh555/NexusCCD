@@ -105,6 +105,12 @@ class Staff(BaseModel):
                 condition=models.Q(email__isnull=False)
             )
         ]
+
+    def save(self, *args, **kwargs):
+        # Ensure external_id is always set
+        if not self.external_id:
+            self.external_id = uuid.uuid4()
+        super().save(*args, **kwargs)
     
     def __str__(self):
         if self.user:
@@ -251,6 +257,7 @@ class Client(BaseModel):
     indigenous_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     country_of_birth = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     image = models.URLField(max_length=500, null=True, blank=True)
+    profile_picture = models.ImageField(upload_to='client_photos/', null=True, blank=True)
     contact_information = models.JSONField(default=dict, help_text="Contact information with phone and email")
     addresses = models.JSONField(default=list, help_text="List of addresses with type, street, city, state, zip, country")
     uid_external = models.CharField(max_length=255, null=True, blank=True, unique=True, db_index=True)
@@ -270,6 +277,15 @@ class Client(BaseModel):
     def phone(self):
         """Get phone from contact_information"""
         return self.contact_information.get('phone', '') if self.contact_information else ''
+
+    @property
+    def profile_image_url(self):
+        """Get profile image URL, prioritizing uploaded file over URL"""
+        if self.profile_picture:
+            return self.profile_picture.url
+        elif self.image:
+            return self.image
+        return None
     
     class Meta:
         db_table = 'clients'

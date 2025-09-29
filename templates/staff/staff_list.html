@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'dashboard_base.html' %}
 {% load static %}
 
 {% block title %}Staff - Central Client Database{% endblock %}
@@ -10,9 +10,11 @@
             <h1 class="text-3xl font-bold text-secondary-900">Staff</h1>
             <p class="text-secondary-600 mt-2">Manage staff members and roles</p>
         </div>
+        {% if user_permissions.can_manage_staff %}
         <a href="{% url 'staff:create' %}" class="btn-primary">
             Add New Staff
         </a>
+        {% endif %}
     </div>
     
     <div class="card">
@@ -22,6 +24,7 @@
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Name</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Email</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Roles</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Status</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Created</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Actions</th>
@@ -34,18 +37,41 @@
                             <div class="flex items-center">
                                 <div class="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
                                     <span class="text-sm font-medium text-primary-700">
-                                        {{ staff_member.first_name|first|upper }}{{ staff_member.last_name|first|upper }}
+                                        {% if staff_member.user %}
+                                            {% if staff_member.user.first_name %}{{ staff_member.user.first_name|first|upper }}{% else %}?{% endif %}{% if staff_member.user.last_name %}{{ staff_member.user.last_name|first|upper }}{% else %}?{% endif %}
+                                        {% else %}
+                                            {% if staff_member.first_name %}{{ staff_member.first_name|first|upper }}{% else %}?{% endif %}{% if staff_member.last_name %}{{ staff_member.last_name|first|upper }}{% else %}?{% endif %}
+                                        {% endif %}
                                     </span>
                                 </div>
                                 <div class="ml-4">
                                     <div class="text-sm font-medium text-secondary-900">
-                                        {{ staff_member.first_name }} {{ staff_member.last_name }}
+                                        {% if staff_member.user %}
+                                            {{ staff_member.user.first_name|default:staff_member.first_name|default:"N/A" }} {{ staff_member.user.last_name|default:staff_member.last_name|default:"N/A" }}
+                                        {% else %}
+                                            {{ staff_member.first_name|default:"N/A" }} {{ staff_member.last_name|default:"N/A" }}
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
-                            {{ staff_member.email }}
+                            {% if staff_member.user %}
+                                {{ staff_member.user.email|default:staff_member.email|default:"No email" }}
+                            {% else %}
+                                {{ staff_member.email|default:"No email" }}
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex flex-wrap gap-1">
+                                {% for staff_role in staff_member.current_roles %}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        {{ staff_role.role.name }}
+                                    </span>
+                                {% empty %}
+                                    <span class="text-xs text-gray-500">No roles</span>
+                                {% endfor %}
+                            </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {% if staff_member.active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
@@ -57,14 +83,20 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <a href="{% url 'staff:detail' staff_member.external_id %}" class="text-primary-600 hover:text-primary-900 mr-3">View</a>
+                            {% if user_permissions.can_manage_staff %}
                             <a href="{% url 'staff:edit' staff_member.external_id %}" class="text-secondary-600 hover:text-secondary-900 mr-3">Edit</a>
+                            <a href="{% url 'staff:manage_roles' staff_member.external_id %}" class="text-purple-600 hover:text-purple-900 mr-3">Roles</a>
                             <a href="{% url 'staff:delete' staff_member.external_id %}" class="text-red-600 hover:text-red-900">Delete</a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="px-6 py-4 text-center text-secondary-500">
-                            No staff found. <a href="{% url 'staff:create' %}" class="text-primary-600 hover:text-primary-900">Add your first staff member</a>
+                        <td colspan="6" class="px-6 py-4 text-center text-secondary-500">
+                            No staff found. 
+                            {% if user_permissions.can_manage_staff %}
+                            <a href="{% url 'staff:create' %}" class="text-primary-600 hover:text-primary-900">Add your first staff member</a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endfor %}

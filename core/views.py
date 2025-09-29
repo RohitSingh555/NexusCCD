@@ -88,7 +88,25 @@ def home(request):
 
 @jwt_required
 def dashboard(request):
-    """Dashboard view with statistics and recent data"""
+    """Dashboard view - redirects to profile for users without proper permissions"""
+    # Check if user has proper permissions to access dashboard
+    try:
+        staff_profile = request.user.staff_profile
+        user_roles = staff_profile.staffrole_set.select_related('role').all()
+        role_names = [staff_role.role.name for staff_role in user_roles]
+        
+        # Check if user has any meaningful permissions
+        has_permissions = any(role in ['SuperAdmin', 'Admin', 'Manager', 'Staff'] for role in role_names)
+        
+        if not has_permissions:
+            # User doesn't have proper permissions, redirect to profile
+            return redirect('core:profile')
+            
+    except Staff.DoesNotExist:
+        # User doesn't have staff profile, redirect to profile
+        return redirect('core:profile')
+    
+    # User has proper permissions, show dashboard
     # Get basic statistics
     total_clients = Client.objects.count()
     active_programs = Program.objects.count()
