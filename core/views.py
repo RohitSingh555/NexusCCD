@@ -23,6 +23,49 @@ from .forms import UserProfileForm, StaffProfileForm, PasswordChangeForm
 User = get_user_model()
 
 
+class ProgramManagerAccessMixin:
+    """Mixin to filter data for Program Managers based on their assigned programs"""
+    
+    def get_queryset(self):
+        """Filter queryset based on user's assigned programs"""
+        queryset = super().get_queryset()
+        
+        if not self.request.user.is_authenticated:
+            return queryset.none()
+        
+        try:
+            staff = self.request.user.staff_profile
+            
+            # Superadmin can see everything
+            if self.request.user.is_superuser:
+                return queryset
+            
+            # Program Manager can only see assigned programs
+            if staff.is_program_manager():
+                assigned_programs = staff.get_assigned_programs()
+                return queryset.filter(program__in=assigned_programs)
+            
+            # Other roles see everything (Staff, etc.)
+            return queryset
+            
+        except:
+            return queryset.none()
+    
+    def get_context_data(self, **kwargs):
+        """Add program manager context"""
+        context = super().get_context_data(**kwargs)
+        
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                if staff.is_program_manager():
+                    context['assigned_programs'] = staff.get_assigned_programs()
+                    context['is_program_manager'] = True
+            except:
+                pass
+        
+        return context
+
 def jwt_required(view_func):
     """Decorator to require JWT authentication"""
     @wraps(view_func)
@@ -96,7 +139,7 @@ def dashboard(request):
         role_names = [staff_role.role.name for staff_role in user_roles]
         
         # Check if user has any meaningful permissions
-        has_permissions = any(role in ['SuperAdmin', 'Admin', 'Manager', 'Staff'] for role in role_names)
+        has_permissions = any(role in ['SuperAdmin', 'Staff','Program Manager'] for role in role_names)
         
         if not has_permissions:
             # User doesn't have proper permissions, redirect to profile
@@ -117,7 +160,21 @@ def dashboard(request):
     recent_clients = Client.objects.order_by('-created_at')[:10]
     
     # Get program status with enrollment counts and capacity information
-    programs = Program.objects.all()
+    # Filter programs for Program Managers
+    if request.user.is_authenticated:
+        try:
+            staff = request.user.staff_profile
+            if staff.is_program_manager():
+                # Program Manager can only see their assigned programs
+                programs = staff.get_assigned_programs()
+            else:
+                # SuperAdmin and Staff can see all programs
+                programs = Program.objects.all()
+        except:
+            programs = Program.objects.none()
+    else:
+        programs = Program.objects.none()
+    
     program_status = []
     
     for program in programs:
@@ -152,11 +209,23 @@ def dashboard(request):
 @jwt_required
 def departments(request):
     """Departments management view"""
-    # Get all departments with related counts
-    departments = Department.objects.annotate(
-        program_count=Count('program', distinct=True),
-        staff_count=Count('program__programstaff__staff', distinct=True)
-    ).order_by('name')
+    # Get departments - filter for Program Managers
+    if request.user.is_authenticated:
+        try:
+            staff = request.user.staff_profile
+            if staff.is_program_manager():
+                # Program Manager can only see departments of their assigned programs
+                departments = staff.get_assigned_departments()
+            else:
+                # SuperAdmin and Staff can see all departments
+                departments = Department.objects.annotate(
+                    program_count=Count('program', distinct=True),
+                    staff_count=Count('program__programstaff__staff', distinct=True)
+                ).order_by('name')
+        except:
+            departments = Department.objects.none()
+    else:
+        departments = Department.objects.none()
     
     # Get statistics
     total_departments = departments.count()
@@ -310,7 +379,7 @@ class DepartmentDeleteView(DeleteView):
 
 
 # Enrollment CRUD Views
-class EnrollmentListView(ListView):
+class EnrollmentListView(ProgramManagerAccessMixin, ListView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollments.html'
     context_object_name = 'enrollments'
@@ -337,7 +406,7 @@ class EnrollmentListView(ListView):
         return context
 
 
-class EnrollmentDetailView(DetailView):
+class EnrollmentDetailView(ProgramManagerAccessMixin, DetailView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollment_detail.html'
     context_object_name = 'enrollment'
@@ -345,22 +414,28 @@ class EnrollmentDetailView(DetailView):
     slug_url_kwarg = 'external_id'
 
 
-class EnrollmentCreateView(CreateView):
+class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
     model = ClientProgramEnrollment
     form_class = EnrollmentForm
     template_name = 'core/enrollment_form.html'
     success_url = reverse_lazy('core:enrollments')
     
-    def form_valid(self, form):
-        messages.success(self.request, 'Enrollment created successfully.')
-        return super().form_valid(form)
-    
-    def form_invalid(self, form):
-        messages.error(self.request, 'Please correct the errors below.')
-        return super().form_invalid(form)
+    def get_form_kwargs(self):
+        """Filter programs to only assigned ones for Program Managers"""
+        kwargs = super().get_form_kwargs()
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                if staff.is_program_manager():
+                    # Filter programs to only assigned ones
+                    assigned_programs = staff.get_assigned_programs()
+                    kwargs['program_queryset'] = assigned_programs
+            except:
+                pass
+        return kwargs
 
 
-class EnrollmentUpdateView(UpdateView):
+class EnrollmentUpdateView(ProgramManagerAccessMixin, UpdateView):
     model = ClientProgramEnrollment
     form_class = EnrollmentForm
     template_name = 'core/enrollment_form.html'
@@ -368,25 +443,27 @@ class EnrollmentUpdateView(UpdateView):
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:enrollments')
     
-    def form_valid(self, form):
-        messages.success(self.request, 'Enrollment updated successfully.')
-        return super().form_valid(form)
-    
-    def form_invalid(self, form):
-        messages.error(self.request, 'Please correct the errors below.')
-        return super().form_invalid(form)
+    def get_form_kwargs(self):
+        """Filter programs to only assigned ones for Program Managers"""
+        kwargs = super().get_form_kwargs()
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                if staff.is_program_manager():
+                    # Filter programs to only assigned ones
+                    assigned_programs = staff.get_assigned_programs()
+                    kwargs['program_queryset'] = assigned_programs
+            except:
+                pass
+        return kwargs
 
 
-class EnrollmentDeleteView(DeleteView):
+class EnrollmentDeleteView(ProgramManagerAccessMixin, DeleteView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollment_confirm_delete.html'
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:enrollments')
-    
-    def delete(self, request, *args, **kwargs):
-        messages.success(self.request, 'Enrollment deleted successfully.')
-        return super().delete(request, *args, **kwargs)
 
 
 @csrf_exempt
@@ -452,7 +529,7 @@ def check_program_capacity(request):
 
 
 # Service Restriction CRUD Views
-class RestrictionListView(ListView):
+class RestrictionListView(ProgramManagerAccessMixin, ListView):
     model = ServiceRestriction
     template_name = 'core/restrictions.html'
     context_object_name = 'restrictions'
@@ -461,7 +538,7 @@ class RestrictionListView(ListView):
     def get_queryset(self):
         return ServiceRestriction.objects.select_related(
             'client', 'program', 'program__department'
-        ).order_by('-start_date')
+        ).order_by('-created_at')
     
     def get_context_data(self, **kwargs):
         from django.utils import timezone
@@ -475,7 +552,7 @@ class RestrictionListView(ListView):
         return context
 
 
-class RestrictionDetailView(DetailView):
+class RestrictionDetailView(ProgramManagerAccessMixin, DetailView):
     model = ServiceRestriction
     template_name = 'core/restriction_detail.html'
     context_object_name = 'restriction'
@@ -483,7 +560,7 @@ class RestrictionDetailView(DetailView):
     slug_url_kwarg = 'external_id'
 
 
-class RestrictionCreateView(CreateView):
+class RestrictionCreateView(ProgramManagerAccessMixin, CreateView):
     model = ServiceRestriction
     template_name = 'core/restriction_form.html'
     fields = ['client', 'scope', 'program', 'start_date', 'end_date', 'reason']
@@ -494,10 +571,9 @@ class RestrictionCreateView(CreateView):
         return super().form_valid(form)
 
 
-class RestrictionUpdateView(UpdateView):
+class RestrictionUpdateView(ProgramManagerAccessMixin, UpdateView):
     model = ServiceRestriction
     template_name = 'core/restriction_form.html'
-    fields = ['client', 'scope', 'program', 'start_date', 'end_date', 'reason']
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:restrictions')
@@ -507,7 +583,7 @@ class RestrictionUpdateView(UpdateView):
         return super().form_valid(form)
 
 
-class RestrictionDeleteView(DeleteView):
+class RestrictionDeleteView(ProgramManagerAccessMixin, DeleteView):
     model = ServiceRestriction
     template_name = 'core/restriction_confirm_delete.html'
     slug_field = 'external_id'

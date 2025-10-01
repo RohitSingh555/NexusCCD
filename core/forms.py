@@ -10,18 +10,19 @@ from .models import Staff, Department
 class EnrollmentForm(forms.ModelForm):
     class Meta:
         model = ClientProgramEnrollment
-        fields = ['client', 'program', 'start_date', 'end_date']
+        fields = ['client', 'program', 'start_date', 'end_date', 'status', 'notes']
         widgets = {
             'start_date': forms.DateInput(attrs={'type': 'date'}),
             'end_date': forms.DateInput(attrs={'type': 'date'}),
+            'notes': forms.Textarea(attrs={'rows': 3}),
         }
     
     def __init__(self, *args, **kwargs):
+        program_queryset = kwargs.pop('program_queryset', None)
         super().__init__(*args, **kwargs)
         
-        # Set default start date to today
-        if not self.instance.pk:
-            self.fields['start_date'].initial = date.today()
+        if program_queryset is not None:
+            self.fields['program'].queryset = program_queryset
     
     def clean(self):
         cleaned_data = super().clean()

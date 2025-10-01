@@ -42,27 +42,27 @@ def user_permissions(request):
             # Check specific permissions for other roles
             permissions = {
                 'is_superadmin': 'SuperAdmin' in role_names or request.user.is_superuser,
-                'is_staff': 'Staff' in role_names or 'Admin' in role_names or 'Manager' in role_names,
+                'is_staff': 'Staff' in role_names,
                 'is_user': 'User' in role_names,
-                'can_view_clients': any(role in ['SuperAdmin', 'Admin', 'Staff', 'Manager'] for role in role_names),
-                'can_manage_clients': any(role in ['SuperAdmin', 'Admin', 'Staff'] for role in role_names),
-                'can_view_programs': any(role in ['SuperAdmin', 'Admin', 'Staff', 'Manager'] for role in role_names),
-                'can_manage_programs': any(role in ['SuperAdmin', 'Admin', 'Staff'] for role in role_names),
-                'can_view_departments': any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names),
-                'can_manage_departments': any(role in ['SuperAdmin', 'Admin'] for role in role_names),
-                'can_view_enrollments': any(role in ['SuperAdmin', 'Admin', 'Staff', 'Manager'] for role in role_names),
-                'can_manage_enrollments': any(role in ['SuperAdmin', 'Admin', 'Staff'] for role in role_names),
-                'can_view_restrictions': any(role in ['SuperAdmin', 'Admin', 'Staff', 'Manager'] for role in role_names),
-                'can_manage_restrictions': any(role in ['SuperAdmin', 'Admin', 'Staff'] for role in role_names),
-                'can_view_approvals': any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names),
-                'can_manage_approvals': any(role in ['SuperAdmin', 'Admin'] for role in role_names),
-                'can_view_reports': any(role in ['SuperAdmin', 'Admin', 'Staff', 'Manager'] for role in role_names),
-                'can_manage_reports': any(role in ['SuperAdmin', 'Admin'] for role in role_names),
-                'can_view_audit_log': any(role in ['SuperAdmin', 'Admin'] for role in role_names),
-                'can_manage_users': any(role in ['SuperAdmin', 'Admin'] for role in role_names),
-                'can_manage_staff': any(role in ['SuperAdmin', 'Admin'] for role in role_names),
-                'can_view_dashboard': any(role in ['SuperAdmin', 'Admin', 'Staff', 'Manager'] for role in role_names),
-
+                'can_view_clients': any(role in ['SuperAdmin', 'Staff'] for role in role_names),
+                'can_manage_clients': any(role in ['SuperAdmin'] for role in role_names),
+                'can_view_programs': any(role in ['SuperAdmin', 'Staff','Program Manager'] for role in role_names),
+                'can_manage_programs': any(role in ['SuperAdmin'] for role in role_names),
+                'can_view_departments': any(role in ['SuperAdmin','Program Manager'] for role in role_names),
+                'can_manage_departments': any(role in ['SuperAdmin'] for role in role_names),
+                'can_view_enrollments': any(role in ['SuperAdmin', 'Staff','Program Manager'] for role in role_names),
+                'can_manage_enrollments': any(role in ['SuperAdmin','Program Manager'] for role in role_names),
+                'can_view_restrictions': any(role in ['SuperAdmin', 'Staff','Program Manager'] for role in role_names),
+                'can_manage_restrictions': any(role in ['SuperAdmin','Program Manager'] for role in role_names),
+                'can_view_approvals': any(role in ['SuperAdmin'] for role in role_names),
+                'can_manage_approvals': any(role in ['SuperAdmin'] for role in role_names),
+                'can_view_reports': any(role in ['SuperAdmin', 'Staff','Program Manager'] for role in role_names),
+                'can_manage_reports': any(role in ['SuperAdmin'] for role in role_names),
+                'can_view_audit_log': any(role in ['SuperAdmin','Staff'] for role in role_names),
+                'can_manage_users': any(role in ['SuperAdmin'] for role in role_names),
+                'can_manage_staff': any(role in ['SuperAdmin'] for role in role_names),
+                'can_view_dashboard': any(role in ['SuperAdmin', 'Staff','Program Manager'] for role in role_names),
+                'is_program_manager': 'Program Manager' in role_names,
             }
             
             return {
@@ -101,3 +101,26 @@ def user_permissions(request):
         'user_roles': [],
         'user_permissions': {}
     }
+
+
+
+def program_manager_context(request):
+    """Add program manager context to all templates"""
+    context = {}
+    
+    if request.user.is_authenticated:
+        try:
+            staff = request.user.staff_profile
+            context['is_program_manager'] = staff.is_program_manager()
+            
+            if context['is_program_manager']:
+                context['assigned_programs'] = staff.get_assigned_programs()
+                context['assigned_services'] = staff.get_assigned_services()
+                context['assigned_departments'] = staff.get_assigned_departments()
+                context['assigned_programs_count'] = context['assigned_programs'].count()
+        except:
+            context['is_program_manager'] = False
+    else:
+        context['is_program_manager'] = False
+    
+    return context

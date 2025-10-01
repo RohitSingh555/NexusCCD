@@ -7,6 +7,11 @@ from django.contrib.auth import get_user_model
 from core.models import Staff, Role, StaffRole, User
 from .forms import StaffRoleForm
 import uuid
+from core.models import Staff, Role, StaffRole, User, ProgramServiceManagerAssignment, ProgramManagerAssignment, Program
+
+
+from .forms import StaffRoleForm, ProgramManagerAssignmentForm
+from programs.models import ProgramService
 
 class StaffListView(ListView):
     model = Staff
@@ -15,11 +20,20 @@ class StaffListView(ListView):
     paginate_by = 10
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        # Only show staff members who have a linked user account (can be converted to staff or already are staff)
+        queryset = Staff.objects.filter(user__isnull=False).select_related('user')
         # Add role information to each staff member
         for staff in queryset:
             staff.current_roles = staff.staffrole_set.select_related('role').all()
+            # Create a set of role IDs for easy lookup
+            staff.role_ids = set(staff.current_roles.values_list('role_id', flat=True))
         return queryset
+        
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Add all available roles to the context for the toggle buttons
+        context['available_roles'] = Role.objects.all()
+        return context
 
 class StaffDetailView(DetailView):
     model = Staff
@@ -32,7 +46,17 @@ class StaffDetailView(DetailView):
         context = super().get_context_data(**kwargs)
         staff = self.get_object()
         context['current_roles'] = staff.staffrole_set.select_related('role').all()
-        context['available_roles'] = Role.objects.all()
+
+        # Check if staff has program manager role
+        has_program_manager_role = staff.is_program_manager()
+        context['has_program_manager_role'] = has_program_manager_role
+
+        if has_program_manager_role:
+            context['assigned_programs'] = ProgramManagerAssignment.objects.filter(
+                staff=staff, 
+                is_active=True
+            ).select_related('program', 'program__department')
+        
         return context
 
 class StaffCreateView(CreateView):
@@ -235,3 +259,86 @@ def update_staff_roles(request, external_id):
             return JsonResponse({'success': False, 'message': str(e)})
     
     return JsonResponse({'success': False, 'message': 'Invalid request method'})
+
+
+def toggle_staff_role(request, external_id):
+    """AJAX endpoint for toggling a single staff role - only one role allowed at a time"""
+    if request.method == 'POST':
+        import json
+        staff = get_object_or_404(Staff, external_id=external_id)
+        data = json.loads(request.body)
+        role_id = data.get('role_id')
+        action = data.get('action')  # 'add' or 'remove'
+        
+        try:
+            role = Role.objects.get(id=role_id)
+            
+            if action == 'add':
+                # Remove all existing roles first
+                staff.staffrole_set.all().delete()
+                # Add the new role
+                StaffRole.objects.create(staff=staff, role=role)
+                message = f'Role "{role.name}" assigned successfully'
+            elif action == 'remove':
+                # Remove the current role
+                StaffRole.objects.filter(staff=staff, role=role).delete()
+                message = f'Role "{role.name}" removed successfully'
+            else:
+                return JsonResponse({'success': False, 'message': 'Invalid action'})
+            
+            return JsonResponse({'success': True, 'message': message})
+        except Role.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'Role not found'})
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)})
+    
+    return JsonResponse({'success': False, 'message': 'Invalid request method'})
+
+
+
+def manage_program_assignments(request, external_id):
+    """View for managing program assignments for program managers"""
+    staff = get_object_or_404(Staff, external_id=external_id)
+    
+    # Check if staff has program manager role
+    has_program_manager_role = staff.is_program_manager()
+    
+    if not has_program_manager_role:
+        messages.error(request, 'This staff member does not have the Program Manager role.')
+        return redirect('staff:detail', external_id=staff.external_id)
+    
+    if request.method == 'POST':
+        form = ProgramManagerAssignmentForm(request.POST, staff=staff)
+        if form.is_valid():
+            # Get the current user's staff profile
+            try:
+                assigned_by = request.user.staff_profile
+            except:
+                assigned_by = None
+            
+            form.save(staff, assigned_by)
+            messages.success(request, f'Program assignments updated successfully for {staff.first_name} {staff.last_name}')
+            return redirect('staff:detail', external_id=staff.external_id)
+    else:
+        form = ProgramManagerAssignmentForm(staff=staff)
+    
+    # Get current program assignments
+    current_program_assignments = ProgramManagerAssignment.objects.filter(
+        staff=staff, 
+        is_active=True
+    ).select_related('program', 'program__department')
+    
+    # Get all available programs grouped by department
+    from collections import defaultdict
+    programs_by_department = defaultdict(list)
+    for program in Program.objects.filter(status='active').select_related('department'):
+        programs_by_department[program.department].append(program)
+    
+    context = {
+        'staff_member': staff,
+        'form': form,
+        'current_program_assignments': current_program_assignments,
+        'programs_by_department': dict(programs_by_department),
+    }
+    
+    return render(request, 'staff/staff_program_assignments.html', context)

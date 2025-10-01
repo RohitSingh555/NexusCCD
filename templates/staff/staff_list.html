@@ -26,7 +26,6 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Email</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Roles</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Status</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Created</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">Actions</th>
                     </tr>
                 </thead>
@@ -35,14 +34,20 @@
                     <tr class="hover:bg-secondary-50">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="flex items-center">
-                                <div class="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                                    <span class="text-sm font-medium text-primary-700">
-                                        {% if staff_member.user %}
-                                            {% if staff_member.user.first_name %}{{ staff_member.user.first_name|first|upper }}{% else %}?{% endif %}{% if staff_member.user.last_name %}{{ staff_member.user.last_name|first|upper }}{% else %}?{% endif %}
-                                        {% else %}
-                                            {% if staff_member.first_name %}{{ staff_member.first_name|first|upper }}{% else %}?{% endif %}{% if staff_member.last_name %}{{ staff_member.last_name|first|upper }}{% else %}?{% endif %}
-                                        {% endif %}
-                                    </span>
+                                <div class="flex-shrink-0 h-10 w-10">
+                                    {% if staff_member.user.profile_photo %}
+                                        <img class="h-10 w-10 rounded-full object-cover" src="{{ staff_member.user.profile_photo.url }}" alt="{{ staff_member.user.first_name }} {{ staff_member.user.last_name }}">
+                                    {% else %}
+                                        <div class="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
+                                            <span class="text-sm font-medium text-primary-700">
+                                                {% if staff_member.user %}
+                                                    {% if staff_member.user.first_name %}{{ staff_member.user.first_name|first|upper }}{% else %}?{% endif %}{% if staff_member.user.last_name %}{{ staff_member.user.last_name|first|upper }}{% else %}?{% endif %}
+                                                {% else %}
+                                                    {% if staff_member.first_name %}{{ staff_member.first_name|first|upper }}{% else %}?{% endif %}{% if staff_member.last_name %}{{ staff_member.last_name|first|upper }}{% else %}?{% endif %}
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                    {% endif %}
                                 </div>
                                 <div class="ml-4">
                                     <div class="text-sm font-medium text-secondary-900">
@@ -62,14 +67,33 @@
                                 {{ staff_member.email|default:"No email" }}
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="flex flex-wrap gap-1">
-                                {% for staff_role in staff_member.current_roles %}
-                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                        {{ staff_role.role.name }}
-                                    </span>
-                                {% empty %}
-                                    <span class="text-xs text-gray-500">No roles</span>
+                        <td class="px-6 py-4">
+                            <div class="flex flex-wrap gap-2">
+                                {% for role in available_roles %}
+                                    {% comment %}Check if this staff member has this role{% endcomment %}
+                                    {% if role.id in staff_member.role_ids %}
+                                        <button 
+                                            type="button"
+                                            class="role-toggle-btn inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200 cursor-pointer bg-blue-100 text-blue-800 hover:bg-blue-200"
+                                            data-staff-id="{{ staff_member.external_id }}"
+                                            data-role-id="{{ role.id }}"
+                                            data-role-name="{{ role.name }}"
+                                            onclick="toggleRole(this)">
+                                            {{ role.name }}
+                                            <span class="ml-1">✓</span>
+                                        </button>
+                                    {% else %}
+                                        <button 
+                                            type="button"
+                                            class="role-toggle-btn inline-flex items-center px-3 py-1 rounded-full text-xs font-medium transition-colors duration-200 cursor-pointer bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                            data-staff-id="{{ staff_member.external_id }}"
+                                            data-role-id="{{ role.id }}"
+                                            data-role-name="{{ role.name }}"
+                                            onclick="toggleRole(this)">
+                                            {{ role.name }}
+                                            <span class="ml-1"></span>
+                                        </button>
+                                    {% endif %}
                                 {% endfor %}
                             </div>
                         </td>
@@ -78,21 +102,17 @@
                                 {% if staff_member.active %}Active{% else %}Inactive{% endif %}
                             </span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-secondary-500">
-                            {{ staff_member.created_at|date:"M d, Y" }}
-                        </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <a href="{% url 'staff:detail' staff_member.external_id %}" class="text-primary-600 hover:text-primary-900 mr-3">View</a>
                             {% if user_permissions.can_manage_staff %}
                             <a href="{% url 'staff:edit' staff_member.external_id %}" class="text-secondary-600 hover:text-secondary-900 mr-3">Edit</a>
-                            <a href="{% url 'staff:manage_roles' staff_member.external_id %}" class="text-purple-600 hover:text-purple-900 mr-3">Roles</a>
                             <a href="{% url 'staff:delete' staff_member.external_id %}" class="text-red-600 hover:text-red-900">Delete</a>
                             {% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="px-6 py-4 text-center text-secondary-500">
+                        <td colspan="5" class="px-6 py-4 text-center text-secondary-500">
                             No staff found. 
                             {% if user_permissions.can_manage_staff %}
                             <a href="{% url 'staff:create' %}" class="text-primary-600 hover:text-primary-900">Add your first staff member</a>
@@ -108,4 +128,77 @@
     <!-- Pagination -->
     {% include 'components/pagination.html' %}
 </div>
+
+<script>
+function toggleRole(button) {
+    const staffId = button.getAttribute('data-staff-id');
+    const roleId = button.getAttribute('data-role-id');
+    const roleName = button.getAttribute('data-role-name');
+    
+    // Check if role is currently active
+    const isActive = button.classList.contains('bg-blue-100');
+    const action = isActive ? 'remove' : 'add';
+    
+    // Disable button during request
+    button.disabled = true;
+    button.style.opacity = '0.6';
+    
+    // Send AJAX request
+    fetch(`/staff/${staffId}/toggle-role/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            role_id: roleId,
+            action: action
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            // If adding a role, remove all other role buttons' active state
+            if (action === 'add') {
+                const allRoleButtons = document.querySelectorAll(`[data-staff-id="${staffId}"]`);
+                allRoleButtons.forEach(btn => {
+                    btn.classList.remove('bg-blue-100', 'text-blue-800', 'hover:bg-blue-200');
+                    btn.classList.add('bg-gray-100', 'text-gray-600', 'hover:bg-gray-200');
+                    btn.querySelector('span').textContent = '';
+                });
+            }
+            
+            // Toggle current button appearance
+            if (isActive) {
+                button.classList.remove('bg-blue-100', 'text-blue-800', 'hover:bg-blue-200');
+                button.classList.add('bg-gray-100', 'text-gray-600', 'hover:bg-gray-200');
+                button.querySelector('span').textContent = '';
+            } else {
+                button.classList.remove('bg-gray-100', 'text-gray-600', 'hover:bg-gray-200');
+                button.classList.add('bg-blue-100', 'text-blue-800', 'hover:bg-blue-200');
+                button.querySelector('span').textContent = '✓';
+            }
+            
+            // Show success message
+            console.log(data.message);
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while updating the role: ' + error.message);
+    })
+    .finally(() => {
+        // Re-enable button
+        button.disabled = false;
+        button.style.opacity = '1';
+    });
+}
+</script>
 {% endblock %}

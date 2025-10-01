@@ -117,6 +117,63 @@ class Staff(BaseModel):
             return f"{self.user.first_name} {self.user.last_name}"
         return f"{self.first_name} {self.last_name}"
 
+    def is_program_manager(self):
+        """Check if staff has program manager role"""
+        return self.staffrole_set.filter(role__name='Program Manager').exists()
+    
+    def get_assigned_programs(self):
+        """Get all programs assigned to this program manager"""
+        if not self.is_program_manager():
+            return Program.objects.none()
+        return Program.objects.filter(
+            manager_assignments__staff=self,
+            manager_assignments__is_active=True
+        ).distinct()
+
+    def get_assigned_services(self):
+        """Get all services assigned to this program manager"""
+        if not self.is_program_manager():
+            from programs.models import ProgramService
+            return ProgramService.objects.none()
+        from programs.models import ProgramService
+        return ProgramService.objects.filter(
+            manager_assignments__staff=self,
+            manager_assignments__is_active=True
+        ).distinct()
+    
+    def get_assigned_departments(self):
+        """Get all departments for assigned programs"""
+        if not self.is_program_manager():
+            return Department.objects.none()
+        return Department.objects.filter(
+            program__manager_assignments__staff=self,
+            program__manager_assignments__is_active=True
+        ).distinct()
+    
+    def can_access_program(self, program):
+        """Check if program manager can access a specific program"""
+        if not self.is_program_manager():
+            return False
+        return self.program_manager_assignments.filter(
+            program=program,
+            is_active=True
+        ).exists()
+    
+    def can_access_service(self, service):
+        """Check if program manager can access a specific service"""
+        if not self.is_program_manager():
+            return False
+        return self.service_manager_assignments.filter(
+            program_service=service,
+            is_active=True
+        ).exists()
+    
+    def can_manage_enrollment(self, enrollment):
+        """Check if program manager can manage a specific enrollment"""
+        if not self.is_program_manager():
+            return False
+        return self.can_access_program(enrollment.program)
+
 
 class StaffRole(BaseModel):
     staff = models.ForeignKey(Staff, on_delete=models.CASCADE, db_index=True)
@@ -544,3 +601,43 @@ class ClientDuplicate(BaseModel):
         self.reviewed_at = timezone.now()
         self.review_notes = notes
         self.save()
+
+class ProgramManagerAssignment(BaseModel):
+    """Assigns a staff member with Program Manager role to specific programs"""
+    staff = models.ForeignKey(Staff, on_delete=models.CASCADE, db_index=True, related_name='program_manager_assignments')
+    program = models.ForeignKey(Program, on_delete=models.CASCADE, db_index=True, related_name='manager_assignments')
+    assigned_by = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_program_managers')
+    assigned_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    notes = models.TextField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'program_manager_assignments'
+        unique_together = ['staff', 'program']
+        indexes = [
+            models.Index(fields=['staff', 'is_active']),
+            models.Index(fields=['program', 'is_active']),
+        ]
+    
+    def __str__(self):
+        return f"{self.staff} - Program Manager for {self.program.name}"
+
+class ProgramServiceManagerAssignment(BaseModel):
+    """Assigns a staff member with Program Manager role to specific program services"""
+    staff = models.ForeignKey(Staff, on_delete=models.CASCADE, db_index=True, related_name='service_manager_assignments')
+    program_service = models.ForeignKey('programs.ProgramService', on_delete=models.CASCADE, db_index=True, related_name='manager_assignments')
+    assigned_by = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_service_managers')
+    assigned_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    notes = models.TextField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'program_service_manager_assignments'
+        unique_together = ['staff', 'program_service']
+        indexes = [
+            models.Index(fields=['staff', 'is_active']),
+            models.Index(fields=['program_service', 'is_active']),
+        ]
+    
+    def __str__(self):
+        return f"{self.staff} - Service Manager for {self.program_service.name}"

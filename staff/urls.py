@@ -12,4 +12,6 @@ urlpatterns = [
     path('<uuid:external_id>/roles/', views.StaffRoleManageView.as_view(), name='manage_roles'),
     path('<uuid:external_id>/roles/update/', views.update_staff_roles, name='update_roles'),
     path('upgrade-user/<uuid:external_id>/', views.upgrade_user_to_staff, name='upgrade_user'),
+    path('<uuid:external_id>/toggle-role/', views.toggle_staff_role, name='toggle_role'),
+    path('<uuid:external_id>/programs/', views.manage_program_assignments, name='manage_programs'),
 ]
