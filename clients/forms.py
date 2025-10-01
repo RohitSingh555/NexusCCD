@@ -6,20 +6,29 @@ import json
 class ClientForm(forms.ModelForm):
     class Meta:
         model = Client
-        fields = ['first_name', 'last_name', 'preferred_name', 'alias', 'dob', 'gender', 
-                  'sexual_orientation', 'languages_spoken', 'ethnicity', 'citizenship_status', 
-                  'indigenous_status', 'country_of_birth', 'contact_information', 'addresses', 'image',
-                  'profile_picture']
+        fields = [
+            'first_name', 'last_name', 'preferred_name', 'alias', 'dob', 'gender', 
+            'sexual_orientation', 'languages_spoken', 'ethnicity', 'citizenship_status', 
+            'indigenous_status', 'country_of_birth', 'contact_information', 'addresses', 'image',
+            'profile_picture', 'address_2', 'permission_to_phone', 'permission_to_email',
+            'phone_work', 'phone_alt', 'client_id', 'medical_conditions', 'primary_diagnosis',
+            'support_workers', 'next_of_kin', 'emergency_contact', 'comments'
+        ]
         widgets = {
             'dob': forms.DateInput(attrs={'type': 'date'}),
             'languages_spoken': forms.HiddenInput(),
             'ethnicity': forms.HiddenInput(),
             'contact_information': forms.HiddenInput(),
             'addresses': forms.HiddenInput(),
+            'support_workers': forms.HiddenInput(),
+            'next_of_kin': forms.HiddenInput(),
+            'emergency_contact': forms.HiddenInput(),
             'profile_picture': forms.FileInput(attrs={
                 'accept': 'image/*',
                 'class': 'hidden'
             }),
+            'medical_conditions': forms.Textarea(attrs={'rows': 3}),
+            'comments': forms.Textarea(attrs={'rows': 3}),
         }
     
     def __init__(self, *args, **kwargs):
@@ -30,10 +39,16 @@ class ClientForm(forms.ModelForm):
             self.addresses_data = self.instance.addresses if self.instance.addresses else []
             self.contact_data = self.instance.contact_information if self.instance.contact_information else {}
             self.ethnicity_data = self.instance.ethnicity if self.instance.ethnicity else []
+            self.support_workers_data = self.instance.support_workers if self.instance.support_workers else []
+            self.next_of_kin_data = self.instance.next_of_kin if self.instance.next_of_kin else {}
+            self.emergency_contact_data = self.instance.emergency_contact if self.instance.emergency_contact else {}
         else:
             self.addresses_data = []
             self.contact_data = {}
             self.ethnicity_data = []
+            self.support_workers_data = []
+            self.next_of_kin_data = {}
+            self.emergency_contact_data = {}
     
     def clean_addresses(self):
         """Validate and clean addresses data"""
@@ -116,6 +131,51 @@ class ClientForm(forms.ModelForm):
                 raise forms.ValidationError("Invalid email format")
         
         return contact_info
+
+    def clean_support_workers(self):
+        """Validate and clean support_workers data"""
+        support_workers = self.cleaned_data.get('support_workers', [])
+        
+        if isinstance(support_workers, str):
+            try:
+                support_workers = json.loads(support_workers)
+            except json.JSONDecodeError:
+                raise forms.ValidationError("Invalid JSON format for support workers")
+        
+        if not isinstance(support_workers, list):
+            raise forms.ValidationError("Support workers must be a list")
+        
+        return support_workers
+
+    def clean_next_of_kin(self):
+        """Validate and clean next_of_kin data"""
+        next_of_kin = self.cleaned_data.get('next_of_kin', {})
+        
+        if isinstance(next_of_kin, str):
+            try:
+                next_of_kin = json.loads(next_of_kin)
+            except json.JSONDecodeError:
+                raise forms.ValidationError("Invalid JSON format for next of kin")
+        
+        if not isinstance(next_of_kin, dict):
+            raise forms.ValidationError("Next of kin must be a dictionary")
+        
+        return next_of_kin
+
+    def clean_emergency_contact(self):
+        """Validate and clean emergency_contact data"""
+        emergency_contact = self.cleaned_data.get('emergency_contact', {})
+        
+        if isinstance(emergency_contact, str):
+            try:
+                emergency_contact = json.loads(emergency_contact)
+            except json.JSONDecodeError:
+                raise forms.ValidationError("Invalid JSON format for emergency contact")
+        
+        if not isinstance(emergency_contact, dict):
+            raise forms.ValidationError("Emergency contact must be a dictionary")
+        
+        return emergency_contact
 
     def clean_profile_picture(self):
         """Validate profile picture file"""

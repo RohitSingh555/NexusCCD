@@ -1,48 +1,19 @@
 from django.core.management.base import BaseCommand
-from core.models import Role, Department
+from core.models import Role, Department, Staff, StaffRole
+from django.contrib.auth import get_user_model
 
+User = get_user_model()
 
 class Command(BaseCommand):
     help = 'Set up initial roles and departments'
 
     def handle(self, *args, **options):
         # Create default roles
+        
         roles_data = [
-            {
-                'name': 'SuperAdmin',
-                'description': 'Full system access with all permissions',
-                'permissions': [
-                    'all',
-                    'manage_users',
-                    'manage_staff',
-                    'manage_clients',
-                    'manage_programs',
-                    'manage_departments',
-                    'view_reports',
-                    'manage_roles',
-                    'system_admin'
-                ]
-            },
-            {
-                'name': 'Staff',
-                'description': 'Staff member with operational access',
-                'permissions': [
-                    'view_clients',
-                    'edit_clients',
-                    'view_programs',
-                    'view_enrollments',
-                    'view_reports',
-                    'manage_own_profile'
-                ]
-            },
-            {
-                'name': 'User',
-                'description': 'Basic user with limited access',
-                'permissions': [
-                    'view_own_profile',
-                    'edit_own_profile'
-                ]
-            }
+            {'name': 'SuperAdmin', 'description': 'Full system access', 'permissions': ['all']},
+            {'name': 'Staff', 'description': 'Basic staff access', 'permissions': ['read', 'write']},
+            {'name': 'Program Manager', 'description': 'Program management access', 'permissions': ['program_management']},
         ]
 
         for role_data in roles_data:
@@ -62,6 +33,7 @@ class Command(BaseCommand):
             {'name': 'Healthcare', 'owner': 'Medical Director'},
             {'name': 'Housing', 'owner': 'Housing Coordinator'},
             {'name': 'Employment', 'owner': 'Employment Specialist'},
+            {'name': 'NA', 'owner': 'System'},  # Add NA department
         ]
 
         for dept_data in departments_data:

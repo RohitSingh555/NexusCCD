@@ -395,6 +395,9 @@
                                 this.userName = `${data.user.first_name} ${data.user.last_name}`;
                                 this.userInitials = `${data.user.first_name[0]}${data.user.last_name[0]}`.toUpperCase();
                                 this.isAuthenticated = true;
+                            } else if (response.status === 401) {
+                                // Token expired, try to refresh
+                                await this.refreshToken();
                             } else {
                                 this.logout();
                             }
@@ -402,6 +405,54 @@
                             console.error('Auth check failed:', error);
                             this.logout();
                         }
+                    }
+                },
+                
+                async refreshToken() {
+                    const refreshToken = localStorage.getItem('refresh_token');
+                    if (refreshToken) {
+                        try {
+                            const refreshResponse = await fetch('/core/api/auth/refresh/', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({ refresh: refreshToken })
+                            });
+                            
+                            if (refreshResponse.ok) {
+                                const refreshData = await refreshResponse.json();
+                                localStorage.setItem('access_token', refreshData.access);
+                                
+                                // Update cookies
+                                document.cookie = `access_token=${refreshData.access}; path=/; max-age=3600; SameSite=Lax`;
+                                
+                                // Retry the profile request
+                                const retryResponse = await fetch('/core/api/auth/profile/', {
+                                    headers: {
+                                        'Authorization': `Bearer ${refreshData.access}`,
+                                        'Content-Type': 'application/json',
+                                    }
+                                });
+                                
+                                if (retryResponse.ok) {
+                                    const retryData = await retryResponse.json();
+                                    this.user = retryData.user;
+                                    this.userName = `${retryData.user.first_name} ${retryData.user.last_name}`;
+                                    this.userInitials = `${retryData.user.first_name[0]}${retryData.user.last_name[0]}`.toUpperCase();
+                                    this.isAuthenticated = true;
+                                } else {
+                                    this.logout();
+                                }
+                            } else {
+                                this.logout();
+                            }
+                        } catch (error) {
+                            console.error('Token refresh failed:', error);
+                            this.logout();
+                        }
+                    } else {
+                        this.logout();
                     }
                 },
                 
@@ -534,6 +585,9 @@
                     
                     // Show success message
                     this.showNotification('Successfully logged out!', 'info');
+                    
+                    // Redirect to home page after logout
+                    window.location.href = '/';
                 },
                 
                 showNotification(message, type = 'info') {

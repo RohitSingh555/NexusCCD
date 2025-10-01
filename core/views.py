@@ -1,10 +1,5 @@
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
-from django.utils import timezone
-from datetime import timedelta
-from rest_framework_simplejwt.tokens import AccessToken
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from django.shortcuts import render, redirect
+from django.db.models import Count
 from django.http import JsonResponse
 from django.contrib.auth import get_user_model
 from functools import wraps
@@ -33,22 +28,25 @@ class ProgramManagerAccessMixin:
         if not self.request.user.is_authenticated:
             return queryset.none()
         
+        # Superadmin can see everything - bypass all filtering
+        if self.request.user.is_superuser:
+            return queryset
+        
         try:
             staff = self.request.user.staff_profile
-            
-            # Superadmin can see everything
-            if self.request.user.is_superuser:
-                return queryset
             
             # Program Manager can only see assigned programs
             if staff.is_program_manager():
                 assigned_programs = staff.get_assigned_programs()
-                return queryset.filter(program__in=assigned_programs)
+                return queryset.filter(id__in=assigned_programs)
             
             # Other roles see everything (Staff, etc.)
             return queryset
             
-        except:
+        except Exception:
+            # For superadmin, return all programs even if there's an exception
+            if self.request.user.is_superuser:
+                return queryset
             return queryset.none()
     
     def get_context_data(self, **kwargs):
@@ -61,39 +59,20 @@ class ProgramManagerAccessMixin:
                 if staff.is_program_manager():
                     context['assigned_programs'] = staff.get_assigned_programs()
                     context['is_program_manager'] = True
-            except:
+            except Exception:
                 pass
         
         return context
 
 def jwt_required(view_func):
-    """Decorator to require JWT authentication"""
+    """Decorator to require authentication (JWT or Django session)"""
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
-        # Check for JWT token in Authorization header
-        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-        if auth_header.startswith('Bearer '):
-            token = auth_header.split(' ')[1]
-            try:
-                access_token = AccessToken(token)
-                user_id = access_token['user_id']
-                request.user = User.objects.get(id=user_id)
-                return view_func(request, *args, **kwargs)
-            except (InvalidToken, TokenError, User.DoesNotExist):
-                pass
+        # Check if user is authenticated (either JWT via middleware or Django session)
+        if request.user.is_authenticated:
+            return view_func(request, *args, **kwargs)
         
-        # Check for JWT token in cookies
-        token = request.COOKIES.get('access_token')
-        if token:
-            try:
-                access_token = AccessToken(token)
-                user_id = access_token['user_id']
-                request.user = User.objects.get(id=user_id)
-                return view_func(request, *args, **kwargs)
-            except (InvalidToken, TokenError, User.DoesNotExist):
-                pass
-        
-        # If no valid JWT token, redirect to home
+        # If no authentication at all, redirect to home
         return redirect('home')
     
     return wrapper
@@ -101,37 +80,19 @@ def jwt_required(view_func):
 
 def home(request):
     """Home view that redirects authenticated users to dashboard"""
-    # Check for JWT token in Authorization header
-    auth_header = request.META.get('HTTP_AUTHORIZATION', '')
-    if auth_header.startswith('Bearer '):
-        token = auth_header.split(' ')[1]
-        try:
-            # Validate the token
-            AccessToken(token)
-            # If token is valid, redirect to dashboard
-            return redirect('dashboard')
-        except (InvalidToken, TokenError):
-            pass
-    
-    # Check for JWT token in cookies (for web requests)
-    token = request.COOKIES.get('access_token')
-    if token:
-        try:
-            AccessToken(token)
-            return redirect('dashboard')
-        except (InvalidToken, TokenError):
-            pass
-    
-    # Check Django session authentication as fallback
+    # Check if user is authenticated (either JWT via middleware or Django session)
     if request.user.is_authenticated:
         return redirect('dashboard')
     
     return render(request, 'home.html')
 
 
-@jwt_required
 def dashboard(request):
     """Dashboard view - redirects to profile for users without proper permissions"""
+    # Check if user is authenticated (either JWT via middleware or Django session)
+    if not request.user.is_authenticated:
+        return redirect('home')
+    
     # Check if user has proper permissions to access dashboard
     try:
         staff_profile = request.user.staff_profile
@@ -170,7 +131,7 @@ def dashboard(request):
             else:
                 # SuperAdmin and Staff can see all programs
                 programs = Program.objects.all()
-        except:
+        except Exception:
             programs = Program.objects.none()
     else:
         programs = Program.objects.none()
@@ -222,7 +183,7 @@ def departments(request):
                     program_count=Count('program', distinct=True),
                     staff_count=Count('program__programstaff__staff', distinct=True)
                 ).order_by('name')
-        except:
+        except Exception:
             departments = Department.objects.none()
     else:
         departments = Department.objects.none()
@@ -274,7 +235,7 @@ def enrollments(request):
 @jwt_required
 def restrictions(request):
     """Service restrictions management view"""
-    from django.utils import timezone
+    from django.utils import timezone as django_timezone
     
     # Get all restrictions with related data
     restrictions = ServiceRestriction.objects.select_related(
@@ -295,7 +256,7 @@ def restrictions(request):
         'active_restrictions': active_restrictions,
         'org_restrictions': org_restrictions,
         'program_restrictions': program_restrictions,
-        'today': timezone.now().date(),
+        'today': django_timezone.now().date(),
     }
     
     return render(request, 'core/restrictions.html', context)
@@ -430,7 +391,7 @@ class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
                     # Filter programs to only assigned ones
                     assigned_programs = staff.get_assigned_programs()
                     kwargs['program_queryset'] = assigned_programs
-            except:
+            except Exception:
                 pass
         return kwargs
 
@@ -453,7 +414,7 @@ class EnrollmentUpdateView(ProgramManagerAccessMixin, UpdateView):
                     # Filter programs to only assigned ones
                     assigned_programs = staff.get_assigned_programs()
                     kwargs['program_queryset'] = assigned_programs
-            except:
+            except Exception:
                 pass
         return kwargs
 
@@ -541,14 +502,14 @@ class RestrictionListView(ProgramManagerAccessMixin, ListView):
         ).order_by('-created_at')
     
     def get_context_data(self, **kwargs):
-        from django.utils import timezone
+        from django.utils import timezone as django_timezone
         context = super().get_context_data(**kwargs)
         restrictions = self.get_queryset()
         context['total_restrictions'] = restrictions.count()
         context['active_restrictions'] = restrictions.filter(end_date__isnull=True).count()
         context['org_restrictions'] = restrictions.filter(scope='org').count()
         context['program_restrictions'] = restrictions.filter(scope='program').count()
-        context['today'] = timezone.now().date()
+        context['today'] = django_timezone.now().date()
         return context
 
 

@@ -319,6 +319,33 @@ class Client(BaseModel):
     addresses = models.JSONField(default=list, help_text="List of addresses with type, street, city, state, zip, country")
     uid_external = models.CharField(max_length=255, null=True, blank=True, unique=True, db_index=True)
     
+    # New fields for comprehensive client information
+    # Address fields
+    address_2 = models.CharField(max_length=255, null=True, blank=True, help_text="Address line 2")
+    
+    # Contact permissions
+    permission_to_phone = models.BooleanField(default=False, db_index=True, help_text="Permission to contact by phone")
+    permission_to_email = models.BooleanField(default=False, db_index=True, help_text="Permission to contact by email")
+    
+    # Additional phone numbers
+    phone_work = models.CharField(max_length=20, null=True, blank=True, help_text="Work phone number")
+    phone_alt = models.CharField(max_length=20, null=True, blank=True, help_text="Alternative phone number")
+    
+    # Client ID
+    client_id = models.CharField(max_length=100, null=True, blank=True, unique=True, db_index=True, help_text="External client ID")
+    
+    # Medical information
+    medical_conditions = models.TextField(null=True, blank=True, help_text="Medical conditions")
+    primary_diagnosis = models.CharField(max_length=255, null=True, blank=True, help_text="Primary diagnosis")
+    
+    # Support and emergency contacts
+    support_workers = models.JSONField(default=list, help_text="List of assigned support workers")
+    next_of_kin = models.JSONField(default=dict, help_text="Next of kin contact information")
+    emergency_contact = models.JSONField(default=dict, help_text="Emergency contact information")
+    
+    # Comments
+    comments = models.TextField(null=True, blank=True, help_text="Additional comments and notes")
+    
     def save(self, *args, **kwargs):
         # Auto-generate external ID if not provided
         if not self.uid_external:
@@ -349,9 +376,12 @@ class Client(BaseModel):
         indexes = [
             models.Index(fields=['first_name', 'last_name', 'dob'], name='client_name_dob_idx'),
             models.Index(fields=['uid_external'], name='client_uid_external_idx'),
+            models.Index(fields=['client_id'], name='client_id_idx'),
             models.Index(fields=['citizenship_status'], name='client_citizenship_status_idx'),
             models.Index(fields=['indigenous_status'], name='client_indigenous_status_idx'),
             models.Index(fields=['country_of_birth'], name='client_country_of_birth_idx'),
+            models.Index(fields=['permission_to_phone'], name='client_permission_phone_idx'),
+            models.Index(fields=['permission_to_email'], name='client_permission_email_idx'),
         ]
     
     def __str__(self):

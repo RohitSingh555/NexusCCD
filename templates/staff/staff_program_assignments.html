@@ -40,20 +40,20 @@
                 </svg>
             </div>
             <div>
-                <h2 class="text-xl font-bold text-neutral-800 font-header">Assigned Program Services</h2>
-                <p class="text-sm text-neutral-600 font-body">{{ current_service_assignments.count }} service(s)</p>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">Assigned Programs</h2>
+                <p class="text-sm text-neutral-600 font-body">{{ current_program_assignments.count }} program(s)</p>
             </div>
         </div>
         
-        {% if current_service_assignments %}
+        {% if current_program_assignments %}
             <div class="space-y-3 max-h-96 overflow-y-auto">
-                {% for assignment in current_service_assignments %}
+                {% for assignment in current_program_assignments %}
                     <div class="border border-neutral-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                         <div class="flex items-start justify-between">
                             <div class="flex-1">
-                                <h3 class="font-bold text-neutral-900 font-subheader">{{ assignment.program_service.name }}</h3>
-                                <p class="text-sm text-neutral-600 font-body mt-1">{{ assignment.program_service.program.name }}</p>
-                                <p class="text-xs text-neutral-500 font-body mt-1">{{ assignment.program_service.program.department.name }}</p>
+                                <h3 class="font-bold text-neutral-900 font-subheader">{{ assignment.program.name }}</h3>
+                                <p class="text-sm text-neutral-600 font-body mt-1">{{ assignment.program.department.name }}</p>
+                                <p class="text-xs text-neutral-500 font-body mt-1">{{ assignment.program.location }}</p>
                             </div>
                             <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800">
                                 Active
@@ -63,7 +63,7 @@
                 {% endfor %}
             </div>
         {% else %}
-            <p class="text-neutral-500 font-body">No program services assigned yet</p>
+            <p class="text-neutral-500 font-body">No programs assigned yet</p>
         {% endif %}
     </div>
 

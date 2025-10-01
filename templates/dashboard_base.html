@@ -107,7 +107,7 @@
     </script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
-<body class="h-full bg-neutral-50 font-body" x-data="dashboardApp()">
+<body class="h-full bg-neutral-50 font-body authenticated" x-data="dashboardApp()">
     <!-- Loading Overlay -->
     <div x-show="loading" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
@@ -379,8 +379,11 @@
                             this.logout();
                         }
                     } else {
-                        // Redirect to login if no token
-                        window.location.href = '/';
+                        // Check if user is authenticated via Django session
+                        // If not authenticated, redirect to login
+                        if (!document.body.classList.contains('authenticated')) {
+                            window.location.href = '/';
+                        }
                     }
                 },
                 
