@@ -220,6 +220,14 @@ class Program(BaseModel):
             models.Q(end_date__isnull=True) | models.Q(end_date__gt=as_of_date)
         ).count()
     
+    def get_total_enrollments_count(self):
+        """Get the total number of enrollments for this program (including future enrollments)"""
+        return ClientProgramEnrollment.objects.filter(
+            program=self
+        ).filter(
+            models.Q(end_date__isnull=True) | models.Q(end_date__gt=timezone.now().date())
+        ).count()
+    
     def get_enrollments_count_for_date(self, enrollment_date):
         """Get the number of enrollments that will be active on a specific date"""
         return ClientProgramEnrollment.objects.filter(
@@ -346,10 +354,22 @@ class Client(BaseModel):
     # Comments
     comments = models.TextField(null=True, blank=True, help_text="Additional comments and notes")
     
+    # Audit fields
+    updated_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who last updated this record")
+    
     def save(self, *args, **kwargs):
         # Auto-generate external ID if not provided
         if not self.uid_external:
             self.uid_external = str(uuid.uuid4())
+        
+        # Set updated_by if not already set
+        if not self.updated_by:
+            # Try to get the current user from the request if available
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            # This will be set by the view when saving
+            pass
+        
         super().save(*args, **kwargs)
     
     @property
@@ -403,6 +423,9 @@ class ClientProgramEnrollment(BaseModel):
     end_date = models.DateField(null=True, blank=True, db_index=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
     notes = models.TextField(null=True, blank=True)
+    
+    # Audit fields
+    updated_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who last updated this record")
     
     class Meta:
         db_table = 'client_program_enrollments'
@@ -471,12 +494,41 @@ class ServiceRestriction(BaseModel):
         ('program', 'Program'),
     ]
     
+    RESTRICTION_TYPE_CHOICES = [
+        ('general', 'General Restriction'),
+        ('bill_168', 'Bill 168 (Violence Against Staff)'),
+        ('no_trespass', 'No Trespass Order'),
+        ('behaviors', 'Behavioral Issues'),
+    ]
+    
+    BEHAVIOR_CHOICES = [
+        ('aggressive_behavior', 'Aggressive Behavior'),
+        ('threats', 'Threats'),
+        ('violence', 'Violence'),
+        ('harassment', 'Harassment'),
+        ('disruptive_conduct', 'Disruptive Conduct'),
+        ('substance_abuse', 'Substance Abuse'),
+        ('theft', 'Theft'),
+        ('property_damage', 'Property Damage'),
+        ('inappropriate_sexual_behavior', 'Inappropriate Sexual Behavior'),
+        ('non_compliance', 'Non-compliance with Program Rules'),
+        ('safety_concerns', 'Safety Concerns'),
+        ('other', 'Other'),
+    ]
+    
     client = models.ForeignKey(Client, on_delete=models.CASCADE, db_index=True)
     scope = models.CharField(max_length=10, choices=SCOPE_CHOICES, db_index=True)
     program = models.ForeignKey(Program, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
+    restriction_type = models.CharField(max_length=20, choices=RESTRICTION_TYPE_CHOICES, default='general', db_index=True)
     start_date = models.DateField(db_index=True)
     end_date = models.DateField(null=True, blank=True, db_index=True)
-    reason = models.TextField()
+    is_indefinite = models.BooleanField(default=False, db_index=True, help_text="Check if this restriction has no end date")
+    behaviors = models.JSONField(default=list, help_text="List of behaviors that led to this restriction")
+    notes = models.TextField(null=True, blank=True, help_text="Additional notes about the restriction")
+    
+    # Audit fields
+    created_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who created this record")
+    updated_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who last updated this record")
     
     class Meta:
         db_table = 'service_restrictions'
@@ -487,11 +539,47 @@ class ServiceRestriction(BaseModel):
                     models.Q(scope='program', program__isnull=False)
                 ),
                 name='valid_scope_program_combination'
+            ),
+            models.CheckConstraint(
+                check=(
+                    models.Q(is_indefinite=True, end_date__isnull=True) |
+                    models.Q(is_indefinite=False)
+                ),
+                name='indefinite_restriction_no_end_date'
             )
         ]
     
     def __str__(self):
-        return f"{self.client} - {self.get_scope_display()}"
+        return f"{self.client} - {self.get_restriction_type_display()}"
+    
+    def is_active(self):
+        """Check if the restriction is currently active"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        
+        if self.is_indefinite:
+            return self.start_date <= today
+        else:
+            return self.start_date <= today and (self.end_date is None or self.end_date >= today)
+    
+    def get_duration_display(self):
+        """Get a human-readable duration display"""
+        if self.is_indefinite:
+            return "Indefinite"
+        elif self.end_date:
+            from datetime import timedelta
+            duration = self.end_date - self.start_date
+            days = duration.days
+            if days < 30:
+                return f"{days} days"
+            elif days < 365:
+                months = days // 30
+                return f"{months} month{'s' if months > 1 else ''}"
+            else:
+                years = days // 365
+                return f"{years} year{'s' if years > 1 else ''}"
+        else:
+            return "Ongoing"
 
 
 class AuditLog(BaseModel):

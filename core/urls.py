@@ -19,13 +19,16 @@ urlpatterns = [
     
     # Main views
     path('departments/', views.departments, name='departments'),
-    path('enrollments/', views.enrollments, name='enrollments'),
+    path('enrollments/', views.EnrollmentListView.as_view(), name='enrollments'),
     path('restrictions/', views.restrictions, name='restrictions'),
     path('approvals/', views.approvals, name='approvals'),
     path('audit-log/', views.audit_log, name='audit_log'),
     
     # API endpoints for capacity checking
     path('check-program-capacity/', views.check_program_capacity, name='check_program_capacity'),
+    
+    # API endpoints for client search
+    path('search-clients/', views.search_clients, name='search_clients'),
     
     # Department CRUD views
     path('departments/create/', views.DepartmentCreateView.as_view(), name='departments_create'),
@@ -44,6 +47,7 @@ urlpatterns = [
     path('restrictions/<uuid:external_id>/', views.RestrictionDetailView.as_view(), name='restrictions_detail'),
     path('restrictions/<uuid:external_id>/edit/', views.RestrictionUpdateView.as_view(), name='restrictions_edit'),
     path('restrictions/<uuid:external_id>/delete/', views.RestrictionDeleteView.as_view(), name='restrictions_delete'),
+    path('restrictions/bulk-delete/', views.bulk_delete_restrictions, name='restrictions_bulk_delete'),
 ]
 
 # In your main urls.py, add:

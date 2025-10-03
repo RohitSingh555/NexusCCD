@@ -4,6 +4,39 @@ html {
     font-family: 'Inter', system-ui, sans-serif;
 }
 
+/* Enhanced error message styling */
+.errorlist {
+    @apply space-y-3;
+}
+
+.errorlist li {
+    @apply bg-red-50 border-l-4 border-red-400 rounded-lg p-4 text-red-800;
+    white-space: pre-line;
+    font-weight: 500;
+    line-height: 1.6;
+    font-size: 0.95rem;
+    font-family: 'Inter', system-ui, sans-serif;
+}
+
+.errorlist li:first-child {
+    @apply bg-red-100 border-red-500;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+/* Specific styling for enrollment form errors */
+.bg-red-50 .text-red-700 li {
+    @apply bg-red-100 border-l-4 border-red-500 rounded-lg p-4 mb-3;
+    white-space: pre-line;
+    line-height: 1.6;
+    font-weight: 500;
+}
+
+.bg-red-50 .text-red-700 li:first-child {
+    @apply bg-red-200 border-red-600;
+    font-weight: 600;
+}
+
 .btn-primary {
     @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
 }

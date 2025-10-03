@@ -11,6 +11,7 @@ from django.utils.decorators import method_decorator
 from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
+from django.db import IntegrityError
 from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate
 from core.fuzzy_matching import fuzzy_matcher
 from .forms import ClientForm
@@ -29,6 +30,31 @@ class ClientListView(ListView):
     template_name = 'clients/client_list.html'
     context_object_name = 'clients'
     paginate_by = 10
+    
+    def get_queryset(self):
+        queryset = Client.objects.all()
+        search_query = self.request.GET.get('search', '').strip()
+        
+        if search_query:
+            # Search across multiple fields using Q objects
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(first_name__icontains=search_query) |
+                Q(last_name__icontains=search_query) |
+                Q(preferred_name__icontains=search_query) |
+                Q(alias__icontains=search_query) |
+                Q(contact_information__email__icontains=search_query) |
+                Q(contact_information__phone__icontains=search_query) |
+                Q(client_id__icontains=search_query) |
+                Q(uid_external__icontains=search_query)
+            ).distinct()
+        
+        return queryset.order_by('-created_at')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['search_query'] = self.request.GET.get('search', '')
+        return context
 
 class ClientDetailView(DetailView):
     model = Client
@@ -45,6 +71,12 @@ class ClientCreateView(CreateView):
     
     def form_valid(self, form):
         client = form.save(commit=False)
+        
+        # Set updated_by field
+        if self.request.user.is_authenticated:
+            client.updated_by = f"{self.request.user.first_name} {self.request.user.last_name}".strip()
+            if not client.updated_by:
+                client.updated_by = self.request.user.username or self.request.user.email
         
         # Check for potential duplicates using fuzzy matching
         client_data = {
@@ -104,6 +136,15 @@ class ClientUpdateView(UpdateView):
     success_url = reverse_lazy('clients:list')
     
     def form_valid(self, form):
+        client = form.save(commit=False)
+        
+        # Set updated_by field
+        if self.request.user.is_authenticated:
+            client.updated_by = f"{self.request.user.first_name} {self.request.user.last_name}".strip()
+            if not client.updated_by:
+                client.updated_by = self.request.user.username or self.request.user.email
+        
+        client.save()
         messages.success(self.request, 'Client updated successfully.')
         return super().form_valid(form)
 
@@ -419,7 +460,17 @@ def upload_clients(request):
                     'alias': str(row.get('alias', '')).strip() if pd.notna(row.get('alias', '')) else '',
                     'gender': str(row.get('gender', '')).strip() if pd.notna(row.get('gender', '')) else 'Unknown',
                     'sexual_orientation': str(row.get('sexual_orientation', '')).strip() if pd.notna(row.get('sexual_orientation', '')) else '',
-                    'citizenship_status': str(row.get('immigration_status', '')).strip() if pd.notna(row.get('immigration_status', '')) else '',
+                    'citizenship_status': str(row.get('citizenship_status', '')).strip() if pd.notna(row.get('citizenship_status', '')) else '',
+                    'indigenous_status': str(row.get('indigenous_status', '')).strip() if pd.notna(row.get('indigenous_status', '')) else '',
+                    'country_of_birth': str(row.get('country_of_birth', '')).strip() if pd.notna(row.get('country_of_birth', '')) else '',
+                    'client_id': str(row.get('client_id', '')).strip() if pd.notna(row.get('client_id', '')) else '',
+                    'phone_work': str(row.get('phone_work', '')).strip() if pd.notna(row.get('phone_work', '')) else '',
+                    'phone_alt': str(row.get('phone_alt', '')).strip() if pd.notna(row.get('phone_alt', '')) else '',
+                    'permission_to_phone': str(row.get('permission_to_phone', '')).lower() in ['true', '1', 'yes', 'y'] if pd.notna(row.get('permission_to_phone', '')) else False,
+                    'permission_to_email': str(row.get('permission_to_email', '')).lower() in ['true', '1', 'yes', 'y'] if pd.notna(row.get('permission_to_email', '')) else False,
+                    'medical_conditions': str(row.get('medical_conditions', '')).strip() if pd.notna(row.get('medical_conditions', '')) else '',
+                    'primary_diagnosis': str(row.get('primary_diagnosis', '')).strip() if pd.notna(row.get('primary_diagnosis', '')) else '',
+                    'comments': str(row.get('comments', '')).strip() if pd.notna(row.get('comments', '')) else '',
                     'contact_information': {
                         'email': email,
                         'phone': phone,
@@ -433,6 +484,42 @@ def upload_clients(request):
                 else:
                     client_data['languages_spoken'] = []
                 
+                # Handle ethnicity (expect comma-separated string)
+                ethnicity = str(row.get('ethnicity', '')).strip() if pd.notna(row.get('ethnicity', '')) else ''
+                if ethnicity:
+                    client_data['ethnicity'] = [eth.strip() for eth in ethnicity.split(',') if eth.strip()]
+                else:
+                    client_data['ethnicity'] = []
+                
+                # Handle support_workers (expect comma-separated string)
+                support_workers = str(row.get('support_workers', '')).strip() if pd.notna(row.get('support_workers', '')) else ''
+                if support_workers:
+                    client_data['support_workers'] = [worker.strip() for worker in support_workers.split(',') if worker.strip()]
+                else:
+                    client_data['support_workers'] = []
+                
+                # Handle next_of_kin (expect JSON string)
+                next_of_kin = str(row.get('next_of_kin', '')).strip() if pd.notna(row.get('next_of_kin', '')) else ''
+                if next_of_kin:
+                    try:
+                        client_data['next_of_kin'] = json.loads(next_of_kin)
+                    except json.JSONDecodeError:
+                        # If JSON parsing fails, create a simple dict with the string
+                        client_data['next_of_kin'] = {'name': next_of_kin}
+                else:
+                    client_data['next_of_kin'] = {}
+                
+                # Handle emergency_contact (expect JSON string)
+                emergency_contact = str(row.get('emergency_contact', '')).strip() if pd.notna(row.get('emergency_contact', '')) else ''
+                if emergency_contact:
+                    try:
+                        client_data['emergency_contact'] = json.loads(emergency_contact)
+                    except json.JSONDecodeError:
+                        # If JSON parsing fails, create a simple dict with the string
+                        client_data['emergency_contact'] = {'name': emergency_contact}
+                else:
+                    client_data['emergency_contact'] = {}
+                
                 # Handle addresses (expect JSON string or individual address fields)
                 addresses = []
                 if 'addresses' in row and pd.notna(row['addresses']):
@@ -444,6 +531,7 @@ def upload_clients(request):
                     address = {
                         'type': str(row.get('address_type', 'Home')).strip(),
                         'street': str(row['street']).strip(),
+                        'address_2': str(row.get('address_2', '')).strip(),
                         'city': str(row.get('city', '')).strip(),
                         'state': str(row.get('state', '')).strip(),
                         'zip': str(row.get('zip', '')).strip(),
@@ -721,8 +809,36 @@ def upload_clients(request):
                 if has_intake_data and client is not None:
                     process_intake_data(client, row, index)
                     
+            except IntegrityError as e:
+                error_message = str(e)
+                
+                # Handle specific database constraint violations
+                if "duplicate key value violates unique constraint" in error_message:
+                    if "client_id_key" in error_message:
+                        errors.append(f"Row {index + 2}: This client already exists in the system. Please check if the client is already in the database.")
+                    elif "email" in error_message:
+                        errors.append(f"Row {index + 2}: A client with this email address already exists. Please use a different email or update the existing client.")
+                    elif "phone" in error_message:
+                        errors.append(f"Row {index + 2}: A client with this phone number already exists. Please use a different phone number or update the existing client.")
+                    else:
+                        errors.append(f"Row {index + 2}: This client already exists in the system. Please check for duplicates.")
+                else:
+                    errors.append(f"Row {index + 2}: This client already exists in the system. Please check for duplicates.")
+                
+                logger.error(f"IntegrityError processing row {index + 2}: {str(e)}")
+                
             except Exception as e:
-                errors.append(f"Row {index + 2}: {str(e)}")
+                error_message = str(e)
+                
+                # Handle other types of errors
+                if "NOT NULL constraint" in error_message:
+                    errors.append(f"Row {index + 2}: Required information is missing. Please ensure all required fields are filled.")
+                elif "invalid input syntax" in error_message:
+                    errors.append(f"Row {index + 2}: Invalid data format. Please check the data in this row.")
+                else:
+                    # Generic user-friendly error
+                    errors.append(f"Row {index + 2}: Unable to process this client. Please check the data and try again.")
+                
                 logger.error(f"Error processing row {index + 2}: {str(e)}")
         
         # Prepare response
@@ -752,7 +868,11 @@ def upload_clients(request):
         
     except Exception as e:
         logger.error(f"Upload error: {str(e)}")
-        return JsonResponse({'success': False, 'error': f'Upload failed: {str(e)}'}, status=500)
+        # Provide user-friendly error message
+        return JsonResponse({
+            'success': False, 
+            'error': 'Upload failed. Please check your file format and try again. If the problem persists, contact your system administrator.'
+        }, status=500)
 
 @require_http_methods(["GET"])
 def download_sample(request, file_type):
@@ -1153,12 +1273,13 @@ class ClientDedupeView(TemplateView):
         return context
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 @require_http_methods(["POST"])
 def mark_duplicate_action(request, duplicate_id, action):
     """Handle duplicate actions (confirm, not_duplicate, merge)"""
     try:
+        print(f"mark_duplicate_action called with duplicate_id={duplicate_id}, action={action}")
         duplicate = get_object_or_404(ClientDuplicate, id=duplicate_id)
+        print(f"Found duplicate: {duplicate}")
         
         # Get the current user (you might need to adjust this based on your auth system)
         reviewed_by = None
@@ -1166,34 +1287,43 @@ def mark_duplicate_action(request, duplicate_id, action):
             # Try to get staff profile
             try:
                 reviewed_by = request.user.staff_profile
-            except:
+                print(f"Found staff profile: {reviewed_by}")
+            except Exception as e:
+                print(f"Could not get staff profile: {e}")
                 pass
         
         # Get notes from request
         data = json.loads(request.body) if request.body else {}
         notes = data.get('notes', '')
+        print(f"Notes: {notes}")
         
         if action == 'confirm':
             duplicate.mark_as_duplicate(reviewed_by, notes)
             message = f'Marked {duplicate.duplicate_client} as duplicate of {duplicate.primary_client}'
+            print(f"Marked as duplicate: {message}")
         elif action == 'not_duplicate':
             duplicate.mark_as_not_duplicate(reviewed_by, notes)
             message = f'Confirmed {duplicate.duplicate_client} is not a duplicate of {duplicate.primary_client}'
+            print(f"Marked as not duplicate: {message}")
         elif action == 'merge':
             duplicate.merge_clients(reviewed_by, notes)
             message = f'Marked {duplicate.duplicate_client} for merging with {duplicate.primary_client}'
+            print(f"Marked for merge: {message}")
         else:
+            print(f"Invalid action: {action}")
             return JsonResponse({
                 'success': False,
                 'error': 'Invalid action'
             }, status=400)
         
+        print(f"Returning success response: {message}")
         return JsonResponse({
             'success': True,
             'message': message
         })
         
     except Exception as e:
+        print(f"Error in mark_duplicate_action: {str(e)}")
         logger.error(f"Error in mark_duplicate_action: {str(e)}")
         return JsonResponse({
             'success': False,
@@ -1201,15 +1331,17 @@ def mark_duplicate_action(request, duplicate_id, action):
         }, status=500)
 
 
-@method_decorator(csrf_exempt, name='dispatch')
 @require_http_methods(["POST"])
 def bulk_duplicate_action(request):
     """Handle bulk actions on duplicates"""
     try:
+        print(f"bulk_duplicate_action called")
         data = json.loads(request.body)
         duplicate_ids = data.get('duplicate_ids', [])
         action = data.get('action', '')
         notes = data.get('notes', '')
+        
+        print(f"Bulk action data: duplicate_ids={duplicate_ids}, action={action}, notes={notes}")
         
         if not duplicate_ids:
             return JsonResponse({
@@ -1228,14 +1360,18 @@ def bulk_duplicate_action(request):
         if hasattr(request, 'user') and request.user.is_authenticated:
             try:
                 reviewed_by = request.user.staff_profile
-            except:
+                print(f"Found staff profile for bulk action: {reviewed_by}")
+            except Exception as e:
+                print(f"Could not get staff profile for bulk action: {e}")
                 pass
         
         # Get duplicates
         duplicates = ClientDuplicate.objects.filter(id__in=duplicate_ids)
+        print(f"Found {duplicates.count()} duplicates to process")
         updated_count = 0
         
         for duplicate in duplicates:
+            print(f"Processing duplicate {duplicate.id}: {duplicate}")
             if action == 'confirm':
                 duplicate.mark_as_duplicate(reviewed_by, notes)
             elif action == 'not_duplicate':
@@ -1246,18 +1382,21 @@ def bulk_duplicate_action(request):
                 continue
             updated_count += 1
         
+        print(f"Updated {updated_count} duplicates")
         return JsonResponse({
             'success': True,
             'message': f'Updated {updated_count} duplicate(s)',
             'updated_count': updated_count
         })
         
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error: {e}")
         return JsonResponse({
             'success': False,
             'error': 'Invalid JSON data'
         }, status=400)
     except Exception as e:
+        print(f"Error in bulk_duplicate_action: {str(e)}")
         logger.error(f"Error in bulk_duplicate_action: {str(e)}")
         return JsonResponse({
             'success': False,

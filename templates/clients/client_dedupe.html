@@ -188,6 +188,9 @@
             </div>
         </div>
 
+        <!-- CSRF Token -->
+        {% csrf_token %}
+        
         <!-- Duplicates List -->
         <div class="space-y-6">
             {% if grouped_duplicates %}
@@ -458,9 +461,20 @@
 
 {% block extra_js %}
 <script>
+console.log('Dedupe JavaScript loaded');
 let currentAction = null;
 let currentDuplicateId = null;
 let selectedDuplicates = new Set();
+
+// Get CSRF token from Django
+const csrfTokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
+console.log('CSRF Token element:', csrfTokenElement);
+const csrfToken = csrfTokenElement ? csrfTokenElement.value : null;
+console.log('CSRF Token:', csrfToken);
+
+if (!csrfToken) {
+    console.error('CSRF Token not found!');
+}
 
 function updateBulkActions() {
     const checkboxes = document.querySelectorAll('.duplicate-checkbox:checked');
@@ -483,6 +497,7 @@ function clearSelection() {
 }
 
 function duplicateAction(duplicateId, action) {
+    console.log('duplicateAction called with:', duplicateId, action);
     currentAction = action;
     currentDuplicateId = duplicateId;
     
@@ -490,6 +505,8 @@ function duplicateAction(duplicateId, action) {
     const title = document.getElementById('modalTitle');
     const message = document.getElementById('modalMessage');
     const button = document.getElementById('confirmButton');
+    
+    console.log('Modal elements:', { modal, title, message, button });
     
     const actionTexts = {
         'confirm': 'Mark as Duplicate',
@@ -508,6 +525,7 @@ function duplicateAction(duplicateId, action) {
     button.textContent = actionTexts[action];
     button.className = `px-4 py-2 text-white rounded-md hover:opacity-90 ${getActionButtonClass(action)}`;
     
+    console.log('Showing modal');
     modal.classList.remove('hidden');
 }
 
@@ -552,30 +570,45 @@ function getActionButtonClass(action) {
 }
 
 function closeModal() {
+    console.log('closeModal called');
     document.getElementById('actionModal').classList.add('hidden');
     currentAction = null;
     currentDuplicateId = null;
 }
 
 function confirmAction() {
+    console.log('confirmAction called');
+    console.log('CSRF Token available:', !!csrfToken);
+    console.log('CSRF Token value:', csrfToken);
+    
     const notes = document.getElementById('actionNotes').value;
+    console.log('Notes:', notes);
+    console.log('Current duplicate ID:', currentDuplicateId);
+    console.log('Current action:', currentAction);
     
     if (currentDuplicateId) {
         // Single action
-        fetch(`{% url 'clients:duplicate_action' 0 'action' %}`.replace('0', currentDuplicateId).replace('action', currentAction), {
+        const url = `/clients/dedupe/action/${currentDuplicateId}/${currentAction}/`;
+        console.log('Making request to:', url);
+        
+        fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({ notes: notes })
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('Response status:', response.status);
+            return response.json();
+        })
         .then(data => {
+            console.log('Response data:', data);
             if (data.success) {
                 location.reload();
             } else {
-                alert('Error: ' + data.error);
+                alert('Error: ' + (data.error || 'Unknown error'));
             }
         })
         .catch(error => {
@@ -584,11 +617,12 @@ function confirmAction() {
         });
     } else {
         // Bulk action
-        fetch('{% url "clients:bulk_duplicate_action" %}', {
+        console.log('Making bulk action request');
+        fetch('/clients/dedupe/bulk-action/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
+                'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({
                 duplicate_ids: Array.from(selectedDuplicates),
@@ -596,12 +630,16 @@ function confirmAction() {
                 notes: notes
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('Bulk response status:', response.status);
+            return response.json();
+        })
         .then(data => {
+            console.log('Bulk response data:', data);
             if (data.success) {
                 location.reload();
             } else {
-                alert('Error: ' + data.error);
+                alert('Error: ' + (data.error || 'Unknown error'));
             }
         })
         .catch(error => {
@@ -613,9 +651,34 @@ function confirmAction() {
     closeModal();
 }
 
+// Get CSRF token from cookies
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing dedupe functionality');
     updateBulkActions();
+    
+    // Add click listeners to all action buttons for debugging
+    document.querySelectorAll('button[onclick*="duplicateAction"]').forEach(button => {
+        console.log('Found action button:', button);
+        button.addEventListener('click', function(e) {
+            console.log('Button clicked:', e.target);
+        });
+    });
 });
 </script>
 {% endblock %}

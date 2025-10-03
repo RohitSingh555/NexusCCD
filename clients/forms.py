@@ -34,6 +34,15 @@ class ClientForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
+        # Make JSON fields optional
+        self.fields['languages_spoken'].required = False
+        self.fields['ethnicity'].required = False
+        self.fields['contact_information'].required = False
+        self.fields['addresses'].required = False
+        self.fields['support_workers'].required = False
+        self.fields['next_of_kin'].required = False
+        self.fields['emergency_contact'].required = False
+        
         # Initialize addresses from instance or empty list
         if self.instance and self.instance.pk:
             self.addresses_data = self.instance.addresses if self.instance.addresses else []
@@ -187,8 +196,24 @@ class ClientForm(forms.ModelForm):
             if profile_picture.size > max_size:
                 raise forms.ValidationError('File size must be less than 5MB')
             
-            # Check file type
-            if not profile_picture.content_type.startswith('image/'):
-                raise forms.ValidationError('Please upload an image file')
+            # Check file type by reading the file header
+            try:
+                profile_picture.seek(0)
+                header = profile_picture.read(10)
+                profile_picture.seek(0)  # Reset file pointer
+                
+                # Check for common image file signatures
+                is_image = (
+                    header.startswith(b'\xff\xd8\xff') or  # JPEG
+                    header.startswith(b'\x89PNG\r\n\x1a\n') or  # PNG
+                    header.startswith(b'GIF87a') or  # GIF87a
+                    header.startswith(b'GIF89a') or  # GIF89a
+                    header.startswith(b'RIFF') and b'WEBP' in header[:12]  # WebP
+                )
+                
+                if not is_image:
+                    raise forms.ValidationError('Please upload a valid image file (JPEG, PNG, GIF, or WebP)')
+            except Exception:
+                raise forms.ValidationError('Please upload a valid image file')
         
         return profile_picture

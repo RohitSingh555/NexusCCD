@@ -144,7 +144,9 @@
                     <tr class="hover:bg-neutral-50 relative" 
                         @contextmenu.prevent="showContextMenu($event, '{{ enrollment.external_id }}', '{{ enrollment.client.first_name }} {{ enrollment.client.last_name }} - {{ enrollment.program.name }}')"
                         @click="toggleEnrollment('{{ enrollment.external_id }}')"
-                        :class="{ 'bg-blue-50': selectedEnrollments.includes('{{ enrollment.external_id }}') }">
+                        :class="{ 'bg-blue-50': selectedEnrollments.includes('{{ enrollment.external_id }}') }"
+                        onmouseenter="showTooltip(this, '{{ enrollment.created_by|default:"Unknown" }}', '{{ enrollment.created_at|date:'M d, Y g:i A' }}', '{{ enrollment.updated_by|default:"Unknown" }}', '{{ enrollment.updated_at|date:'M d, Y g:i A' }}')"
+                        onmouseleave="hideTooltip()">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <input type="checkbox" 
                                    :checked="selectedEnrollments.includes('{{ enrollment.external_id }}')"
@@ -153,10 +155,14 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="flex items-center">
-                                <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm">
-                                    <span class="text-sm font-bold text-white">
-                                        {{ enrollment.client.first_name|first|upper }}{{ enrollment.client.last_name|first|upper }}
-                                    </span>
+                                <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm overflow-hidden">
+                                    {% if enrollment.client.profile_picture %}
+                                        <img src="{{ enrollment.client.profile_picture.url }}" alt="{{ enrollment.client.first_name }} {{ enrollment.client.last_name }}" class="w-full h-full object-cover">
+                                    {% else %}
+                                        <span class="text-sm font-bold text-white">
+                                            {{ enrollment.client.first_name|first|upper }}{{ enrollment.client.last_name|first|upper }}
+                                        </span>
+                                    {% endif %}
                                 </div>
                                 <div class="ml-4">
                                     <div class="text-sm font-bold text-neutral-900 font-body">
@@ -276,6 +282,31 @@
                         Cancel
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Custom Tooltip -->
+    <div id="custom-tooltip" class="fixed z-50 bg-neutral-800 text-white text-xs rounded-lg py-3 px-4 shadow-lg opacity-0 transition-opacity duration-200" style="display: none; pointer-events: none;">
+        <div class="flex flex-col space-y-2">
+            <div class="text-sm font-bold text-white border-b border-neutral-600 pb-1">
+                <span id="tooltip-heading">Enrollment Details</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-neutral-300">Created by:</span>
+                <span id="tooltip-created-by"></span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-neutral-300">Created on:</span>
+                <span id="tooltip-created-on"></span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-neutral-300">Updated by:</span>
+                <span id="tooltip-updated-by"></span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-neutral-300">Updated on:</span>
+                <span id="tooltip-updated-on"></span>
             </div>
         </div>
     </div>
@@ -462,6 +493,55 @@ function enrollmentManager() {
             return cookieValue;
         }
     }
+}
+
+// Global functions for tooltip
+let tooltipTimeout;
+
+function showTooltip(element, createdBy, createdOn, updatedBy, updatedOn) {
+    // Clear any existing timeout
+    if (tooltipTimeout) {
+        clearTimeout(tooltipTimeout);
+        tooltipTimeout = null;
+    }
+    
+    const tooltip = document.getElementById('custom-tooltip');
+    const createdBySpan = document.getElementById('tooltip-created-by');
+    const createdOnSpan = document.getElementById('tooltip-created-on');
+    const updatedBySpan = document.getElementById('tooltip-updated-by');
+    const updatedOnSpan = document.getElementById('tooltip-updated-on');
+    
+    if (tooltip && createdBySpan && createdOnSpan && updatedBySpan && updatedOnSpan) {
+        createdBySpan.textContent = createdBy || 'Unknown';
+        createdOnSpan.textContent = createdOn;
+        updatedBySpan.textContent = updatedBy || 'Unknown';
+        updatedOnSpan.textContent = updatedOn;
+        
+        // Position the tooltip
+        const rect = element.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        
+        tooltip.style.left = (rect.left + rect.width / 2 - tooltipRect.width / 2) + 'px';
+        tooltip.style.top = (rect.top - tooltipRect.height - 10) + 'px';
+        
+        tooltip.style.display = 'block';
+        setTimeout(() => {
+            tooltip.style.opacity = '1';
+        }, 10);
+    }
+}
+
+function hideTooltip() {
+    // Add a small delay before hiding to prevent flickering
+    tooltipTimeout = setTimeout(() => {
+        const tooltip = document.getElementById('custom-tooltip');
+        if (tooltip) {
+            tooltip.style.opacity = '0';
+            setTimeout(() => {
+                tooltip.style.display = 'none';
+            }, 200);
+        }
+    }, 100);
 }
 </script>
 {% endblock %}

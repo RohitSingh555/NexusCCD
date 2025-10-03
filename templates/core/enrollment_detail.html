@@ -97,10 +97,36 @@
                 </div>
             </div>
 
-            <!-- Program Information -->
+            <!-- Enrollment Status -->
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
                 <div class="flex items-center mb-6">
                     <div class="w-10 h-10 bg-gradient-to-br from-secondary-400 to-secondary-700 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-bold text-neutral-800 font-header">Enrollment Status</h2>
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-sm font-bold text-neutral-500 mb-2 font-subheader">Enrollment Status</label>
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold {% if enrollment.status == 'active' %}bg-brand-lime text-neutral-800{% elif enrollment.status == 'completed' %}bg-neutral-100 text-neutral-800{% elif enrollment.status == 'cancelled' %}bg-red-100 text-red-800{% elif enrollment.status == 'suspended' %}bg-orange-100 text-orange-800{% else %}bg-blue-100 text-blue-800{% endif %}">
+                        {{ enrollment.get_status_display }}
+                    </span>
+                </div>
+                
+                {% if enrollment.notes %}
+                <div class="bg-neutral-50 rounded-lg p-4">
+                    <label class="block text-sm font-bold text-neutral-500 mb-2 font-subheader">Notes</label>
+                    <p class="text-neutral-900 font-body whitespace-pre-wrap">{{ enrollment.notes }}</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Program Information -->
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+                <div class="flex items-center mb-6">
+                    <div class="w-10 h-10 bg-gradient-to-br from-accent-400 to-accent-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
                         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                         </svg>
@@ -163,12 +189,6 @@
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
                 <h3 class="text-lg font-bold text-neutral-800 font-header mb-4">Quick Actions</h3>
                 <div class="space-y-3">
-                    <a href="{% url 'core:enrollments_edit' enrollment.external_id %}" class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                        </svg>
-                        Edit Enrollment
-                    </a>
                     <a href="{% url 'core:enrollments_delete' enrollment.external_id %}" class="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 text-sm font-bold rounded-xl text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-sm">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>

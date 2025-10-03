@@ -20,6 +20,88 @@
         </a>
     </div>
     
+    <!-- Filters and Search -->
+    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
+        <form method="GET" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <!-- Search -->
+                <div class="lg:col-span-2">
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Search</label>
+                    <div class="relative">
+                        <input type="text" 
+                               name="search" 
+                               value="{{ search_query }}" 
+                               placeholder="Search programs..." 
+                               class="w-full pl-10 pr-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Department Filter -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Department</label>
+                    <select name="department" class="w-full px-3 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">All Departments</option>
+                        {% for dept in departments %}
+                        <option value="{{ dept.name }}" {% if current_department == dept.name %}selected{% endif %}>{{ dept.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Status Filter -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Status</label>
+                    <select name="status" class="w-full px-3 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">All Statuses</option>
+                        {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if current_status == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Capacity Filter -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Capacity</label>
+                    <select name="capacity" class="w-full px-3 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        {% for value, label in capacity_choices %}
+                        <option value="{{ value }}" {% if current_capacity == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            
+            <div class="flex justify-between items-center">
+                <div class="flex space-x-3">
+                    <button type="submit" class="inline-flex items-center px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        Apply Filters
+                    </button>
+                    {% if search_query or current_department or current_status or current_capacity %}
+                    <a href="{% url 'programs:list' %}" class="inline-flex items-center px-4 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                        Clear Filters
+                    </a>
+                    {% endif %}
+                </div>
+                
+                <!-- Results Count -->
+                {% if search_query or current_department or current_status or current_capacity %}
+                <div class="text-sm text-neutral-600 font-body">
+                    <span class="font-bold">{{ programs|length }}</span> program(s) found
+                </div>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+    
     <!-- Bulk Actions Bar -->
     <div x-show="selectedPrograms.length > 0" x-transition class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <div class="flex items-center justify-between">

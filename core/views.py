@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.contrib.auth import get_user_model
 from functools import wraps
@@ -9,10 +9,11 @@ from django.urls import reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from django.utils.decorators import method_decorator
 from datetime import datetime
 from .models import Client, Program, Staff, PendingChange, ClientProgramEnrollment, Department, ServiceRestriction
 from .forms import EnrollmentForm
-from .forms import UserProfileForm, StaffProfileForm, PasswordChangeForm
+from .forms import UserProfileForm, StaffProfileForm, PasswordChangeForm, ServiceRestrictionForm
 
 
 User = get_user_model()
@@ -23,7 +24,18 @@ class ProgramManagerAccessMixin:
     
     def get_queryset(self):
         """Filter queryset based on user's assigned programs"""
-        queryset = super().get_queryset()
+        # Start with the base queryset with proper ordering and select_related
+        queryset = super().get_queryset().order_by('-created_at')
+        
+        # Add appropriate select_related based on model
+        if hasattr(self.model, 'department'):
+            queryset = queryset.select_related('department')
+        elif hasattr(self.model, 'client') and hasattr(self.model, 'program'):
+            queryset = queryset.select_related('client', 'program')
+        elif hasattr(self.model, 'client'):
+            queryset = queryset.select_related('client')
+        elif hasattr(self.model, 'program'):
+            queryset = queryset.select_related('program')
         
         if not self.request.user.is_authenticated:
             return queryset.none()
@@ -38,7 +50,13 @@ class ProgramManagerAccessMixin:
             # Program Manager can only see assigned programs
             if staff.is_program_manager():
                 assigned_programs = staff.get_assigned_programs()
-                return queryset.filter(id__in=assigned_programs)
+                # Filter based on model type
+                if hasattr(self.model, 'program'):
+                    # For models with program field (like ServiceRestriction)
+                    return queryset.filter(program__in=assigned_programs)
+                else:
+                    # For models without program field (like Program)
+                    return queryset.filter(id__in=assigned_programs)
             
             # Other roles see everything (Staff, etc.)
             return queryset
@@ -340,6 +358,7 @@ class DepartmentDeleteView(DeleteView):
 
 
 # Enrollment CRUD Views
+@method_decorator(jwt_required, name='dispatch')
 class EnrollmentListView(ProgramManagerAccessMixin, ListView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollments.html'
@@ -367,6 +386,7 @@ class EnrollmentListView(ProgramManagerAccessMixin, ListView):
         return context
 
 
+@method_decorator(jwt_required, name='dispatch')
 class EnrollmentDetailView(ProgramManagerAccessMixin, DetailView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollment_detail.html'
@@ -375,6 +395,7 @@ class EnrollmentDetailView(ProgramManagerAccessMixin, DetailView):
     slug_url_kwarg = 'external_id'
 
 
+@method_decorator(jwt_required, name='dispatch')
 class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
     model = ClientProgramEnrollment
     form_class = EnrollmentForm
@@ -382,7 +403,7 @@ class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
     success_url = reverse_lazy('core:enrollments')
     
     def get_form_kwargs(self):
-        """Filter programs to only assigned ones for Program Managers"""
+        """Filter programs and clients to only assigned ones for Program Managers"""
         kwargs = super().get_form_kwargs()
         if self.request.user.is_authenticated:
             try:
@@ -391,11 +412,24 @@ class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
                     # Filter programs to only assigned ones
                     assigned_programs = staff.get_assigned_programs()
                     kwargs['program_queryset'] = assigned_programs
+                    
+                    # For now, show all clients - program managers can enroll any client
+                    # In the future, you might want to filter clients based on some criteria
+                    kwargs['client_queryset'] = Client.objects.all()
             except Exception:
                 pass
         return kwargs
+    
+    def form_invalid(self, form):
+        """Handle form validation errors"""
+        return super().form_invalid(form)
+    
+    def form_valid(self, form):
+        """Handle successful form submission"""
+        return super().form_valid(form)
 
 
+@method_decorator(jwt_required, name='dispatch')
 class EnrollmentUpdateView(ProgramManagerAccessMixin, UpdateView):
     model = ClientProgramEnrollment
     form_class = EnrollmentForm
@@ -405,7 +439,7 @@ class EnrollmentUpdateView(ProgramManagerAccessMixin, UpdateView):
     success_url = reverse_lazy('core:enrollments')
     
     def get_form_kwargs(self):
-        """Filter programs to only assigned ones for Program Managers"""
+        """Filter programs and clients to only assigned ones for Program Managers"""
         kwargs = super().get_form_kwargs()
         if self.request.user.is_authenticated:
             try:
@@ -414,17 +448,58 @@ class EnrollmentUpdateView(ProgramManagerAccessMixin, UpdateView):
                     # Filter programs to only assigned ones
                     assigned_programs = staff.get_assigned_programs()
                     kwargs['program_queryset'] = assigned_programs
+                    
+                    # For now, show all clients - program managers can enroll any client
+                    # In the future, you might want to filter clients based on some criteria
+                    kwargs['client_queryset'] = Client.objects.all()
             except Exception:
                 pass
         return kwargs
 
 
+@method_decorator(jwt_required, name='dispatch')
 class EnrollmentDeleteView(ProgramManagerAccessMixin, DeleteView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollment_confirm_delete.html'
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:enrollments')
+    
+    def get_context_data(self, **kwargs):
+        """Add enrollment object to context"""
+        context = super().get_context_data(**kwargs)
+        context['enrollment'] = self.get_object()
+        return context
+    
+    def delete(self, request, *args, **kwargs):
+        """Override to handle confirmation text validation"""
+        try:
+            # Get the enrollment object first
+            enrollment = self.get_object()
+            
+            # Check confirmation text
+            confirmation = request.POST.get('confirmation_text', '').strip().upper()
+            if confirmation != 'DELETE':
+                messages.error(request, 'Please type "DELETE" to confirm deletion.')
+                return redirect('core:enrollments_detail', external_id=enrollment.external_id)
+            
+            client_name = f"{enrollment.client.first_name} {enrollment.client.last_name}"
+            program_name = enrollment.program.name
+            
+            # Delete the enrollment
+            enrollment.delete()
+            print(f"Deleted enrollment: {client_name} - {program_name}")
+            
+            messages.success(
+                request, 
+                f'Enrollment for {client_name} in {program_name} has been deleted successfully.'
+            )
+            return redirect(self.success_url)
+            
+        except Exception as e:
+            print(f"Error deleting enrollment: {str(e)}")
+            messages.error(request, f'Error deleting enrollment: {str(e)}')
+            return redirect(self.success_url)
 
 
 @csrf_exempt
@@ -489,6 +564,51 @@ def check_program_capacity(request):
         }, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["GET"])
+def search_clients(request):
+    """Search clients by name via AJAX"""
+    try:
+        query = request.GET.get('q', '').strip()
+        
+        if not query:
+            # If no query, return all clients (limit to 100 for performance)
+            clients = Client.objects.all()[:100]
+        else:
+            # Filter clients that start with the query
+            clients = Client.objects.filter(
+                Q(first_name__istartswith=query) |
+                Q(last_name__istartswith=query) |
+                Q(first_name__icontains=f' {query}') |
+                Q(last_name__icontains=f' {query}')
+            )[:50]  # Limit to 50 results for performance
+        
+        # Format results for the frontend
+        results = []
+        for client in clients:
+            results.append({
+                'id': client.id,
+                'external_id': str(client.external_id),
+                'name': f"{client.first_name} {client.last_name}",
+                'first_name': client.first_name,
+                'last_name': client.last_name,
+                'date_of_birth': client.date_of_birth.strftime('%Y-%m-%d') if client.date_of_birth else None,
+                'display_text': f"{client.first_name} {client.last_name} ({client.date_of_birth.strftime('%m/%d/%Y') if client.date_of_birth else 'No DOB'})"
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'clients': results,
+            'count': len(results)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error searching clients: {str(e)}'
+        }, status=500)
+
+
 # Service Restriction CRUD Views
 class RestrictionListView(ProgramManagerAccessMixin, ListView):
     model = ServiceRestriction
@@ -524,24 +644,84 @@ class RestrictionDetailView(ProgramManagerAccessMixin, DetailView):
 class RestrictionCreateView(ProgramManagerAccessMixin, CreateView):
     model = ServiceRestriction
     template_name = 'core/restriction_form.html'
-    fields = ['client', 'scope', 'program', 'start_date', 'end_date', 'reason']
+    form_class = ServiceRestrictionForm
     success_url = reverse_lazy('core:restrictions')
     
+    def get_form_kwargs(self):
+        """Filter programs to only assigned ones for Program Managers"""
+        kwargs = super().get_form_kwargs()
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                if staff.is_program_manager():
+                    # Filter programs to only assigned ones
+                    assigned_programs = staff.get_assigned_programs()
+                    kwargs['program_queryset'] = assigned_programs
+            except Exception:
+                pass
+        return kwargs
+    
     def form_valid(self, form):
-        messages.success(self.request, 'Service restriction created successfully.')
-        return super().form_valid(form)
+        print("RestrictionCreateView.form_valid called")
+        print(f"Form is valid: {form.is_valid()}")
+        print(f"Form errors: {form.errors}")
+        print(f"Form cleaned_data: {form.cleaned_data}")
+        
+        try:
+            # Set the created_by and updated_by fields before saving
+            restriction = form.save(commit=False)
+            user_name = self.request.user.get_full_name() or self.request.user.username
+            restriction.created_by = user_name
+            restriction.updated_by = user_name
+            restriction.save()
+            
+            messages.success(self.request, 'Service restriction created successfully.')
+            return redirect(self.success_url)
+        except Exception as e:
+            print(f"Error saving form: {e}")
+            messages.error(self.request, f'Error creating restriction: {e}')
+            return self.form_invalid(form)
+    
+    def form_invalid(self, form):
+        print("RestrictionCreateView.form_invalid called")
+        print(f"Form is valid: {form.is_valid()}")
+        print(f"Form errors: {form.errors}")
+        print(f"Form non_field_errors: {form.non_field_errors()}")
+        for field_name, errors in form.errors.items():
+            print(f"Field '{field_name}' errors: {errors}")
+        return super().form_invalid(form)
 
 
 class RestrictionUpdateView(ProgramManagerAccessMixin, UpdateView):
     model = ServiceRestriction
     template_name = 'core/restriction_form.html'
+    form_class = ServiceRestrictionForm
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:restrictions')
     
+    def get_form_kwargs(self):
+        """Filter programs to only assigned ones for Program Managers"""
+        kwargs = super().get_form_kwargs()
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                if staff.is_program_manager():
+                    # Filter programs to only assigned ones
+                    assigned_programs = staff.get_assigned_programs()
+                    kwargs['program_queryset'] = assigned_programs
+            except Exception:
+                pass
+        return kwargs
+    
     def form_valid(self, form):
+        # Set the updated_by field before saving
+        restriction = form.save(commit=False)
+        restriction.updated_by = self.request.user.get_full_name() or self.request.user.username
+        restriction.save()
+        
         messages.success(self.request, 'Service restriction updated successfully.')
-        return super().form_valid(form)
+        return redirect(self.success_url)
 
 
 class RestrictionDeleteView(ProgramManagerAccessMixin, DeleteView):
@@ -551,9 +731,93 @@ class RestrictionDeleteView(ProgramManagerAccessMixin, DeleteView):
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:restrictions')
     
+    def get_context_data(self, **kwargs):
+        """Add restriction object to context"""
+        context = super().get_context_data(**kwargs)
+        context['restriction'] = self.get_object()
+        return context
+    
     def delete(self, request, *args, **kwargs):
-        messages.success(self.request, 'Service restriction deleted successfully.')
-        return super().delete(request, *args, **kwargs)
+        """Override to handle confirmation text validation"""
+        try:
+            # Get the restriction object first
+            restriction = self.get_object()
+            
+            # Check confirmation text
+            confirmation = request.POST.get('confirmation_text', '').strip().upper()
+            if confirmation != 'DELETE':
+                messages.error(request, 'Please type "DELETE" to confirm deletion.')
+                return redirect('core:restrictions_detail', external_id=restriction.external_id)
+            
+            client_name = f"{restriction.client.first_name} {restriction.client.last_name}"
+            restriction_type = restriction.get_restriction_type_display()
+            
+            # Delete the restriction
+            restriction.delete()
+            print(f"Deleted restriction: {client_name} - {restriction_type}")
+            
+            messages.success(
+                request, 
+                f'Service restriction for {client_name} has been deleted successfully.'
+            )
+            return redirect(self.success_url)
+            
+        except Exception as e:
+            print(f"Error deleting restriction: {str(e)}")
+            messages.error(request, f'Error deleting restriction: {str(e)}')
+            return redirect(self.success_url)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def bulk_delete_restrictions(request):
+    """Bulk delete service restrictions"""
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        restriction_ids = data.get('restriction_ids', [])
+        
+        if not restriction_ids:
+            return JsonResponse({
+                'success': False,
+                'error': 'No restrictions selected for deletion'
+            }, status=400)
+        
+        # Get the restrictions to delete
+        restrictions_to_delete = ServiceRestriction.objects.filter(id__in=restriction_ids)
+        deleted_count = restrictions_to_delete.count()
+        
+        if deleted_count == 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'No restrictions found with the provided IDs'
+            }, status=404)
+        
+        # Delete the restrictions
+        restrictions_to_delete.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'Successfully deleted {deleted_count} restriction(s)'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error deleting restrictions: {str(e)}'
+        }, status=500)
 
 
 @jwt_required
@@ -586,8 +850,15 @@ def edit_profile(request):
         )
 
     if request.method == 'POST':
+        print(f"POST data: {request.POST}")
+        print(f"FILES data: {request.FILES}")
         user_form = UserProfileForm(request.POST, request.FILES, instance=request.user)
         staff_form = StaffProfileForm(request.POST, instance=staff_profile)
+        
+        print(f"User form is valid: {user_form.is_valid()}")
+        print(f"User form errors: {user_form.errors}")
+        print(f"Staff form is valid: {staff_form.is_valid()}")
+        print(f"Staff form errors: {staff_form.errors}")
         
         if user_form.is_valid() and staff_form.is_valid():
             user = user_form.save()

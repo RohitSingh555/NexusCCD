@@ -34,6 +34,56 @@
                 </a>
             </div>
         </div>
+        
+        <!-- Search Form -->
+        <div class="mb-6">
+            <form method="GET" class="flex items-center space-x-4">
+                <div class="flex-1 max-w-md">
+                    <div class="relative">
+                        <input type="text" 
+                               name="search" 
+                               value="{{ search_query }}" 
+                               placeholder="Search clients by name, email, phone, or ID..." 
+                               class="w-full pl-10 pr-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" 
+                        class="inline-flex items-center px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                    Search
+                </button>
+                {% if search_query %}
+                <a href="{% url 'clients:list' %}" 
+                   class="inline-flex items-center px-4 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                    Clear
+                </a>
+                {% endif %}
+            </form>
+        </div>
+        
+        <!-- Search Results Info -->
+        {% if search_query %}
+        <div class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div class="flex items-center">
+                <svg class="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <span class="text-sm font-bold text-blue-800 font-body">
+                    Search results for "{{ search_query }}" - {{ clients|length }} client(s) found
+                </span>
+            </div>
+        </div>
+        {% endif %}
     </div>
     
     <!-- Bulk Actions Bar -->
@@ -75,10 +125,12 @@
                 </thead>
                 <tbody class="bg-white divide-y divide-neutral-200">
                     {% for client in clients %}
-                    <tr class="hover:bg-neutral-50 relative" 
+                    <tr class="hover:bg-neutral-50 relative group" 
                         @contextmenu.prevent="showContextMenu($event, '{{ client.external_id }}', '{{ client.first_name }} {{ client.last_name }}')"
                         @click="toggleClient('{{ client.external_id }}')"
-                        :class="{ 'bg-blue-50': selectedClients.includes('{{ client.external_id }}') }">
+                        :class="{ 'bg-blue-50': selectedClients.includes('{{ client.external_id }}') }"
+                        onmouseenter="showTooltip(this, '{{ client.created_by|default:"Unknown" }}', '{{ client.created_at|date:'M d, Y g:i A' }}', '{{ client.updated_by|default:"Unknown" }}', '{{ client.updated_at|date:'M d, Y g:i A' }}')"
+                        onmouseleave="hideTooltip()">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <input type="checkbox" 
                                    :checked="selectedClients.includes('{{ client.external_id }}')"
@@ -88,8 +140,8 @@
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="flex items-center">
                                 <div class="w-12 h-12 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm relative group">
-                                    {% if client.profile_image_url %}
-                                        <img src="{{ client.profile_image_url }}" alt="{{ client.first_name }} {{ client.last_name }}" class="w-12 h-12 rounded-lg object-cover">
+                                    {% if client.profile_picture %}
+                                        <img src="{{ client.profile_picture.url }}" alt="{{ client.first_name }} {{ client.last_name }}" class="w-12 h-12 rounded-lg object-cover">
                                     {% else %}
                                         <span class="text-sm font-bold text-white">
                                             {{ client.first_name|first|upper }}{{ client.last_name|first|upper }}
@@ -107,7 +159,9 @@
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="text-sm font-bold text-neutral-900 font-body">
-                                {{ client.first_name }} {{ client.last_name }}
+                                <a href="{% url 'clients:detail' client.external_id %}" class="text-brand-sky hover:text-brand-darkBlue hover:underline">
+                                    {{ client.first_name }} {{ client.last_name }}
+                                </a>
                             </div>
                             {% if client.preferred_name %}
                             <div class="text-sm text-neutral-500 font-body">{{ client.preferred_name }}</div>
@@ -132,6 +186,31 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+    </div>
+    
+    <!-- Custom Tooltip -->
+    <div id="custom-tooltip" class="fixed z-50 bg-neutral-800 text-white text-xs rounded-lg py-3 px-4 shadow-lg opacity-0 transition-opacity duration-200" style="display: none; pointer-events: none;">
+        <div class="flex flex-col space-y-2">
+            <div class="text-sm font-bold text-white border-b border-neutral-600 pb-1">
+                <span id="tooltip-heading">Client Details</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-neutral-300">Created by:</span>
+                <span id="tooltip-created-by"></span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-neutral-300">Created on:</span>
+                <span id="tooltip-created-on"></span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-neutral-300">Updated by:</span>
+                <span id="tooltip-updated-by"></span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-neutral-300">Updated on:</span>
+                <span id="tooltip-updated-on"></span>
+            </div>
         </div>
     </div>
     
@@ -717,8 +796,88 @@ function clientManager() {
                 console.error('Error removing profile picture:', error);
                 this.showNotification('An error occurred while removing profile picture', 'error');
             }
+        },
+        
+        showTooltip(element, updatedDate) {
+            const tooltip = document.getElementById('custom-tooltip');
+            const updatedSpan = document.getElementById('tooltip-updated');
+            
+            if (tooltip && updatedSpan) {
+                updatedSpan.textContent = updatedDate;
+                
+                // Position the tooltip
+                const rect = element.getBoundingClientRect();
+                const tooltipRect = tooltip.getBoundingClientRect();
+                
+                tooltip.style.left = (rect.left + rect.width / 2 - tooltipRect.width / 2) + 'px';
+                tooltip.style.top = (rect.top - tooltipRect.height - 10) + 'px';
+                
+                tooltip.style.display = 'block';
+                setTimeout(() => {
+                    tooltip.style.opacity = '1';
+                }, 10);
+            }
+        },
+        
+        hideTooltip() {
+            const tooltip = document.getElementById('custom-tooltip');
+            if (tooltip) {
+                tooltip.style.opacity = '0';
+                setTimeout(() => {
+                    tooltip.style.display = 'none';
+                }, 200);
+            }
         }
     }
+}
+
+// Global functions for tooltip
+let tooltipTimeout;
+
+function showTooltip(element, createdBy, createdOn, updatedBy, updatedOn) {
+    // Clear any existing timeout
+    if (tooltipTimeout) {
+        clearTimeout(tooltipTimeout);
+        tooltipTimeout = null;
+    }
+    
+    const tooltip = document.getElementById('custom-tooltip');
+    const createdBySpan = document.getElementById('tooltip-created-by');
+    const createdOnSpan = document.getElementById('tooltip-created-on');
+    const updatedBySpan = document.getElementById('tooltip-updated-by');
+    const updatedOnSpan = document.getElementById('tooltip-updated-on');
+    
+    if (tooltip && createdBySpan && createdOnSpan && updatedBySpan && updatedOnSpan) {
+        createdBySpan.textContent = createdBy || 'Unknown';
+        createdOnSpan.textContent = createdOn;
+        updatedBySpan.textContent = updatedBy || 'Unknown';
+        updatedOnSpan.textContent = updatedOn;
+        
+        // Position the tooltip
+        const rect = element.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        
+        tooltip.style.left = (rect.left + rect.width / 2 - tooltipRect.width / 2) + 'px';
+        tooltip.style.top = (rect.top - tooltipRect.height - 10) + 'px';
+        
+        tooltip.style.display = 'block';
+        setTimeout(() => {
+            tooltip.style.opacity = '1';
+        }, 10);
+    }
+}
+
+function hideTooltip() {
+    // Add a small delay before hiding to prevent flickering
+    tooltipTimeout = setTimeout(() => {
+        const tooltip = document.getElementById('custom-tooltip');
+        if (tooltip) {
+            tooltip.style.opacity = '0';
+            setTimeout(() => {
+                tooltip.style.display = 'none';
+            }, 200);
+        }
+    }, 100);
 }
 </script>
 {% endblock %}

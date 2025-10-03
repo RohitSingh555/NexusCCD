@@ -77,7 +77,7 @@
                 
                 <div>
                     <label for="{{ form.dob.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Date of Birth *</label>
-                    <input type="date" name="{{ form.dob.name }}" id="{{ form.dob.id_for_label }}" value="{{ form.dob.value|default:'' }}" required class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    <input type="date" name="{{ form.dob.name }}" id="{{ form.dob.id_for_label }}" value="{% if form.dob.value %}{{ form.dob.value|date:'Y-m-d' }}{% endif %}" required class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                     {% if form.dob.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.dob.errors.0 }}</div>
                     {% endif %}
@@ -522,26 +522,28 @@
                 
                 <div>
                     <label for="{{ form.next_of_kin.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Next of Kin</label>
-                    <div class="space-y-2">
-                        <div class="flex items-center space-x-2">
-                            <input type="text" x-model="newNextOfKin" @keydown.enter.prevent="addNextOfKin()" placeholder="Add next of kin" class="flex-1 px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                            <button type="button" @click="addNextOfKin()" class="px-4 py-2 bg-brand-sky text-white text-sm font-bold rounded-lg hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-brand-sky transition-all duration-200">
-                                Add
-                            </button>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-neutral-600 mb-1">Name</label>
+                                <input type="text" x-model="nextOfKinData.name" placeholder="Enter full name" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-neutral-600 mb-1">Phone</label>
+                                <input type="tel" x-model="nextOfKinData.phone" placeholder="Enter phone number" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            </div>
                         </div>
-                        <div class="flex flex-wrap gap-2" x-show="nextOfKin.length > 0">
-                            <template x-for="(kin, index) in nextOfKin" :key="index">
-                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-neutral-100 text-neutral-800">
-                                    <span x-text="kin"></span>
-                                    <button type="button" @click="removeNextOfKin(index)" class="ml-2 text-neutral-500 hover:text-red-600">
-                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                        </svg>
-                                    </button>
-                                </span>
-                            </template>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-neutral-600 mb-1">Relationship</label>
+                                <input type="text" x-model="nextOfKinData.relationship" placeholder="e.g., Spouse, Parent, Sibling" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-neutral-600 mb-1">Email (Optional)</label>
+                                <input type="email" x-model="nextOfKinData.email" placeholder="Enter email address" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            </div>
                         </div>
-                        <input type="hidden" name="next_of_kin" :value="JSON.stringify(nextOfKin)">
+                        <input type="hidden" name="next_of_kin" :value="JSON.stringify(nextOfKinData)">
                     </div>
                     {% if form.next_of_kin.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.next_of_kin.errors.0 }}</div>
@@ -550,26 +552,28 @@
                 
                 <div>
                     <label for="{{ form.emergency_contact.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Emergency Contact</label>
-                    <div class="space-y-2">
-                        <div class="flex items-center space-x-2">
-                            <input type="text" x-model="newEmergencyContact" @keydown.enter.prevent="addEmergencyContact()" placeholder="Add emergency contact" class="flex-1 px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                            <button type="button" @click="addEmergencyContact()" class="px-4 py-2 bg-brand-sky text-white text-sm font-bold rounded-lg hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-brand-sky transition-all duration-200">
-                                Add
-                            </button>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-neutral-600 mb-1">Name</label>
+                                <input type="text" x-model="emergencyContactData.name" placeholder="Enter full name" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-neutral-600 mb-1">Phone</label>
+                                <input type="tel" x-model="emergencyContactData.phone" placeholder="Enter phone number" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            </div>
                         </div>
-                        <div class="flex flex-wrap gap-2" x-show="emergencyContacts.length > 0">
-                            <template x-for="(contact, index) in emergencyContacts" :key="index">
-                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-neutral-100 text-neutral-800">
-                                    <span x-text="contact"></span>
-                                    <button type="button" @click="removeEmergencyContact(index)" class="ml-2 text-neutral-500 hover:text-red-600">
-                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                        </svg>
-                                    </button>
-                                </span>
-                            </template>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-neutral-600 mb-1">Relationship</label>
+                                <input type="text" x-model="emergencyContactData.relationship" placeholder="e.g., Spouse, Parent, Sibling" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-neutral-600 mb-1">Email (Optional)</label>
+                                <input type="email" x-model="emergencyContactData.email" placeholder="Enter email address" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            </div>
                         </div>
-                        <input type="hidden" name="emergency_contact" :value="JSON.stringify(emergencyContacts)">
+                        <input type="hidden" name="emergency_contact" :value="JSON.stringify(emergencyContactData)">
                     </div>
                     {% if form.emergency_contact.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.emergency_contact.errors.0 }}</div>
@@ -634,11 +638,15 @@
 <script>
     function clientForm() {
         return {
-            languages: {{ form.languages_spoken.value|default:"[]"|safe }},
+            languages: {{ form.languages_spoken.initial|default:"[]"|safe }},
             newLanguage: '',
-            ethnicities: {{ form.ethnicity.value|default:"[]"|safe }},
+            ethnicities: {{ form.ethnicity.initial|default:"[]"|safe }},
             newEthnicity: '',
-            contactInfo: {{ form.contact_information.value|default:"{}"|safe }},
+            contactInfo: {{ form.contact_information.initial|default:"{}"|safe }},
+            supportWorkers: {{ form.support_workers.initial|default:"[]"|safe }},
+            newSupportWorker: '',
+            nextOfKinData: {{ form.next_of_kin.initial|default:"{}"|safe }},
+            emergencyContactData: {{ form.emergency_contact.initial|default:"{}"|safe }},
             
             init() {
                 // Initialize languages from form data
@@ -669,6 +677,44 @@
                 }
                 if (!this.contactInfo.phone) this.contactInfo.phone = '';
                 if (!this.contactInfo.email) this.contactInfo.email = '';
+                
+                // Initialize support workers from form data
+                if (typeof this.supportWorkers === 'string') {
+                    try {
+                        this.supportWorkers = JSON.parse(this.supportWorkers);
+                    } catch (e) {
+                        this.supportWorkers = [];
+                    }
+                }
+                if (!Array.isArray(this.supportWorkers)) {
+                    this.supportWorkers = [];
+                }
+                
+                // Initialize next of kin data from form data
+                if (typeof this.nextOfKinData === 'string') {
+                    try {
+                        this.nextOfKinData = JSON.parse(this.nextOfKinData);
+                    } catch (e) {
+                        this.nextOfKinData = { name: '', phone: '', relationship: '', email: '' };
+                    }
+                }
+                if (!this.nextOfKinData.name) this.nextOfKinData.name = '';
+                if (!this.nextOfKinData.phone) this.nextOfKinData.phone = '';
+                if (!this.nextOfKinData.relationship) this.nextOfKinData.relationship = '';
+                if (!this.nextOfKinData.email) this.nextOfKinData.email = '';
+                
+                // Initialize emergency contact data from form data
+                if (typeof this.emergencyContactData === 'string') {
+                    try {
+                        this.emergencyContactData = JSON.parse(this.emergencyContactData);
+                    } catch (e) {
+                        this.emergencyContactData = { name: '', phone: '', relationship: '', email: '' };
+                    }
+                }
+                if (!this.emergencyContactData.name) this.emergencyContactData.name = '';
+                if (!this.emergencyContactData.phone) this.emergencyContactData.phone = '';
+                if (!this.emergencyContactData.relationship) this.emergencyContactData.relationship = '';
+                if (!this.emergencyContactData.email) this.emergencyContactData.email = '';
             },
             
             addLanguage() {
@@ -691,6 +737,17 @@
             
             removeEthnicity(index) {
                 this.ethnicities.splice(index, 1);
+            },
+            
+            addSupportWorker() {
+                if (this.newSupportWorker.trim() && !this.supportWorkers.includes(this.newSupportWorker.trim())) {
+                    this.supportWorkers.push(this.newSupportWorker.trim());
+                    this.newSupportWorker = '';
+                }
+            },
+            
+            removeSupportWorker(index) {
+                this.supportWorkers.splice(index, 1);
             }
         }
     }
@@ -701,7 +758,7 @@
             
             init() {
                 // Initialize addresses from form data
-                let addressesData = {{ form.addresses.value|default:"[]"|safe }};
+                let addressesData = {{ form.addresses.initial|default:"[]"|safe }};
                 
                 if (typeof addressesData === 'string') {
                     try {

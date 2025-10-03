@@ -28,7 +28,7 @@
     </div>
 
     <!-- Form -->
-    <form method="post" class="space-y-8" x-data="restrictionForm()">
+    <form method="post" enctype="multipart/form-data" class="space-y-8" x-data="restrictionForm()">
         {% csrf_token %}
         
         <!-- Restriction Information Section -->
@@ -60,11 +60,7 @@
                 
                 <div>
                     <label for="{{ form.scope.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Scope *</label>
-                    <select name="{{ form.scope.name }}" id="{{ form.scope.id_for_label }}" required @change="updateProgramVisibility()" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Scope</option>
-                        <option value="org" {% if form.scope.value == 'org' %}selected{% endif %}>Organization-wide</option>
-                        <option value="program" {% if form.scope.value == 'program' %}selected{% endif %}>Program-specific</option>
-                    </select>
+                    {{ form.scope }}
                     {% if form.scope.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.scope.errors.0 }}</div>
                     {% endif %}
@@ -72,14 +68,7 @@
                 
                 <div id="program-field" :class="{'hidden': scope !== 'program'}">
                     <label for="{{ form.program.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Program</label>
-                    <select name="{{ form.program.name }}" id="{{ form.program.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Program</option>
-                        {% for program in form.program.field.queryset %}
-                            <option value="{{ program.id }}" {% if form.program.value == program.id %}selected{% endif %}>
-                                {{ program.name }} - {{ program.department.name }}
-                            </option>
-                        {% endfor %}
-                    </select>
+                    {{ form.program }}
                     <p class="mt-1 text-sm text-neutral-500 font-body">Required for program-specific restrictions</p>
                     {% if form.program.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.program.errors.0 }}</div>
@@ -87,8 +76,22 @@
                 </div>
                 
                 <div>
+                    <label for="{{ form.restriction_type.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Restriction Type *</label>
+                    <select name="{{ form.restriction_type.name }}" id="{{ form.restriction_type.id_for_label }}" @change="updateBehaviorVisibility()" class="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
+                        <option value="">Select Restriction Type</option>
+                        <option value="general" {% if form.restriction_type.value == 'general' %}selected{% endif %}>General Restriction</option>
+                        <option value="bill_168" {% if form.restriction_type.value == 'bill_168' %}selected{% endif %}>Bill 168 (Violence Against Staff)</option>
+                        <option value="no_trespass" {% if form.restriction_type.value == 'no_trespass' %}selected{% endif %}>No Trespass Order</option>
+                        <option value="behaviors" {% if form.restriction_type.value == 'behaviors' %}selected{% endif %}>Behavioral Issues</option>
+                    </select>
+                    {% if form.restriction_type.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.restriction_type.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
                     <label for="{{ form.start_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Start Date *</label>
-                    <input type="date" name="{{ form.start_date.name }}" id="{{ form.start_date.id_for_label }}" value="{{ form.start_date.value|default:'' }}" required class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {{ form.start_date }}
                     {% if form.start_date.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.start_date.errors.0 }}</div>
                     {% endif %}
@@ -96,19 +99,100 @@
                 
                 <div>
                     <label for="{{ form.end_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">End Date</label>
-                    <input type="date" name="{{ form.end_date.name }}" id="{{ form.end_date.id_for_label }}" value="{{ form.end_date.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {{ form.end_date }}
                     <p class="mt-1 text-sm text-neutral-500 font-body">Leave blank for indefinite restriction</p>
                     {% if form.end_date.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.end_date.errors.0 }}</div>
                     {% endif %}
                 </div>
+                
+                <div class="md:col-span-2">
+                    <div class="flex items-center">
+                        {{ form.is_indefinite }}
+                        <label for="{{ form.is_indefinite.id_for_label }}" class="ml-2 text-sm font-bold text-neutral-700 font-subheader">
+                            Indefinite Restriction
+                        </label>
+                    </div>
+                    <p class="mt-1 text-sm text-neutral-500 font-body">Check this box if the restriction has no end date</p>
+                    {% if form.is_indefinite.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.is_indefinite.errors.0 }}</div>
+                    {% endif %}
+                </div>
             </div>
             
+            <!-- Behaviors Section (only for Behavioral Issues type) -->
+            <div id="behaviors-section" class="mt-6" :class="{'hidden': restrictionType !== 'behaviors'}">
+                <label class="block text-sm font-bold text-neutral-700 mb-3 font-subheader">Behaviors *</label>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {% for choice in form.behaviors.field.choices %}
+                        <div class="flex items-center">
+                            <input type="checkbox" 
+                                   name="{{ form.behaviors.name }}" 
+                                   value="{{ choice.0 }}" 
+                                   id="behavior_{{ forloop.counter }}"
+                                   {% if choice.0 in form.behaviors.value %}checked{% endif %}
+                                   class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                            <label for="behavior_{{ forloop.counter }}" class="ml-2 text-sm text-neutral-700 font-body">
+                                {{ choice.1 }}
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+                <p class="mt-2 text-sm text-neutral-500 font-body">Select all behaviors that apply to this restriction</p>
+                {% if form.behaviors.errors %}
+                    <div class="mt-1 text-sm text-red-600">{{ form.behaviors.errors.0 }}</div>
+                {% endif %}
+            </div>
+            
+            <!-- Notes Section -->
             <div class="mt-6">
-                <label for="{{ form.reason.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Reason *</label>
-                <textarea name="{{ form.reason.name }}" id="{{ form.reason.id_for_label }}" rows="4" required class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body" placeholder="Explain the reason for this service restriction">{{ form.reason.value|default:"" }}</textarea>
-                {% if form.reason.errors %}
-                    <div class="mt-1 text-sm text-red-600">{{ form.reason.errors.0 }}</div>
+                <label for="{{ form.notes.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">
+                    <span id="notes-label">Additional Notes</span>
+                </label>
+                {{ form.notes }}
+                <p id="notes-help" class="mt-1 text-sm text-neutral-500 font-body">Additional notes about the restriction (optional)</p>
+                {% if form.notes.errors %}
+                    <div class="mt-1 text-sm text-red-600">{{ form.notes.errors.0 }}</div>
+                {% endif %}
+            </div>
+            
+            <!-- Client Profile Image Section -->
+            <div class="mt-6">
+                <label for="{{ form.client_profile_image.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Client Profile Image</label>
+                <div class="space-y-4">
+                    <!-- File Input -->
+                    {{ form.client_profile_image }}
+                    
+                    <!-- Image Preview -->
+                    <div id="image-preview" class="hidden">
+                        <div class="flex items-center space-x-4 p-4 bg-neutral-50 rounded-lg border border-neutral-200">
+                            <div class="w-16 h-16 bg-white rounded-lg border border-neutral-200 overflow-hidden">
+                                <img id="preview-img" src="" alt="Preview" class="w-full h-full object-cover">
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-sm font-bold text-neutral-700 font-body">Image Preview</p>
+                                <p id="file-info" class="text-xs text-neutral-500 font-body"></p>
+                                <button type="button" onclick="clearImagePreview()" class="mt-1 text-xs text-red-600 hover:text-red-800 font-bold">Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Current Client Image (if exists) -->
+                    <div id="current-image" class="hidden">
+                        <div class="flex items-center space-x-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <div class="w-16 h-16 bg-white rounded-lg border border-blue-200 overflow-hidden">
+                                <img id="current-img" src="" alt="Current" class="w-full h-full object-cover">
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-sm font-bold text-blue-700 font-body">Current Profile Image</p>
+                                <p class="text-xs text-blue-500 font-body">This will be replaced if you upload a new image</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="mt-1 text-sm text-neutral-500 font-body">Upload a profile image for the client (optional, max 5MB)</p>
+                {% if form.client_profile_image.errors %}
+                    <div class="mt-1 text-sm text-red-600">{{ form.client_profile_image.errors.0 }}</div>
                 {% endif %}
             </div>
         </div>
@@ -129,9 +213,14 @@
     function restrictionForm() {
         return {
             scope: '{{ form.scope.value|default:"" }}',
+            isIndefinite: {{ form.is_indefinite.value|yesno:"true,false" }},
+            restrictionType: '{{ form.restriction_type.value|default:"" }}',
             
             init() {
                 this.updateProgramVisibility();
+                this.updateEndDateVisibility();
+                this.updateBehaviorVisibility();
+                this.setupImagePreview();
             },
             
             updateProgramVisibility() {
@@ -149,9 +238,99 @@
                     programSelect.required = false;
                     programSelect.value = '';
                 }
+            },
+            
+            updateEndDateVisibility() {
+                const indefiniteCheckbox = document.getElementById('{{ form.is_indefinite.id_for_label }}');
+                const endDateInput = document.getElementById('{{ form.end_date.id_for_label }}');
+                
+                this.isIndefinite = indefiniteCheckbox.checked;
+                
+                if (this.isIndefinite) {
+                    endDateInput.disabled = true;
+                    endDateInput.value = '';
+                } else {
+                    endDateInput.disabled = false;
+                }
+            },
+            
+            updateBehaviorVisibility() {
+                const restrictionTypeSelect = document.getElementById('{{ form.restriction_type.id_for_label }}');
+                const behaviorsSection = document.getElementById('behaviors-section');
+                const notesLabel = document.getElementById('notes-label');
+                const notesHelp = document.getElementById('notes-help');
+                
+                this.restrictionType = restrictionTypeSelect.value;
+                
+                if (this.restrictionType === 'behaviors') {
+                    behaviorsSection.classList.remove('hidden');
+                    notesLabel.textContent = 'Behavior Notes *';
+                    notesHelp.textContent = 'Describe the specific behaviors that led to this restriction (required)';
+                } else {
+                    behaviorsSection.classList.add('hidden');
+                    notesLabel.textContent = 'Additional Notes';
+                    notesHelp.textContent = 'Additional notes about the restriction (optional)';
+                }
+            },
+            
+            setupImagePreview() {
+                const fileInput = document.getElementById('{{ form.client_profile_image.id_for_label }}');
+                const previewDiv = document.getElementById('image-preview');
+                const previewImg = document.getElementById('preview-img');
+                const fileInfo = document.getElementById('file-info');
+                
+                if (fileInput) {
+                    fileInput.addEventListener('change', function(e) {
+                        const file = e.target.files[0];
+                        if (file) {
+                            // Check file size (5MB limit)
+                            if (file.size > 5 * 1024 * 1024) {
+                                alert('File size must be less than 5MB');
+                                fileInput.value = '';
+                                return;
+                            }
+                            
+                            // Check file type
+                            const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                            if (!allowedTypes.includes(file.type)) {
+                                alert('Please select a valid image file (JPEG, PNG, GIF, or WebP)');
+                                fileInput.value = '';
+                                return;
+                            }
+                            
+                            // Show preview
+                            const reader = new FileReader();
+                            reader.onload = function(e) {
+                                previewImg.src = e.target.result;
+                                previewDiv.classList.remove('hidden');
+                                
+                                // Show file info
+                                const fileSize = (file.size / 1024 / 1024).toFixed(2);
+                                fileInfo.textContent = `${file.name} (${fileSize} MB)`;
+                            };
+                            reader.readAsDataURL(file);
+                        } else {
+                            previewDiv.classList.add('hidden');
+                        }
+                    });
+                }
             }
-        }
     }
+}
+
+
+// Global function for clearing image preview
+function clearImagePreview() {
+    const fileInput = document.getElementById('{{ form.client_profile_image.id_for_label }}');
+    const previewDiv = document.getElementById('image-preview');
+    
+    if (fileInput) {
+        fileInput.value = '';
+    }
+    if (previewDiv) {
+        previewDiv.classList.add('hidden');
+    }
+}
 </script>
 
 <style>

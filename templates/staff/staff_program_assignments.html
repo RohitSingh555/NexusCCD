@@ -85,11 +85,43 @@
                 </div>
             </div>
             
+            <!-- Search and Filter -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-neutral-800 font-subheader">Available Programs</h3>
+                    <div class="text-sm text-neutral-500 font-body">
+                        <span id="program-count">{{ programs_by_department|length }} department(s)</span>
+                    </div>
+                </div>
+                
+                <!-- Search Input -->
+                <div class="relative">
+                    <input type="text" 
+                           id="program-search" 
+                           placeholder="Search programs by name, department, or location..." 
+                           class="w-full pl-10 pr-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </div>
+                    <button type="button" 
+                            id="clear-search" 
+                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-400 hover:text-neutral-600 hidden">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
             <!-- Programs grouped by department -->
             {% if programs_by_department %}
-                <div class="space-y-6">
+                <div class="space-y-6" id="programs-container">
                     {% for department, programs in programs_by_department.items %}
-                        <div class="border border-neutral-200 rounded-lg p-4">
+                        <div class="department-section border border-neutral-200 rounded-lg p-4" 
+                             data-department="{{ department.name|lower }}"
+                             data-searchable="{{ department.name|lower }}">
                             <h3 class="font-bold text-lg text-neutral-800 font-subheader mb-4 flex items-center">
                                 <svg class="w-5 h-5 mr-2 text-brand-sky" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
@@ -98,7 +130,11 @@
                             </h3>
                             <div class="space-y-3 pl-4">
                                 {% for program in programs %}
-                                    <div class="flex items-start">
+                                    <div class="program-item flex items-start" 
+                                         data-program-name="{{ program.name|lower }}"
+                                         data-program-location="{{ program.location|lower }}"
+                                         data-program-description="{{ program.description|lower }}"
+                                         data-searchable="{{ program.name|lower }} {{ program.location|lower }} {{ program.description|lower }}">
                                         <input type="checkbox" 
                                             name="programs" 
                                             value="{{ program.id }}" 
@@ -117,6 +153,17 @@
                             </div>
                         </div>
                     {% endfor %}
+                </div>
+                
+                <!-- No results message -->
+                <div id="no-results" class="hidden text-center py-12">
+                    <div class="mx-auto w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
+                        <svg class="w-8 h-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-neutral-600 font-header mb-2">No programs found</h3>
+                    <p class="text-neutral-500 font-body">Try adjusting your search terms or clear the search to see all programs.</p>
                 </div>
             {% else %}
                 <p class="text-neutral-500 font-body">No active programs available</p>
@@ -153,4 +200,97 @@
         </div>
     </form>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('program-search');
+    const clearButton = document.getElementById('clear-search');
+    const programsContainer = document.getElementById('programs-container');
+    const programCount = document.getElementById('program-count');
+    const noResults = document.getElementById('no-results');
+    
+    // Get all department sections and program items
+    const departmentSections = document.querySelectorAll('.department-section');
+    const programItems = document.querySelectorAll('.program-item');
+    
+    function updateSearch() {
+        const searchTerm = searchInput.value.toLowerCase().trim();
+        
+        if (searchTerm === '') {
+            // Show all departments and programs
+            departmentSections.forEach(section => {
+                section.style.display = 'block';
+                section.querySelectorAll('.program-item').forEach(item => {
+                    item.style.display = 'flex';
+                });
+            });
+            
+            // Update count
+            programCount.textContent = `${departmentSections.length} department(s)`;
+            clearButton.classList.add('hidden');
+            noResults.classList.add('hidden');
+        } else {
+            let visibleDepartments = 0;
+            let totalVisiblePrograms = 0;
+            
+            departmentSections.forEach(section => {
+                const departmentName = section.dataset.department;
+                const programs = section.querySelectorAll('.program-item');
+                let visiblePrograms = 0;
+                
+                programs.forEach(program => {
+                    const searchableText = program.dataset.searchable;
+                    if (searchableText.includes(searchTerm)) {
+                        program.style.display = 'flex';
+                        visiblePrograms++;
+                        totalVisiblePrograms++;
+                    } else {
+                        program.style.display = 'none';
+                    }
+                });
+                
+                // Show/hide department based on whether it has visible programs
+                if (visiblePrograms > 0) {
+                    section.style.display = 'block';
+                    visibleDepartments++;
+                } else {
+                    section.style.display = 'none';
+                }
+            });
+            
+            // Update count and show/hide no results message
+            if (visibleDepartments === 0) {
+                programCount.textContent = 'No programs found';
+                noResults.classList.remove('hidden');
+            } else {
+                programCount.textContent = `${visibleDepartments} department(s) - ${totalVisiblePrograms} program(s)`;
+                noResults.classList.add('hidden');
+            }
+            
+            clearButton.classList.remove('hidden');
+        }
+    }
+    
+    // Search input event
+    searchInput.addEventListener('input', updateSearch);
+    
+    // Clear search button
+    clearButton.addEventListener('click', function() {
+        searchInput.value = '';
+        updateSearch();
+        searchInput.focus();
+    });
+    
+    // Keyboard shortcuts
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            searchInput.value = '';
+            updateSearch();
+        }
+    });
+    
+    // Initial state
+    updateSearch();
+});
+</script>
 {% endblock %}

@@ -153,27 +153,41 @@ class StaffDeleteView(DeleteView):
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('staff:list')
 
-    def delete(self, request, *args, **kwargs):
+    def form_valid(self, form):
         """Override to delete both Staff and linked User records"""
         try:
+            # Check confirmation text
+            confirmation = self.request.POST.get('confirmation_name', '').strip().upper()
+            if confirmation != 'DELETE':
+                messages.error(self.request, 'Please type "DELETE" to confirm deletion.')
+                return self.form_invalid(form)
+            
             staff = self.get_object()
             staff_name = f"{staff.first_name} {staff.last_name}"
             
             # Delete the linked User record if it exists
             if staff.user:
-                staff.user.delete()
+                user_email = staff.user.email
+                user = staff.user
+                # Clear the relationship first to avoid cascade issues
+                staff.user = None
+                staff.save()
+                user.delete()
+                print(f"Deleted user: {user_email}")
             
             # Delete the Staff record
             staff.delete()
+            print(f"Deleted staff: {staff_name}")
             
             messages.success(
-                request, 
+                self.request, 
                 f'Staff member {staff_name} and their user account have been deleted successfully.'
             )
             return redirect(self.success_url)
             
         except Exception as e:
-            messages.error(request, f'Error deleting staff member: {str(e)}')
+            print(f"Error deleting staff member: {str(e)}")
+            messages.error(self.request, f'Error deleting staff member: {str(e)}')
             return redirect(self.success_url)
 
 def upgrade_user_to_staff(request, external_id):
