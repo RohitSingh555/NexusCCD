@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0011_add_comprehensive_client_fields'),
+        ('core', '0012_add_comprehensive_client_fields'),
     ]
 
     operations = [

@@ -1,40 +1,47 @@
-version: "3.9"  # or "3.8", "3.7", etc.
+version: "3.9"
 services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=nexusccd_db
+      - POSTGRES_USER=nexusccd_user
+      - POSTGRES_PASSWORD=nexusccd_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexusccd_user -d nexusccd_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   web:
     build:
       context: .
       dockerfile: Dockerfile
-##    ports:
-##      - "8000:8000"
+    ports:
+      - "8001:8000"
     volumes:
       - .:/app
       - static_volume:/app/static
       - media_volume:/app/media
     environment:
       - ENVIRONMENT=development
-    env_file:
-      - .env.dev
+      - DB_NAME=nexusccd_db
+      - DB_USER=nexusccd_user
+      - DB_PASSWORD=nexusccd_password
+      - DB_HOST=db
+      - DB_PORT=5432
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
     command: python manage.py runserver 0.0.0.0:8000
-
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: nexusccd_db
-      POSTGRES_USER: nexusccd_user
-      POSTGRES_PASSWORD: your_secure_password_here
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    # ports:
-    #  - "5433:5432"
 
   redis:
     image: redis:7-alpine
     # ports:
     #  - "6380:6379"
-
 
 volumes:
   postgres_data:

@@ -13,8 +13,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
+# Make the startup script executable
+RUN chmod +x start_prod.sh
+
+# Collect static files
 RUN python manage.py collectstatic --noinput
 
 EXPOSE 8000
 
-CMD ["gunicorn", "ccd.wsgi:application", "--bind", "0.0.0.0:8000"]
+CMD ["./start_prod.sh"]

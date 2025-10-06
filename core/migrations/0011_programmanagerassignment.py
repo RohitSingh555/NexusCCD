@@ -8,7 +8,7 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0009_programservicemanagerassignment'),
+        ('core', '0010_programservicemanagerassignment'),
     ]
 
     operations = [

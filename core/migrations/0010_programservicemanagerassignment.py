@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('programs', '0001_initial'),
-        ('core', '0008_client_profile_picture'),
+        ('core', '0009_client_profile_picture'),
     ]
 
     operations = [

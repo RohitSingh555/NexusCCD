@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0013_add_behavioral_restrictions_and_images'),
+        ('core', '0014_add_behavioral_restrictions_and_images'),
     ]
 
     operations = [
