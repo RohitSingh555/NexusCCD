@@ -340,7 +340,7 @@ class Client(BaseModel):
     phone_alt = models.CharField(max_length=20, null=True, blank=True, help_text="Alternative phone number")
     
     # Client ID
-    client_id = models.CharField(max_length=100, null=True, blank=True, unique=True, db_index=True, help_text="External client ID")
+    client_id = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="External client ID")
     
     # Medical information
     medical_conditions = models.TextField(null=True, blank=True, help_text="Medical conditions")

@@ -45,14 +45,56 @@
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label for="{{ form.client.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Client *</label>
-                    <select name="{{ form.client.name }}" id="{{ form.client.id_for_label }}" required class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Client</option>
-                        {% for client in form.client.field.queryset %}
-                            <option value="{{ client.id }}" {% if form.client.value == client.id %}selected{% endif %}>
-                                {{ client.first_name }} {{ client.last_name }}
-                            </option>
-                        {% endfor %}
-                    </select>
+                    
+                    <!-- Client Search Input -->
+                    <div class="relative">
+                        <input type="text" 
+                               id="client-search" 
+                               placeholder="Search clients by name or ID..." 
+                               class="w-full pl-10 pr-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                        <button type="button" 
+                                id="clear-client-search" 
+                                class="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-400 hover:text-neutral-600 hidden">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <!-- Client Search Results -->
+                    <div id="client-search-results" class="hidden mt-2 max-h-60 overflow-y-auto border border-neutral-200 rounded-lg bg-white shadow-lg z-50">
+                        <div id="client-results-list" class="max-h-60 overflow-y-auto"></div>
+                        <div id="client-no-results" class="hidden p-4 text-center text-neutral-500">
+                            <svg class="w-8 h-8 mx-auto mb-2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                            <p class="text-sm">No clients found</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Hidden input for selected client -->
+                    <input type="hidden" name="{{ form.client.name }}" id="{{ form.client.id_for_label }}" value="{{ form.client.value|default:'' }}" required>
+                    
+                    <!-- Selected Client Display -->
+                    <div id="selected-client" class="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg hidden">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="text-sm font-bold text-green-800" id="selected-client-name"></span>
+                                <span class="text-xs text-green-600 ml-2" id="selected-client-id"></span>
+                            </div>
+                            <button type="button" id="clear-selected-client" class="text-green-600 hover:text-green-800">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
                     {% if form.client.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.client.errors.0 }}</div>
                     {% endif %}
@@ -331,6 +373,218 @@ function clearImagePreview() {
         previewDiv.classList.add('hidden');
     }
 }
+
+// Utility function to highlight search terms
+function highlightSearchTerm(text, searchTerm) {
+    if (!searchTerm || !text) return text;
+    
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return text.replace(regex, '<span class="bg-yellow-200 font-bold text-yellow-800 px-1 rounded">$1</span>');
+}
+
+// Client Search Functionality for Restrictions
+function initializeRestrictionClientSearch() {
+    const clientSearchInput = document.getElementById('client-search');
+    const clearClientSearchBtn = document.getElementById('clear-client-search');
+    const clientSearchResults = document.getElementById('client-search-results');
+    const clientResultsList = document.getElementById('client-results-list');
+    const clientNoResults = document.getElementById('client-no-results');
+    const selectedClientDiv = document.getElementById('selected-client');
+    const selectedClientName = document.getElementById('selected-client-name');
+    const selectedClientId = document.getElementById('selected-client-id');
+    const clearSelectedClientBtn = document.getElementById('clear-selected-client');
+    const clientHiddenInput = document.getElementById('{{ form.client.id_for_label }}');
+    
+    let searchTimeout;
+    
+    // Client search input event
+    clientSearchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const searchTerm = this.value.trim();
+        
+        if (searchTerm.length === 0) {
+            // Show all clients when input is empty
+            searchClients('');
+            return;
+        }
+        
+        // Show results for any search term, even single characters
+        searchTimeout = setTimeout(() => {
+            searchClients(searchTerm);
+        }, 300);
+    });
+    
+    // Show results when input is focused
+    clientSearchInput.addEventListener('focus', function() {
+        if (this.value.trim().length === 0) {
+            searchClients('');
+        }
+    });
+    
+    // Keyboard navigation for client search
+    clientSearchInput.addEventListener('keydown', function(e) {
+        const results = clientResultsList.querySelectorAll('.search-result-item');
+        const currentActive = clientResultsList.querySelector('.search-result-item.active');
+        let activeIndex = -1;
+        
+        if (currentActive) {
+            activeIndex = Array.from(results).indexOf(currentActive);
+        }
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (results.length > 0) {
+                const nextIndex = (activeIndex + 1) % results.length;
+                results.forEach(item => item.classList.remove('active'));
+                results[nextIndex].classList.add('active');
+                results[nextIndex].scrollIntoView({ block: 'nearest' });
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (results.length > 0) {
+                const prevIndex = activeIndex <= 0 ? results.length - 1 : activeIndex - 1;
+                results.forEach(item => item.classList.remove('active'));
+                results[prevIndex].classList.add('active');
+                results[prevIndex].scrollIntoView({ block: 'nearest' });
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentActive) {
+                currentActive.click();
+            }
+        } else if (e.key === 'Escape') {
+            hideClientResults();
+            clientSearchInput.blur();
+        }
+    });
+    
+    // Clear client search
+    clearClientSearchBtn.addEventListener('click', function() {
+        clientSearchInput.value = '';
+        hideClientResults();
+        clientSearchInput.focus();
+    });
+    
+    // Clear selected client
+    clearSelectedClientBtn.addEventListener('click', function() {
+        clearSelectedClient();
+    });
+    
+    // Hide results when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!clientSearchInput.contains(e.target) && !clientSearchResults.contains(e.target)) {
+            hideClientResults();
+        }
+    });
+    
+    function searchClients(term) {
+        fetch(`/core/search-clients/?q=${encodeURIComponent(term)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayClientResults(data.clients);
+                } else {
+                    showClientNoResults();
+                }
+            })
+            .catch(error => {
+                console.error('Error searching clients:', error);
+                showClientNoResults();
+            });
+    }
+    
+    function displayClientResults(clients) {
+        if (clients.length === 0) {
+            showClientNoResults();
+            return;
+        }
+        
+        clientResultsList.innerHTML = '';
+        clients.forEach(client => {
+            const clientItem = document.createElement('div');
+            clientItem.className = 'search-result-item p-3 hover:bg-neutral-50 cursor-pointer border-b border-neutral-100 last:border-b-0';
+            clientItem.innerHTML = `
+                <div class="font-bold text-neutral-900">${highlightSearchTerm(client.name, clientSearchInput.value)}</div>
+                <div class="text-sm text-neutral-500">ID: ${client.external_id}</div>
+            `;
+            clientItem.addEventListener('click', () => selectClient(client));
+            clientResultsList.appendChild(clientItem);
+        });
+        
+        showClientResults();
+    }
+    
+    function showClientResults() {
+        clientSearchResults.classList.remove('hidden');
+        clientNoResults.classList.add('hidden');
+        clearClientSearchBtn.classList.remove('hidden');
+    }
+    
+    function showClientNoResults() {
+        clientSearchResults.classList.remove('hidden');
+        clientNoResults.classList.remove('hidden');
+        clearClientSearchBtn.classList.remove('hidden');
+    }
+    
+    function hideClientResults() {
+        clientSearchResults.classList.add('hidden');
+        clearClientSearchBtn.classList.add('hidden');
+    }
+    
+    function selectClient(client) {
+        clientHiddenInput.value = client.id;
+        // Use the new display function
+        showSelectedClient(client);
+        clientSearchInput.value = '';
+        hideClientResults();
+    }
+    
+    function clearSelectedClient() {
+        clientHiddenInput.value = '';
+        selectedClientDiv.classList.add('hidden');
+    }
+}
+
+// Initialize search functionality when page loads
+// Pre-populate selected client for edit mode
+function prePopulateSelectedClient() {
+    const clientHiddenInput = document.getElementById('{{ form.client.id_for_label }}');
+    
+    console.log('Pre-populating restriction form...');
+    console.log('Client hidden input:', clientHiddenInput);
+    console.log('Client hidden input value:', clientHiddenInput ? clientHiddenInput.value : 'null');
+    
+    // Pre-populate client if editing - get client data from Django context
+    {% if client_data %}
+    const clientData = {{ client_data|safe }};
+    console.log('Client data:', clientData);
+    if (clientData && clientHiddenInput && clientHiddenInput.value) {
+        console.log('Selecting client:', clientData);
+        showSelectedClient(clientData);
+    }
+    {% endif %}
+}
+
+// Function to show selected client without going through search
+function showSelectedClient(clientData) {
+    const selectedClientName = document.getElementById('selected-client-name');
+    const selectedClientId = document.getElementById('selected-client-id');
+    const selectedClientDiv = document.getElementById('selected-client');
+    
+    if (selectedClientName && selectedClientId && selectedClientDiv) {
+        selectedClientName.textContent = clientData.name;
+        selectedClientId.textContent = `ID: ${clientData.external_id}`;
+        selectedClientDiv.classList.remove('hidden');
+        console.log('Selected client displayed:', clientData.name);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initializeRestrictionClientSearch();
+    
+    // Pre-populate form fields for edit mode
+    prePopulateSelectedClient();
+});
 </script>
 
 <style>
@@ -350,6 +604,47 @@ function clearImagePreview() {
     /* Error state styling */
     input:invalid, textarea:invalid, select:invalid {
         @apply border-red-300 focus:ring-red-500;
+    }
+    
+    /* Custom scrollbar for search results */
+    #client-results-list::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    #client-results-list::-webkit-scrollbar-track {
+        background: #f8fafc;
+        border-radius: 3px;
+    }
+    
+    #client-results-list::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+    }
+    
+    #client-results-list::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+    
+    /* Smooth scrolling for search results */
+    #client-results-list {
+        scroll-behavior: smooth;
+    }
+    
+    /* Enhanced hover effects for search results */
+    .search-result-item {
+        transition: all 0.15s ease-in-out;
+    }
+    
+    .search-result-item:hover,
+    .search-result-item.active {
+        background-color: #f1f5f9;
+        transform: translateX(2px);
+        border-left: 3px solid #3b82f6;
+    }
+    
+    .search-result-item.active {
+        background-color: #dbeafe;
+        border-left-color: #1d4ed8;
     }
 </style>
 {% endblock %}

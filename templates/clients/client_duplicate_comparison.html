@@ -1,0 +1,529 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Compare Duplicate Clients{% endblock %}
+
+{% block extra_css %}
+<style>
+    .client-card {
+        transition: all 0.2s ease-in-out;
+    }
+    
+    .client-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .client-card.selected {
+        border-color: #10b981;
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+    }
+    
+    .comparison-section {
+        border: 1px solid #e5e7eb;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    .field-comparison {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .field-label {
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+    
+    .field-value {
+        padding: 0.75rem;
+        background-color: #f9fafb;
+        border-radius: 0.5rem;
+        border: 1px solid #e5e7eb;
+    }
+    
+    .field-value.different {
+        background-color: #fef3c7;
+        border-color: #f59e0b;
+    }
+    
+    .field-value.same {
+        background-color: #d1fae5;
+        border-color: #10b981;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- CSRF Token -->
+{% csrf_token %}
+<div class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="flex items-center space-x-3">
+                        <div class="p-3 bg-orange-100 rounded-xl">
+                            <svg class="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-900">Compare Duplicate Clients</h1>
+                            <p class="mt-2 text-gray-600">Select which client to keep and which to delete</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex space-x-3">
+                    <a href="{% url 'clients:dedupe' %}" 
+                       class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        Back to Duplicates
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Match Information -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">Match Information</h3>
+                    <div class="mt-2 flex items-center space-x-6 text-sm text-gray-600">
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                            Similarity: {{ similarity_score|floatformat:1 }}%
+                        </span>
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Type: {{ match_type|title }}
+                        </span>
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Confidence: {{ confidence_level|title }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Client Comparison -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- Primary Client -->
+            <div class="client-card bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer" 
+                 data-client-id="{{ primary_client.id }}" 
+                 onclick="selectClient({{ primary_client.id }})">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-sm">
+                            <span class="text-lg font-bold text-white">
+                                {{ primary_client.first_name|first|upper }}{{ primary_client.last_name|first|upper }}
+                            </span>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900">
+                                {{ primary_client.first_name }} {{ primary_client.last_name }}
+                            </h3>
+                            <p class="text-sm text-gray-600">Click to KEEP this client</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-6 h-6 border-2 border-gray-300 rounded-full client-selector" id="selector-{{ primary_client.id }}"></div>
+                    </div>
+                </div>
+
+                <!-- Client Details -->
+                <div class="space-y-4">
+                    <!-- Basic Information -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Basic Information</h4>
+                        <div class="space-y-2">
+                            <div class="field-comparison">
+                                <div>
+                                    <div class="field-label">Date of Birth</div>
+                                    <div class="field-value">{{ primary_client.dob|date:"M d, Y" }}</div>
+                                </div>
+                            </div>
+                            <div class="field-comparison">
+                                <div>
+                                    <div class="field-label">Gender</div>
+                                    <div class="field-value">{{ primary_client.gender }}</div>
+                                </div>
+                            </div>
+                            {% if primary_client.preferred_name %}
+                            <div class="field-comparison">
+                                <div>
+                                    <div class="field-label">Preferred Name</div>
+                                    <div class="field-value">{{ primary_client.preferred_name }}</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Contact Information -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Contact Information</h4>
+                        <div class="space-y-2">
+                            {% if primary_client.email %}
+                            <div class="field-comparison">
+                                <div>
+                                    <div class="field-label">Email</div>
+                                    <div class="field-value">{{ primary_client.email }}</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% if primary_client.phone %}
+                            <div class="field-comparison">
+                                <div>
+                                    <div class="field-label">Phone</div>
+                                    <div class="field-value">{{ primary_client.phone }}</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Enrollments -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Program Enrollments ({{ primary_enrollments|length }})</h4>
+                        {% if primary_enrollments %}
+                        <div class="space-y-2">
+                            {% for enrollment in primary_enrollments %}
+                            <div class="bg-gray-50 rounded-lg p-3">
+                                <div class="font-medium text-gray-900">{{ enrollment.program.name }}</div>
+                                <div class="text-sm text-gray-600">{{ enrollment.program.department.name }}</div>
+                                <div class="text-sm text-gray-500">
+                                    {{ enrollment.start_date|date:"M d, Y" }} - 
+                                    {% if enrollment.end_date %}{{ enrollment.end_date|date:"M d, Y" }}{% else %}Active{% endif %}
+                                </div>
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
+                                    {% if enrollment.status == 'active' %}bg-green-100 text-green-800
+                                    {% elif enrollment.status == 'pending' %}bg-yellow-100 text-yellow-800
+                                    {% elif enrollment.status == 'completed' %}bg-blue-100 text-blue-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {{ enrollment.get_status_display }}
+                                </span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-gray-500 italic">No enrollments</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Restrictions -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Restrictions ({{ primary_restrictions|length }})</h4>
+                        {% if primary_restrictions %}
+                        <div class="space-y-2">
+                            {% for restriction in primary_restrictions %}
+                            <div class="bg-red-50 rounded-lg p-3">
+                                <div class="font-medium text-gray-900">{{ restriction.get_restriction_type_display }}</div>
+                                <div class="text-sm text-gray-600">{{ restriction.get_scope_display }}</div>
+                                <div class="text-sm text-gray-500">
+                                    {{ restriction.start_date|date:"M d, Y" }} - 
+                                    {% if restriction.end_date %}{{ restriction.end_date|date:"M d, Y" }}{% else %}Indefinite{% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-gray-500 italic">No restrictions</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Duplicate Client -->
+            <div class="client-card bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer" 
+                 data-client-id="{{ duplicate_client.id }}" 
+                 onclick="selectClient({{ duplicate_client.id }})">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-sm">
+                            <span class="text-lg font-bold text-white">
+                                {{ duplicate_client.first_name|first|upper }}{{ duplicate_client.last_name|first|upper }}
+                            </span>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900">
+                                {{ duplicate_client.first_name }} {{ duplicate_client.last_name }}
+                            </h3>
+                            <p class="text-sm text-gray-600">Click to KEEP this client</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <div class="w-6 h-6 border-2 border-gray-300 rounded-full client-selector" id="selector-{{ duplicate_client.id }}"></div>
+                    </div>
+                </div>
+
+                <!-- Client Details -->
+                <div class="space-y-4">
+                    <!-- Basic Information -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Basic Information</h4>
+                        <div class="space-y-2">
+                            <div class="field-comparison">
+                                <div>
+                                    <div class="field-label">Date of Birth</div>
+                                    <div class="field-value">{{ duplicate_client.dob|date:"M d, Y" }}</div>
+                                </div>
+                            </div>
+                            <div class="field-comparison">
+                                <div>
+                                    <div class="field-label">Gender</div>
+                                    <div class="field-value">{{ duplicate_client.gender }}</div>
+                                </div>
+                            </div>
+                            {% if duplicate_client.preferred_name %}
+                            <div class="field-comparison">
+                                <div>
+                                    <div class="field-label">Preferred Name</div>
+                                    <div class="field-value">{{ duplicate_client.preferred_name }}</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Contact Information -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Contact Information</h4>
+                        <div class="space-y-2">
+                            {% if duplicate_client.email %}
+                            <div class="field-comparison">
+                                <div>
+                                    <div class="field-label">Email</div>
+                                    <div class="field-value">{{ duplicate_client.email }}</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% if duplicate_client.phone %}
+                            <div class="field-comparison">
+                                <div>
+                                    <div class="field-label">Phone</div>
+                                    <div class="field-value">{{ duplicate_client.phone }}</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Enrollments -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Program Enrollments ({{ duplicate_enrollments|length }})</h4>
+                        {% if duplicate_enrollments %}
+                        <div class="space-y-2">
+                            {% for enrollment in duplicate_enrollments %}
+                            <div class="bg-gray-50 rounded-lg p-3">
+                                <div class="font-medium text-gray-900">{{ enrollment.program.name }}</div>
+                                <div class="text-sm text-gray-600">{{ enrollment.program.department.name }}</div>
+                                <div class="text-sm text-gray-500">
+                                    {{ enrollment.start_date|date:"M d, Y" }} - 
+                                    {% if enrollment.end_date %}{{ enrollment.end_date|date:"M d, Y" }}{% else %}Active{% endif %}
+                                </div>
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
+                                    {% if enrollment.status == 'active' %}bg-green-100 text-green-800
+                                    {% elif enrollment.status == 'pending' %}bg-yellow-100 text-yellow-800
+                                    {% elif enrollment.status == 'completed' %}bg-blue-100 text-blue-800
+                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                    {{ enrollment.get_status_display }}
+                                </span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-gray-500 italic">No enrollments</p>
+                        {% endif %}
+                    </div>
+
+                    <!-- Restrictions -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Restrictions ({{ duplicate_restrictions|length }})</h4>
+                        {% if duplicate_restrictions %}
+                        <div class="space-y-2">
+                            {% for restriction in duplicate_restrictions %}
+                            <div class="bg-red-50 rounded-lg p-3">
+                                <div class="font-medium text-gray-900">{{ restriction.get_restriction_type_display }}</div>
+                                <div class="text-sm text-gray-600">{{ restriction.get_scope_display }}</div>
+                                <div class="text-sm text-gray-500">
+                                    {{ restriction.start_date|date:"M d, Y" }} - 
+                                    {% if restriction.end_date %}{{ restriction.end_date|date:"M d, Y" }}{% else %}Indefinite{% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-gray-500 italic">No restrictions</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Section -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">Resolution</h3>
+                    <p class="text-sm text-gray-600">Click on the client you want to KEEP. The other client will be DELETED permanently.</p>
+                </div>
+                <div class="flex space-x-3">
+                    <button onclick="resolveDuplicate()" 
+                            class="inline-flex items-center px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-semibold transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                            id="resolve-button" disabled>
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                        Confirm Resolution
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Notes Section -->
+            <div class="mt-4">
+                <label for="resolution-notes" class="block text-sm font-medium text-gray-700 mb-2">Resolution Notes (optional)</label>
+                <textarea id="resolution-notes" rows="3" 
+                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                          placeholder="Add any notes about this resolution..."></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirmationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full">
+                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+            </div>
+            <div class="mt-2 px-7 py-3">
+                <h3 class="text-lg font-medium text-gray-900">Confirm Resolution</h3>
+                <div class="mt-2">
+                    <p class="text-sm text-gray-500" id="confirmation-message">Are you sure you want to proceed with this resolution?</p>
+                </div>
+            </div>
+            <div class="flex items-center justify-end px-4 py-3 bg-gray-50 rounded-b-md">
+                <button onclick="closeConfirmationModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 mr-2">
+                    Cancel
+                </button>
+                <button onclick="confirmResolution()" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let selectedClientId = null;
+const duplicateId = {{ duplicate.id }};
+
+function selectClient(clientId) {
+    // Remove previous selection
+    document.querySelectorAll('.client-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    document.querySelectorAll('.client-selector').forEach(selector => {
+        selector.classList.remove('bg-green-500', 'border-green-500');
+        selector.classList.add('border-gray-300');
+    });
+    
+    // Add selection to clicked client
+    const clientCard = document.querySelector(`[data-client-id="${clientId}"]`);
+    const selector = document.getElementById(`selector-${clientId}`);
+    
+    clientCard.classList.add('selected');
+    selector.classList.add('bg-green-500', 'border-green-500');
+    selector.classList.remove('border-gray-300');
+    
+    selectedClientId = clientId;
+    
+    // Enable resolve button
+    document.getElementById('resolve-button').disabled = false;
+}
+
+function resolveDuplicate() {
+    if (!selectedClientId) {
+        alert('Please click on the client you want to KEEP');
+        return;
+    }
+    
+    const selectedClientName = document.querySelector(`[data-client-id="${selectedClientId}"] h3`).textContent;
+    const otherClientName = document.querySelector(`[data-client-id]:not([data-client-id="${selectedClientId}"]) h3`).textContent;
+    
+    document.getElementById('confirmation-message').innerHTML = 
+        `You are about to:<br><br>
+        <strong>✅ KEEP:</strong> ${selectedClientName}<br>
+        <strong>❌ DELETE:</strong> ${otherClientName}<br><br>
+        <strong>⚠️ WARNING:</strong> The other client will be permanently deleted and cannot be recovered!`;
+    
+    document.getElementById('confirmationModal').classList.remove('hidden');
+}
+
+function closeConfirmationModal() {
+    document.getElementById('confirmationModal').classList.add('hidden');
+}
+
+function confirmResolution() {
+    const notes = document.getElementById('resolution-notes').value;
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    if (!selectedClientId) {
+        alert('No client selected!');
+        return;
+    }
+    
+    fetch(`/clients/dedupe/resolve/${duplicateId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({
+            selected_client_id: selectedClientId,
+            notes: notes
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Redirect to dedupe page with success message
+            window.location.href = '/clients/dedupe/?success=resolved';
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while processing the request.');
+    });
+    
+    closeConfirmationModal();
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Duplicate comparison page loaded');
+});
+</script>
+{% endblock %}

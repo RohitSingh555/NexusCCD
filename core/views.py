@@ -135,8 +135,8 @@ def dashboard(request):
     total_staff = Staff.objects.count()
     pending_approvals = PendingChange.objects.filter(status='pending').count()
     
-    # Get recent clients (last 10)
-    recent_clients = Client.objects.order_by('-created_at')[:10]
+    # Get recent clients (last 5)
+    recent_clients = Client.objects.order_by('-created_at')[:5]
     
     # Get program status with enrollment counts and capacity information
     # Filter programs for Program Managers
@@ -156,7 +156,10 @@ def dashboard(request):
     
     program_status = []
     
-    for program in programs:
+    # Limit to first 5 programs
+    programs_limited = programs[:5]
+    
+    for program in programs_limited:
         current_enrollments = program.get_current_enrollments_count()
         available_capacity = program.get_available_capacity()
         capacity_percentage = program.get_capacity_percentage()
@@ -363,12 +366,46 @@ class EnrollmentListView(ProgramManagerAccessMixin, ListView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollments.html'
     context_object_name = 'enrollments'
-    paginate_by = 10
+    paginate_by = 20
     
     def get_queryset(self):
-        return ClientProgramEnrollment.objects.select_related(
-            'client', 'program', 'program__department'
-        ).order_by('-start_date')
+        # First apply the ProgramManagerAccessMixin filtering
+        queryset = super().get_queryset()
+        
+        # Apply additional filters
+        department_filter = self.request.GET.get('department', '')
+        status_filter = self.request.GET.get('status', '')
+        client_search = self.request.GET.get('client_search', '').strip()
+        program_search = self.request.GET.get('program_search', '').strip()
+        
+        if department_filter:
+            queryset = queryset.filter(program__department__name=department_filter)
+        
+        if status_filter:
+            if status_filter == 'active':
+                queryset = queryset.filter(end_date__isnull=True)
+            elif status_filter == 'completed':
+                queryset = queryset.filter(end_date__isnull=False)
+            elif status_filter == 'future':
+                from django.utils import timezone
+                queryset = queryset.filter(start_date__gt=timezone.now().date())
+        
+        if client_search:
+            queryset = queryset.filter(
+                Q(client__first_name__icontains=client_search) |
+                Q(client__last_name__icontains=client_search) |
+                Q(client__preferred_name__icontains=client_search) |
+                Q(client__alias__icontains=client_search)
+            ).distinct()
+        
+        if program_search:
+            queryset = queryset.filter(
+                Q(program__name__icontains=program_search) |
+                Q(program__department__name__icontains=program_search) |
+                Q(program__location__icontains=program_search)
+            ).distinct()
+        
+        return queryset.order_by('-start_date')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -382,6 +419,21 @@ class EnrollmentListView(ProgramManagerAccessMixin, ListView):
         if context['total_enrollments'] > 0:
             success_rate = round((context['completed_enrollments'] / context['total_enrollments']) * 100, 1)
         context['success_rate'] = success_rate
+        
+        # Add filter options to context
+        context['departments'] = Department.objects.all().order_by('name')
+        context['status_choices'] = [
+            ('', 'All Statuses'),
+            ('active', 'Active'),
+            ('completed', 'Completed'),
+            ('future', 'Future Start'),
+        ]
+        
+        # Add current filter values
+        context['current_department'] = self.request.GET.get('department', '')
+        context['current_status'] = self.request.GET.get('status', '')
+        context['client_search'] = self.request.GET.get('client_search', '')
+        context['program_search'] = self.request.GET.get('program_search', '')
         
         return context
 
@@ -455,6 +507,39 @@ class EnrollmentUpdateView(ProgramManagerAccessMixin, UpdateView):
             except Exception:
                 pass
         return kwargs
+    
+    def get_context_data(self, **kwargs):
+        """Add client and program data for edit mode"""
+        context = super().get_context_data(**kwargs)
+        if self.object:
+            # Add client data for JavaScript
+            context['client_data'] = json.dumps({
+                'id': self.object.client.id,
+                'external_id': str(self.object.client.external_id),
+                'name': f"{self.object.client.first_name} {self.object.client.last_name}",
+                'first_name': self.object.client.first_name,
+                'last_name': self.object.client.last_name,
+            })
+            # Add program data for JavaScript
+            context['program_data'] = json.dumps({
+                'id': self.object.program.id,
+                'external_id': str(self.object.program.external_id),
+                'name': self.object.program.name,
+                'department': self.object.program.department.name,
+                'location': self.object.program.location,
+                'capacity': self.object.program.capacity_current,
+                'description': self.object.program.description or '',
+            })
+        return context
+    
+    def form_valid(self, form):
+        """Set the updated_by field before saving"""
+        enrollment = form.save(commit=False)
+        enrollment.updated_by = self.request.user.get_full_name() or self.request.user.username
+        enrollment.save()
+        
+        messages.success(self.request, 'Enrollment updated successfully.')
+        return redirect(self.success_url)
 
 
 @method_decorator(jwt_required, name='dispatch')
@@ -567,21 +652,32 @@ def check_program_capacity(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 def search_clients(request):
-    """Search clients by name via AJAX"""
+    """Search clients by name via AJAX with priority ordering"""
     try:
         query = request.GET.get('q', '').strip()
         
         if not query:
-            # If no query, return all clients (limit to 100 for performance)
-            clients = Client.objects.all()[:100]
+            # If no query, return all clients (limit to 20 for performance)
+            clients = Client.objects.all()[:20]
         else:
-            # Filter clients that start with the query
-            clients = Client.objects.filter(
+            # First get clients that start with the query (highest priority)
+            starts_with_clients = Client.objects.filter(
                 Q(first_name__istartswith=query) |
-                Q(last_name__istartswith=query) |
-                Q(first_name__icontains=f' {query}') |
-                Q(last_name__icontains=f' {query}')
-            )[:50]  # Limit to 50 results for performance
+                Q(last_name__istartswith=query)
+            )
+            
+            # Then get clients that contain the query anywhere (lower priority)
+            contains_clients = Client.objects.filter(
+                Q(first_name__icontains=query) |
+                Q(last_name__icontains=query)
+            ).exclude(
+                Q(first_name__istartswith=query) |
+                Q(last_name__istartswith=query)
+            )
+            
+            # Combine and limit results
+            clients = list(starts_with_clients) + list(contains_clients)
+            clients = clients[:50]  # Limit to 50 results for performance
         
         # Format results for the frontend
         results = []
@@ -592,8 +688,8 @@ def search_clients(request):
                 'name': f"{client.first_name} {client.last_name}",
                 'first_name': client.first_name,
                 'last_name': client.last_name,
-                'date_of_birth': client.date_of_birth.strftime('%Y-%m-%d') if client.date_of_birth else None,
-                'display_text': f"{client.first_name} {client.last_name} ({client.date_of_birth.strftime('%m/%d/%Y') if client.date_of_birth else 'No DOB'})"
+                'date_of_birth': client.dob.strftime('%Y-%m-%d') if client.dob else None,
+                'display_text': f"{client.first_name} {client.last_name} ({client.dob.strftime('%m/%d/%Y') if client.dob else 'No DOB'})"
             })
         
         return JsonResponse({
@@ -714,6 +810,20 @@ class RestrictionUpdateView(ProgramManagerAccessMixin, UpdateView):
                 pass
         return kwargs
     
+    def get_context_data(self, **kwargs):
+        """Add client data for pre-population in edit mode"""
+        context = super().get_context_data(**kwargs)
+        if self.object:
+            # Add client data for JavaScript pre-population
+            context['client_data'] = json.dumps({
+                'id': self.object.client.id,
+                'external_id': str(self.object.client.external_id),
+                'name': f"{self.object.client.first_name} {self.object.client.last_name}",
+                'first_name': self.object.client.first_name,
+                'last_name': self.object.client.last_name,
+            })
+        return context
+    
     def form_valid(self, form):
         # Set the updated_by field before saving
         restriction = form.save(commit=False)
@@ -820,6 +930,58 @@ def bulk_delete_restrictions(request):
         }, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["POST"])
+def bulk_delete_enrollments(request):
+    """Bulk delete client program enrollments"""
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        enrollment_ids = data.get('enrollment_ids', [])
+        
+        if not enrollment_ids:
+            return JsonResponse({
+                'success': False,
+                'error': 'No enrollments selected for deletion'
+            }, status=400)
+        
+        # Get the enrollments to delete
+        enrollments_to_delete = ClientProgramEnrollment.objects.filter(id__in=enrollment_ids)
+        deleted_count = enrollments_to_delete.count()
+        
+        if deleted_count == 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'No enrollments found with the provided IDs'
+            }, status=404)
+        
+        # Delete the enrollments
+        enrollments_to_delete.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'Successfully deleted {deleted_count} enrollment(s)'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error deleting enrollments: {str(e)}'
+        }, status=500)
+
+
 @jwt_required
 def profile(request):
     """User profile view"""
@@ -910,3 +1072,81 @@ def change_password(request):
     }
     
     return render(request, 'core/change_password.html', context)
+
+
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def search_programs(request):
+    """AJAX endpoint for searching programs with priority ordering"""
+    if request.method == 'GET':
+        search_term = request.GET.get('q', '').strip()
+        
+        if not search_term:
+            # If no query, return all active programs (limit to 20 for performance)
+            programs = Program.objects.filter(status='active')[:20]
+            programs_data = []
+            for program in programs:
+                programs_data.append({
+                    'id': program.id,
+                    'external_id': str(program.external_id),
+                    'name': program.name,
+                    'department': program.department.name,
+                    'location': program.location,
+                    'capacity': program.capacity_current,
+                    'description': program.description or '',
+                })
+            return JsonResponse({'success': True, 'programs': programs_data})
+        
+        # Filter programs based on user's access level
+        queryset = Program.objects.filter(status='active')
+        
+        # Apply program manager filtering if needed (temporarily disabled for testing)
+        # if request.user.is_authenticated and not request.user.is_superuser:
+        #     try:
+        #         staff = request.user.staff_profile
+        #         if staff.is_program_manager():
+        #             assigned_programs = staff.get_assigned_programs()
+        #             queryset = queryset.filter(id__in=assigned_programs.values_list('id', flat=True))
+        #     except:
+        #         pass
+        
+        # First get programs that start with the search term (highest priority)
+        starts_with_programs = queryset.filter(
+            Q(name__istartswith=search_term) |
+            Q(department__name__istartswith=search_term) |
+            Q(location__istartswith=search_term)
+        ).select_related('department')
+        
+        # Then get programs that contain the search term anywhere (lower priority)
+        contains_programs = queryset.filter(
+            Q(name__icontains=search_term) |
+            Q(department__name__icontains=search_term) |
+            Q(location__icontains=search_term) |
+            Q(description__icontains=search_term)
+        ).exclude(
+            Q(name__istartswith=search_term) |
+            Q(department__name__istartswith=search_term) |
+            Q(location__istartswith=search_term)
+        ).select_related('department')
+        
+        # Combine and limit results
+        programs = list(starts_with_programs) + list(contains_programs)
+        programs = programs[:20]  # Limit to 20 results
+        
+        programs_data = []
+        for program in programs:
+            programs_data.append({
+                'id': program.id,
+                'external_id': str(program.external_id),
+                'name': program.name,
+                'department': program.department.name,
+                'location': program.location,
+                'capacity': program.capacity_current,
+                'description': program.description or '',
+            })
+        
+        return JsonResponse({'success': True, 'programs': programs_data})
+    
+    return JsonResponse({'error': 'Invalid request method'}, status=405)

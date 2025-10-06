@@ -1,6 +1,49 @@
 {% extends 'dashboard_base.html' %}
 {% load static %}
 
+{% block extra_css %}
+<style>
+/* Custom scrollbar for search results */
+#program-search-results::-webkit-scrollbar {
+    width: 6px;
+}
+
+#program-search-results::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+#program-search-results::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+#program-search-results::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Search result item styles */
+.search-result-item {
+    transition: all 0.2s ease;
+}
+
+.search-result-item:hover {
+    background-color: #f8fafc !important;
+    transform: translateX(2px);
+}
+
+.search-result-item.active {
+    background-color: #e0f2fe !important;
+    border-left: 3px solid #0ea5e9;
+}
+
+/* Enhanced hover effects */
+.search-result-item:hover .font-bold {
+    color: #0ea5e9;
+}
+</style>
+{% endblock %}
+
 {% block title %}Programs & Services - Central Client Database{% endblock %}
 
 {% block page_title %}Programs & Services{% endblock %}
@@ -24,19 +67,38 @@
     <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
         <form method="GET" class="space-y-4">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                <!-- Search -->
+                <!-- Program Search -->
                 <div class="lg:col-span-2">
-                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Search</label>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Program Search</label>
                     <div class="relative">
                         <input type="text" 
-                               name="search" 
-                               value="{{ search_query }}" 
+                               id="program-search" 
                                placeholder="Search programs..." 
                                class="w-full pl-10 pr-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                         <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <svg class="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                             </svg>
+                        </div>
+                        <button type="button" 
+                                id="clear-program-search" 
+                                class="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-400 hover:text-neutral-600 hidden">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <!-- Program Search Results -->
+                    <div id="program-search-results" class="hidden mt-2 max-h-60 overflow-y-auto border border-neutral-200 rounded-lg bg-white shadow-lg z-50">
+                        <div id="program-results-list" class="py-1">
+                            <!-- Search results will be populated here -->
+                        </div>
+                        <div id="program-no-results" class="hidden p-4 text-center text-neutral-500">
+                            <svg class="w-8 h-8 mx-auto mb-2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.47-.881-6.08-2.33"></path>
+                            </svg>
+                            <p class="text-sm">No programs found</p>
                         </div>
                     </div>
                 </div>
@@ -142,14 +204,15 @@
                 </thead>
                 <tbody class="bg-white divide-y divide-neutral-200">
                     {% for program_data in programs_with_capacity %}
-                    <tr class="hover:bg-neutral-50 relative" 
+                    <tr class="hover:bg-neutral-50 relative cursor-pointer" 
                         @contextmenu.prevent="showContextMenu($event, '{{ program_data.program.external_id }}', '{{ program_data.program.name }}')"
-                        @click="toggleProgram('{{ program_data.program.external_id }}')"
+                        @click="viewProgram('{{ program_data.program.external_id }}')"
                         :class="{ 'bg-blue-50': selectedPrograms.includes('{{ program_data.program.external_id }}') }">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <input type="checkbox" 
                                    :checked="selectedPrograms.includes('{{ program_data.program.external_id }}')"
                                    @change.stop="toggleProgram('{{ program_data.program.external_id }}')"
+                                   @click.stop
                                    class="rounded border-neutral-300 text-brand-sky focus:ring-brand-sky">
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
@@ -363,11 +426,15 @@ function programManager() {
             this.contextMenu.visible = false;
         },
         
-        viewProgram() {
-            if (this.contextMenu.programId) {
+        viewProgram(programId = null) {
+            if (programId) {
+                // Called from table row click
+                window.location.href = `/programs/${programId}/`;
+            } else if (this.contextMenu.programId) {
+                // Called from context menu
                 window.location.href = `/programs/${this.contextMenu.programId}/`;
+                this.hideContextMenu();
             }
-            this.hideContextMenu();
         },
         
         editProgram() {
@@ -483,5 +550,183 @@ function programManager() {
         }
     }
 }
+
+// Enhanced Program Search Functionality
+function initializeProgramSearch() {
+    console.log('Initializing program search...');
+    const programSearchInput = document.getElementById('program-search');
+    const clearProgramSearchBtn = document.getElementById('clear-program-search');
+    const programSearchResults = document.getElementById('program-search-results');
+    const programResultsList = document.getElementById('program-results-list');
+    const programNoResults = document.getElementById('program-no-results');
+    
+    console.log('Elements found:', {
+        programSearchInput: !!programSearchInput,
+        clearProgramSearchBtn: !!clearProgramSearchBtn,
+        programSearchResults: !!programSearchResults,
+        programResultsList: !!programResultsList,
+        programNoResults: !!programNoResults
+    });
+    
+    let searchTimeout;
+    let currentSearchTerm = '';
+    
+    // Program search input event
+    programSearchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const searchTerm = this.value.trim();
+        currentSearchTerm = searchTerm;
+        
+        if (searchTerm.length === 0) {
+            // Show all programs when input is empty
+            searchPrograms('');
+            return;
+        }
+        
+        // Show results for any search term, even single characters
+        searchTimeout = setTimeout(() => {
+            searchPrograms(searchTerm);
+        }, 300);
+    });
+    
+    // Show results when input is focused
+    programSearchInput.addEventListener('focus', function() {
+        if (this.value.trim().length === 0) {
+            searchPrograms('');
+        }
+    });
+    
+    // Keyboard navigation for program search
+    programSearchInput.addEventListener('keydown', function(e) {
+        const results = programResultsList.querySelectorAll('.search-result-item');
+        const currentActive = programResultsList.querySelector('.search-result-item.active');
+        let activeIndex = -1;
+        
+        if (currentActive) {
+            activeIndex = Array.from(results).indexOf(currentActive);
+        }
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (results.length > 0) {
+                const nextIndex = (activeIndex + 1) % results.length;
+                results.forEach(item => item.classList.remove('active'));
+                results[nextIndex].classList.add('active');
+                results[nextIndex].scrollIntoView({ block: 'nearest' });
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (results.length > 0) {
+                const prevIndex = activeIndex <= 0 ? results.length - 1 : activeIndex - 1;
+                results.forEach(item => item.classList.remove('active'));
+                results[prevIndex].classList.add('active');
+                results[prevIndex].scrollIntoView({ block: 'nearest' });
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentActive) {
+                currentActive.click();
+            }
+        } else if (e.key === 'Escape') {
+            hideProgramResults();
+            programSearchInput.blur();
+        }
+    });
+    
+    // Clear program search
+    clearProgramSearchBtn.addEventListener('click', function() {
+        programSearchInput.value = '';
+        currentSearchTerm = '';
+        hideProgramResults();
+        programSearchInput.focus();
+    });
+    
+    // Hide results when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!programSearchInput.contains(e.target) && !programSearchResults.contains(e.target)) {
+            hideProgramResults();
+        }
+    });
+    
+    function searchPrograms(term) {
+        console.log('Searching programs with term:', term);
+        fetch(`/core/search-programs/?q=${encodeURIComponent(term)}`)
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success) {
+                    displayProgramResults(data.programs);
+                } else {
+                    showProgramNoResults();
+                }
+            })
+            .catch(error => {
+                console.error('Error searching programs:', error);
+                showProgramNoResults();
+            });
+    }
+    
+    function displayProgramResults(programs) {
+        console.log('Displaying program results:', programs);
+        if (!programs || programs.length === 0) {
+            console.log('No programs to display, showing no results');
+            showProgramNoResults();
+            return;
+        }
+        
+        programResultsList.innerHTML = '';
+        programs.forEach(program => {
+            console.log('Adding program:', program.name);
+            const programItem = document.createElement('div');
+            programItem.className = 'search-result-item p-3 hover:bg-neutral-50 cursor-pointer border-b border-neutral-100 last:border-b-0';
+            programItem.innerHTML = `
+                <div class="font-bold text-neutral-900">${highlightSearchTerm(program.name, programSearchInput.value)}</div>
+                <div class="text-sm text-neutral-500">${program.department} • ${program.location || 'No location'}</div>
+                <div class="text-xs text-neutral-400 mt-1">Click to view program details</div>
+            `;
+            programItem.addEventListener('click', () => {
+                // Navigate to program detail page
+                window.location.href = `/programs/${program.external_id}/`;
+            });
+            programResultsList.appendChild(programItem);
+        });
+        
+        showProgramResults();
+    }
+    
+    function showProgramResults() {
+        programSearchResults.classList.remove('hidden');
+        programNoResults.classList.add('hidden');
+        clearProgramSearchBtn.classList.remove('hidden');
+    }
+    
+    function showProgramNoResults() {
+        programSearchResults.classList.remove('hidden');
+        programNoResults.classList.remove('hidden');
+        clearProgramSearchBtn.classList.remove('hidden');
+    }
+    
+    function hideProgramResults() {
+        programSearchResults.classList.add('hidden');
+        clearProgramSearchBtn.classList.add('hidden');
+    }
+}
+
+// Utility function to highlight search terms
+function highlightSearchTerm(text, searchTerm) {
+    if (!searchTerm || !text) return text;
+    
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return text.replace(regex, '<span class="bg-yellow-200 font-bold">$1</span>');
+}
+
+// Initialize program search when DOM is loaded
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing program search');
+    initializeProgramSearch();
+});
 </script>
 {% endblock %}

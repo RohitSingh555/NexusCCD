@@ -6,7 +6,7 @@
 {% block page_title %}Clients{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="clientManager()">
     <div>
         <div class="flex justify-between items-center mb-8">
             <div>
@@ -35,55 +35,90 @@
             </div>
         </div>
         
-        <!-- Search Form -->
-        <div class="mb-6">
-            <form method="GET" class="flex items-center space-x-4">
-                <div class="flex-1 max-w-md">
-                    <div class="relative">
-                        <input type="text" 
-                               name="search" 
-                               value="{{ search_query }}" 
-                               placeholder="Search clients by name, email, phone, or ID..." 
-                               class="w-full pl-10 pr-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <svg class="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                            </svg>
+        <!-- Filters and Search -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
+            <form method="GET" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <!-- Client Search -->
+                    <div class="lg:col-span-2">
+                        <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Client Search</label>
+                        <div class="relative">
+                            <input type="text" 
+                                   name="search"
+                                   placeholder="Search clients by name, email, phone, or ID..." 
+                                   value="{{ search_query }}"
+                                   class="w-full pl-10 pr-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                            </div>
                         </div>
                     </div>
+                    
+                    <!-- Program Filter -->
+                    <div>
+                        <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Program</label>
+                        <select name="program" class="w-full px-3 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            <option value="">All Programs</option>
+                            {% for program in programs %}
+                            <option value="{{ program.id }}" {% if current_program == program.id|stringformat:"s" %}selected{% endif %}>{{ program.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Age Range Filter -->
+                    <div>
+                        <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Age Range</label>
+                        <select name="age_range" class="w-full px-3 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            <option value="">All Ages</option>
+                            <option value="under18" {% if age_range == 'under18' %}selected{% endif %}>Under 18</option>
+                            <option value="18-30" {% if age_range == '18-30' %}selected{% endif %}>18-30</option>
+                            <option value="30-50" {% if age_range == '30-50' %}selected{% endif %}>30-50</option>
+                            <option value="over50" {% if age_range == 'over50' %}selected{% endif %}>Over 50</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Gender Filter -->
+                    <div>
+                        <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Gender</label>
+                        <select name="gender" class="w-full px-3 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            <option value="">All Genders</option>
+                            <option value="Male" {% if gender_filter == 'Male' %}selected{% endif %}>Male</option>
+                            <option value="Female" {% if gender_filter == 'Female' %}selected{% endif %}>Female</option>
+                            <option value="Other" {% if gender_filter == 'Other' %}selected{% endif %}>Other</option>
+                            <option value="Prefer not to say" {% if gender_filter == 'Prefer not to say' %}selected{% endif %}>Prefer not to say</option>
+                        </select>
+                    </div>
                 </div>
-                <button type="submit" 
-                        class="inline-flex items-center px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                    </svg>
-                    Search
-                </button>
-                {% if search_query %}
-                <a href="{% url 'clients:list' %}" 
-                   class="inline-flex items-center px-4 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                    Clear
-                </a>
-                {% endif %}
+                
+                <div class="flex justify-between items-center">
+                    <div class="flex space-x-3">
+                        <button type="submit" class="inline-flex items-center px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                            Apply Filters
+                        </button>
+                        {% if search_query or current_program or age_range or gender_filter %}
+                        <a href="{% url 'clients:list' %}" class="inline-flex items-center px-4 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                            Clear Filters
+                        </a>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Results Count -->
+                    {% if search_query or current_program or age_range or gender_filter %}
+                    <div class="text-sm text-neutral-600 font-body">
+                        <span class="font-bold">{{ paginator.count }}</span> client(s) found
+                    </div>
+                    {% endif %}
+                </div>
             </form>
         </div>
-        
-        <!-- Search Results Info -->
-        {% if search_query %}
-        <div class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div class="flex items-center">
-                <svg class="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                </svg>
-                <span class="text-sm font-bold text-blue-800 font-body">
-                    Search results for "{{ search_query }}" - {{ clients|length }} client(s) found
-                </span>
-            </div>
-        </div>
-        {% endif %}
     </div>
     
     <!-- Bulk Actions Bar -->
@@ -120,14 +155,15 @@
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Name</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Email</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Phone</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Created</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Programs</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Age</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-neutral-200">
                     {% for client in clients %}
-                    <tr class="hover:bg-neutral-50 relative group" 
+                    <tr class="hover:bg-neutral-50 relative group cursor-pointer" 
                         @contextmenu.prevent="showContextMenu($event, '{{ client.external_id }}', '{{ client.first_name }} {{ client.last_name }}')"
-                        @click="toggleClient('{{ client.external_id }}')"
+                        @click="viewClient('{{ client.external_id }}')"
                         :class="{ 'bg-blue-50': selectedClients.includes('{{ client.external_id }}') }"
                         onmouseenter="showTooltip(this, '{{ client.created_by|default:"Unknown" }}', '{{ client.created_at|date:'M d, Y g:i A' }}', '{{ client.updated_by|default:"Unknown" }}', '{{ client.updated_at|date:'M d, Y g:i A' }}')"
                         onmouseleave="hideTooltip()">
@@ -135,11 +171,12 @@
                             <input type="checkbox" 
                                    :checked="selectedClients.includes('{{ client.external_id }}')"
                                    @change.stop="toggleClient('{{ client.external_id }}')"
+                                   @click.stop
                                    class="rounded border-neutral-300 text-brand-sky focus:ring-brand-sky">
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="flex items-center">
-                                <div class="w-12 h-12 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm relative group">
+                                <div class="w-12 h-12 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm">
                                     {% if client.profile_picture %}
                                         <img src="{{ client.profile_picture.url }}" alt="{{ client.first_name }} {{ client.last_name }}" class="w-12 h-12 rounded-lg object-cover">
                                     {% else %}
@@ -147,21 +184,12 @@
                                             {{ client.first_name|first|upper }}{{ client.last_name|first|upper }}
                                         </span>
                                     {% endif %}
-                                    <!-- Quick edit profile picture button -->
-                                    <button @click.stop="editProfilePicture('{{ client.external_id }}', '{{ client.first_name }} {{ client.last_name }}')" 
-                                            class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 rounded-lg flex items-center justify-center transition-all duration-200 opacity-0 group-hover:opacity-100">
-                                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                                        </svg>
-                                    </button>
                                 </div>
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="text-sm font-bold text-neutral-900 font-body">
-                                <a href="{% url 'clients:detail' client.external_id %}" class="text-brand-sky hover:text-brand-darkBlue hover:underline">
-                                    {{ client.first_name }} {{ client.last_name }}
-                                </a>
+                                {{ client.first_name }} {{ client.last_name }}
                             </div>
                             {% if client.preferred_name %}
                             <div class="text-sm text-neutral-500 font-body">{{ client.preferred_name }}</div>
@@ -173,13 +201,28 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
                             {{ client.phone|default:"—" }}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
-                            {{ client.created_at|date:"M d, Y" }}
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {% with program_count=client.clientprogramenrollment_set.count %}
+                                {% if program_count > 0 %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        {{ program_count }} program{{ program_count|pluralize }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-neutral-400">No programs</span>
+                                {% endif %}
+                            {% endwith %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
+                            {% if client.age %}
+                                {{ client.age }} years old
+                            {% else %}
+                                <span class="text-neutral-400">—</span>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="px-6 py-4 text-center text-neutral-500 font-body">
+                        <td colspan="7" class="px-6 py-4 text-center text-neutral-500 font-body">
                             No clients found. <a href="{% url 'clients:create' %}" class="text-brand-sky hover:text-brand-darkBlue font-bold">Add your first client</a>
                         </td>
                     </tr>
@@ -627,11 +670,15 @@ function clientManager() {
             }
         },
         
-        viewClient() {
-            if (this.contextMenu.clientId) {
+        viewClient(clientId = null) {
+            if (clientId) {
+                // Called from table row click
+                window.location.href = `/clients/${clientId}/`;
+            } else if (this.contextMenu.clientId) {
+                // Called from context menu
                 window.location.href = `/clients/${this.contextMenu.clientId}/`;
+                this.hideContextMenu();
             }
-            this.hideContextMenu();
         },
         
         editClient() {
@@ -879,5 +926,235 @@ function hideTooltip() {
         }
     }, 100);
 }
+
+// Enhanced Client Search Functionality for Client List
+function initializeClientListSearch() {
+    const clientSearchInput = document.getElementById('client-search');
+    const clearClientSearchBtn = document.getElementById('clear-client-search');
+    const clientSearchResults = document.getElementById('client-search-results');
+    const clientResultsList = document.getElementById('client-results-list');
+    const clientNoResults = document.getElementById('client-no-results');
+    const searchButton = document.getElementById('search-button');
+    const clearSearchBtn = document.getElementById('clear-search');
+    
+    let searchTimeout;
+    let currentSearchTerm = '';
+    
+    // Client search input event
+    clientSearchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const searchTerm = this.value.trim();
+        currentSearchTerm = searchTerm;
+        
+        if (searchTerm.length === 0) {
+            // Show all clients when input is empty
+            searchClients('');
+            return;
+        }
+        
+        // Show results for any search term, even single characters
+        searchTimeout = setTimeout(() => {
+            searchClients(searchTerm);
+        }, 300);
+    });
+    
+    // Show results when input is focused
+    clientSearchInput.addEventListener('focus', function() {
+        if (this.value.trim().length === 0) {
+            searchClients('');
+        }
+    });
+    
+    // Keyboard navigation for client search
+    clientSearchInput.addEventListener('keydown', function(e) {
+        const results = clientResultsList.querySelectorAll('.search-result-item');
+        const currentActive = clientResultsList.querySelector('.search-result-item.active');
+        let activeIndex = -1;
+        
+        if (currentActive) {
+            activeIndex = Array.from(results).indexOf(currentActive);
+        }
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (results.length > 0) {
+                const nextIndex = (activeIndex + 1) % results.length;
+                results.forEach(item => item.classList.remove('active'));
+                results[nextIndex].classList.add('active');
+                results[nextIndex].scrollIntoView({ block: 'nearest' });
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (results.length > 0) {
+                const prevIndex = activeIndex <= 0 ? results.length - 1 : activeIndex - 1;
+                results.forEach(item => item.classList.remove('active'));
+                results[prevIndex].classList.add('active');
+                results[prevIndex].scrollIntoView({ block: 'nearest' });
+            }
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentActive) {
+                currentActive.click();
+            } else {
+                // If no active result, perform search
+                performSearch();
+            }
+        } else if (e.key === 'Escape') {
+            hideClientResults();
+            clientSearchInput.blur();
+        }
+    });
+    
+    // Clear client search
+    clearClientSearchBtn.addEventListener('click', function() {
+        clientSearchInput.value = '';
+        currentSearchTerm = '';
+        hideClientResults();
+        clientSearchInput.focus();
+    });
+    
+    // Search button
+    searchButton.addEventListener('click', function() {
+        performSearch();
+    });
+    
+    // Clear search button
+    clearSearchBtn.addEventListener('click', function() {
+        clientSearchInput.value = '';
+        currentSearchTerm = '';
+        hideClientResults();
+        // Reload page to show all clients
+        window.location.href = '{% url "clients:list" %}';
+    });
+    
+    // Hide results when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!clientSearchInput.contains(e.target) && !clientSearchResults.contains(e.target)) {
+            hideClientResults();
+        }
+    });
+    
+    function searchClients(term) {
+        fetch(`/core/search-clients/?q=${encodeURIComponent(term)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayClientResults(data.clients);
+                } else {
+                    showClientNoResults();
+                }
+            })
+            .catch(error => {
+                console.error('Error searching clients:', error);
+                showClientNoResults();
+            });
+    }
+    
+    function displayClientResults(clients) {
+        if (clients.length === 0) {
+            showClientNoResults();
+            return;
+        }
+        
+        clientResultsList.innerHTML = '';
+        clients.forEach(client => {
+            const clientItem = document.createElement('div');
+            clientItem.className = 'search-result-item p-3 hover:bg-neutral-50 cursor-pointer border-b border-neutral-100 last:border-b-0';
+            clientItem.innerHTML = `
+                <div class="font-bold text-neutral-900">${highlightSearchTerm(client.name, clientSearchInput.value)}</div>
+                <div class="text-sm text-neutral-500">ID: ${client.external_id}</div>
+                <div class="text-xs text-neutral-400 mt-1">Click to view client details</div>
+            `;
+            clientItem.addEventListener('click', () => {
+                // Navigate to client detail page
+                window.location.href = `/clients/${client.external_id}/`;
+            });
+            clientResultsList.appendChild(clientItem);
+        });
+        
+        showClientResults();
+    }
+    
+    function showClientResults() {
+        clientSearchResults.classList.remove('hidden');
+        clientNoResults.classList.add('hidden');
+        clearClientSearchBtn.classList.remove('hidden');
+    }
+    
+    function showClientNoResults() {
+        clientSearchResults.classList.remove('hidden');
+        clientNoResults.classList.remove('hidden');
+        clearClientSearchBtn.classList.remove('hidden');
+    }
+    
+    function hideClientResults() {
+        clientSearchResults.classList.add('hidden');
+        clearClientSearchBtn.classList.add('hidden');
+    }
+    
+    function performSearch() {
+        if (currentSearchTerm.trim()) {
+            // Navigate to search results page
+            window.location.href = `{% url "clients:list" %}?search=${encodeURIComponent(currentSearchTerm)}`;
+        }
+    }
+}
+
+// Utility function to highlight search terms
+function highlightSearchTerm(text, searchTerm) {
+    if (!searchTerm || !text) return text;
+    
+    const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+    return text.replace(regex, '<span class="bg-yellow-200 font-bold text-yellow-800 px-1 rounded">$1</span>');
+}
+
+// Initialize search functionality when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initializeClientListSearch();
+});
+
 </script>
+
+<style>
+    /* Custom scrollbar for search results */
+    #client-results-list::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    #client-results-list::-webkit-scrollbar-track {
+        background: #f8fafc;
+        border-radius: 3px;
+    }
+    
+    #client-results-list::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 3px;
+    }
+    
+    #client-results-list::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+    }
+    
+    /* Smooth scrolling for search results */
+    #client-results-list {
+        scroll-behavior: smooth;
+    }
+    
+    /* Enhanced hover effects for search results */
+    .search-result-item {
+        transition: all 0.15s ease-in-out;
+    }
+    
+    .search-result-item:hover,
+    .search-result-item.active {
+        background-color: #f1f5f9;
+        transform: translateX(2px);
+        border-left: 3px solid #3b82f6;
+    }
+    
+    .search-result-item.active {
+        background-color: #dbeafe;
+        border-left-color: #1d4ed8;
+    }
+</style>
 {% endblock %}

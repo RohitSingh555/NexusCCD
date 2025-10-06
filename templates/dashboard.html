@@ -81,108 +81,8 @@
         </div>
     </div>
 
-    <!-- Main Content Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <!-- Recent Clients -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-900">Recent Clients</h3>
-                    <a href="{% url 'clients:list' %}" class="text-sm text-blue-600 hover:text-blue-500 font-medium">View all</a>
-                </div>
-            </div>
-            <div class="p-6">
-                {% if recent_clients %}
-                    <div class="space-y-4">
-                        {% for client in recent_clients %}
-                        <div class="flex items-center space-x-4">
-                            <div class="flex-shrink-0">
-                                <div class="w-10 h-10 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
-                                    <span class="text-white font-medium text-sm">{{ client.first_name|first }}{{ client.last_name|first }}</span>
-                                </div>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-gray-900 truncate">
-                                    {{ client.first_name }} {{ client.last_name }}
-                                </p>
-                                <p class="text-sm text-gray-500">
-                                    Added {{ client.created_at|date:"M d, Y" }}
-                                </p>
-                            </div>
-                            <div class="flex-shrink-0">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    Active
-                                </span>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <div class="text-center py-8">
-                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                        </svg>
-                        <h3 class="mt-2 text-sm font-medium text-gray-900">No clients yet</h3>
-                        <p class="mt-1 text-sm text-gray-500">Get started by adding your first client.</p>
-                        <div class="mt-6">
-                            <a href="{% url 'clients:create' %}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-                                Add Client
-                            </a>
-                        </div>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Program Status -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-900">Program Status</h3>
-                    <a href="{% url 'programs:list' %}" class="text-sm text-blue-600 hover:text-blue-500 font-medium">View all</a>
-                </div>
-            </div>
-            <div class="p-6">
-                {% if program_status %}
-                    <div class="space-y-4">
-                        {% for program in program_status %}
-                        <div class="flex items-center justify-between">
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-gray-900 truncate">{{ program.name }}</p>
-                                <p class="text-sm text-gray-500">{{ program.department.name }}</p>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <div class="text-right">
-                                    <p class="text-sm font-medium text-gray-900">{{ program.current_enrollments }}/{{ program.capacity_current }}</p>
-                                    <p class="text-xs text-gray-500">enrolled</p>
-                                </div>
-                                <div class="w-16 bg-gray-200 rounded-full h-2">
-                                    <div class="bg-blue-600 h-2 rounded-full" style="width: {{ program.occupancy_percentage }}%"></div>
-                                </div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <div class="text-center py-8">
-                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                        </svg>
-                        <h3 class="mt-2 text-sm font-medium text-gray-900">No programs yet</h3>
-                        <p class="mt-1 text-sm text-gray-500">Get started by creating your first program.</p>
-                        <div class="mt-6">
-                            <a href="{% url 'programs:create' %}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-                                Create Program
-                            </a>
-                        </div>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
     <!-- Quick Actions -->
-    <div class="mt-8">
+    <div class="mb-8">
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b border-gray-200">
                 <h3 class="text-lg font-semibold text-gray-900">Quick Actions</h3>
@@ -245,6 +145,122 @@
                         </div>
                     </a>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Recent Clients -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900">Recent Clients</h3>
+                    <a href="{% url 'clients:list' %}" class="inline-flex items-center px-3 py-1.5 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                        View all
+                        <svg class="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+            <div class="p-6">
+                {% if recent_clients %}
+                    <div class="space-y-4">
+                        {% for client in recent_clients %}
+                        <div class="flex items-center space-x-4">
+                            <div class="flex-shrink-0">
+                                <div class="w-10 h-10 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full flex items-center justify-center">
+                                    <span class="text-white font-medium text-sm">{{ client.first_name|first }}{{ client.last_name|first }}</span>
+                                </div>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-gray-900 truncate">
+                                    {{ client.first_name }} {{ client.last_name }}
+                                </p>
+                                <p class="text-sm text-gray-500">
+                                    Added {{ client.created_at|date:"M d, Y" }}
+                                </p>
+                            </div>
+                            <div class="flex-shrink-0">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    Active
+                                </span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <p class="text-xs text-gray-500 text-center">Showing 5 most recent clients</p>
+                    </div>
+                {% else %}
+                    <div class="text-center py-8">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                        <h3 class="mt-2 text-sm font-medium text-gray-900">No clients yet</h3>
+                        <p class="mt-1 text-sm text-gray-500">Get started by adding your first client.</p>
+                        <div class="mt-6">
+                            <a href="{% url 'clients:create' %}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                Add Client
+                            </a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Program Status -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-gray-900">Program Status</h3>
+                    <a href="{% url 'programs:list' %}" class="inline-flex items-center px-3 py-1.5 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                        View all
+                        <svg class="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+            <div class="p-6">
+                {% if program_status %}
+                    <div class="space-y-4">
+                        {% for program in program_status %}
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium text-gray-900 truncate">{{ program.name }}</p>
+                                <p class="text-sm text-gray-500">{{ program.department.name }}</p>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <div class="text-right">
+                                    <p class="text-sm font-medium text-gray-900">{{ program.current_enrollments }}/{{ program.capacity_current }}</p>
+                                    <p class="text-xs text-gray-500">enrolled</p>
+                                </div>
+                                <div class="w-16 bg-gray-200 rounded-full h-2">
+                                    <div class="bg-blue-600 h-2 rounded-full" style="width: {{ program.occupancy_percentage }}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-gray-200">
+                        <p class="text-xs text-gray-500 text-center">Showing 5 programs with status</p>
+                    </div>
+                {% else %}
+                    <div class="text-center py-8">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                        </svg>
+                        <h3 class="mt-2 text-sm font-medium text-gray-900">No programs yet</h3>
+                        <p class="mt-1 text-sm text-gray-500">Get started by creating your first program.</p>
+                        <div class="mt-6">
+                            <a href="{% url 'programs:create' %}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                Create Program
+                            </a>
+                        </div>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>

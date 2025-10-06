@@ -16,6 +16,10 @@ urlpatterns = [
     path('dedupe/', views.ClientDedupeView.as_view(), name='dedupe'),
     path('dedupe/action/<int:duplicate_id>/<str:action>/', views.mark_duplicate_action, name='duplicate_action'),
     path('dedupe/bulk-action/', views.bulk_duplicate_action, name='bulk_duplicate_action'),
+    path('dedupe/compare/<int:duplicate_id>/', views.client_duplicate_comparison, name='duplicate-comparison'),
+    path('dedupe/merge/<int:duplicate_id>/', views.client_merge_view, name='duplicate-merge'),
+    path('dedupe/merge/<int:duplicate_id>/process/', views.merge_clients, name='merge_clients'),
+    path('dedupe/resolve/<int:duplicate_id>/', views.resolve_duplicate_selection, name='resolve_duplicate'),
     path('<uuid:external_id>/update-profile-picture/', views.update_profile_picture, name='update_profile_picture'),
     path('<uuid:external_id>/remove-profile-picture/', views.remove_profile_picture, name='remove_profile_picture'),
 ]
