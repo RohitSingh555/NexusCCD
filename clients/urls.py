@@ -20,6 +20,7 @@ urlpatterns = [
     path('dedupe/merge/<int:duplicate_id>/', views.client_merge_view, name='duplicate-merge'),
     path('dedupe/merge/<int:duplicate_id>/process/', views.merge_clients, name='merge_clients'),
     path('dedupe/resolve/<int:duplicate_id>/', views.resolve_duplicate_selection, name='resolve_duplicate'),
+    path('export/', views.export_clients, name='export'),
     path('<uuid:external_id>/update-profile-picture/', views.update_profile_picture, name='update_profile_picture'),
     path('<uuid:external_id>/remove-profile-picture/', views.remove_profile_picture, name='remove_profile_picture'),
 ]

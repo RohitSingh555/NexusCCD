@@ -8,37 +8,54 @@
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="clientManager()">
     <div>
-        <div class="flex justify-between items-center mb-8">
-            <div>
-                <h1 class="text-3xl font-bold text-neutral-800 font-header">Clients</h1>
-                <p class="text-neutral-600 mt-2 font-body">Manage client information and profiles</p>
-            </div>
-            <div class="flex space-x-3">
-                <a href="{% url 'clients:dedupe' %}" class="inline-flex items-center px-4 py-2 border border-orange-300 text-sm font-bold rounded-xl text-orange-700 bg-orange-50 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 shadow-sm">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    Probable Duplicate Clients
-                </a>
-                <a href="{% url 'clients:upload' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                    </svg>
-                    Upload Clients
-                </a>
-                <a href="{% url 'clients:create' %}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                    </svg>
-                    Add New Client
-                </a>
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-sm">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Clients</h1>
+                        <p class="text-sm text-gray-600">Manage client information and profiles</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <a href="{% url 'clients:export' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" class="inline-flex items-center px-4 py-2 border border-green-300 rounded-lg text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Export Clients
+                    </a>
+                    <a href="{% url 'clients:dedupe' %}" class="inline-flex items-center px-4 py-2 border border-orange-300 rounded-lg text-sm font-medium text-orange-700 bg-orange-50 hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Duplicate Detection
+                    </a>
+                    <a href="{% url 'clients:upload' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        Upload Clients
+                    </a>
+                    <a href="{% url 'clients:create' %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Add New Client
+                    </a>
+                </div>
             </div>
         </div>
+
         
         <!-- Filters and Search -->
         <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
             <form method="GET" class="space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
                     <!-- Client Search -->
                     <div class="lg:col-span-2">
                         <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Client Search</label>
@@ -87,7 +104,19 @@
                             <option value="Male" {% if gender_filter == 'Male' %}selected{% endif %}>Male</option>
                             <option value="Female" {% if gender_filter == 'Female' %}selected{% endif %}>Female</option>
                             <option value="Other" {% if gender_filter == 'Other' %}selected{% endif %}>Other</option>
-                            <option value="Prefer not to say" {% if gender_filter == 'Prefer not to say' %}selected{% endif %}>Prefer not to say</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Program Manager Filter -->
+                    <div>
+                        <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Program Manager</label>
+                        <select name="manager" class="w-full px-3 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            <option value="">All Managers</option>
+                            {% for manager in program_managers %}
+                            <option value="{{ manager.id }}" {% if current_manager == manager.id|stringformat:"s" %}selected{% endif %}>
+                                {{ manager.first_name }} {{ manager.last_name }}
+                            </option>
+                            {% endfor %}
                         </select>
                     </div>
                 </div>
@@ -100,7 +129,7 @@
                             </svg>
                             Apply Filters
                         </button>
-                        {% if search_query or current_program or age_range or gender_filter %}
+                        {% if search_query or current_program or age_range or gender_filter or current_manager %}
                         <a href="{% url 'clients:list' %}" class="inline-flex items-center px-4 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -111,7 +140,7 @@
                     </div>
                     
                     <!-- Results Count -->
-                    {% if search_query or current_program or age_range or gender_filter %}
+                    {% if search_query or current_program or age_range or gender_filter or current_manager %}
                     <div class="text-sm text-neutral-600 font-body">
                         <span class="font-bold">{{ paginator.count }}</span> client(s) found
                     </div>
@@ -1112,6 +1141,14 @@ function highlightSearchTerm(text, searchTerm) {
 document.addEventListener('DOMContentLoaded', function() {
     initializeClientListSearch();
 });
+
+// Function to handle rows per page change
+function changeRowsPerPage(perPage) {
+    const url = new URL(window.location);
+    url.searchParams.set('per_page', perPage);
+    url.searchParams.delete('page'); // Reset to first page when changing rows per page
+    window.location.href = url.toString();
+}
 
 </script>
 

@@ -217,6 +217,9 @@ class ClientDemographicsView(TemplateView):
             gender = client.gender or 'Unknown'
             gender_counts[gender] = gender_counts.get(gender, 0) + 1
         
+        # Sort gender counts by count (descending) for better display
+        gender_counts = dict(sorted(gender_counts.items(), key=lambda x: x[1], reverse=True))
+        
         context.update({
             'total_clients': clients.count(),
             'age_groups': age_groups,

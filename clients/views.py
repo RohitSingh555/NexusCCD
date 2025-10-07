@@ -8,10 +8,13 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_protect
 from django.utils.decorators import method_decorator
+from django.utils import timezone
 from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.db import IntegrityError
+from django.http import HttpResponse
+import csv
 from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate
 from core.fuzzy_matching import fuzzy_matcher
 from .forms import ClientForm
@@ -30,6 +33,20 @@ class ClientListView(ListView):
     template_name = 'clients/client_list.html'
     context_object_name = 'clients'
     paginate_by = 10
+    
+    def get_paginate_by(self, queryset):
+        """Get the number of items to paginate by from request parameters"""
+        per_page = self.request.GET.get('per_page', '10')
+        try:
+            per_page = int(per_page)
+            # Limit to reasonable values
+            if per_page < 5:
+                per_page = 5
+            elif per_page > 100:
+                per_page = 100
+        except (ValueError, TypeError):
+            per_page = 10
+        return per_page
     
     def get_queryset(self):
         from django.db.models import Q
@@ -89,7 +106,19 @@ class ClientListView(ListView):
         
         # Gender filtering
         if gender_filter:
-            queryset = queryset.filter(gender=gender_filter)
+            if gender_filter == 'Other':
+                # Show all clients whose gender is not Male or Female
+                queryset = queryset.exclude(gender__in=['Male', 'Female'])
+            else:
+                queryset = queryset.filter(gender=gender_filter)
+        
+        # Program manager filtering
+        manager_filter = self.request.GET.get('manager', '')
+        if manager_filter:
+            queryset = queryset.filter(
+                clientprogramenrollment__program__manager_assignments__staff_id=manager_filter,
+                clientprogramenrollment__program__manager_assignments__is_active=True
+            ).distinct()
         
         return queryset.order_by('-created_at')
     
@@ -99,10 +128,23 @@ class ClientListView(ListView):
         context['program_filter'] = self.request.GET.get('program', '')
         context['age_range'] = self.request.GET.get('age_range', '')
         context['gender_filter'] = self.request.GET.get('gender', '')
+        context['manager_filter'] = self.request.GET.get('manager', '')
+        context['per_page'] = self.request.GET.get('per_page', '10')
         context['programs'] = Program.objects.filter(status='active').order_by('name')
+        
+        # Force pagination to be enabled if there are any results
+        if context.get('paginator') and context['paginator'].count > 0:
+            context['is_paginated'] = True
+        
+        # Get program managers
+        from core.models import ProgramManagerAssignment, Staff
+        context['program_managers'] = Staff.objects.filter(
+            program_manager_assignments__is_active=True
+        ).distinct().order_by('first_name', 'last_name')
         
         # Add current filter values (like programs page)
         context['current_program'] = self.request.GET.get('program', '')
+        context['current_manager'] = self.request.GET.get('manager', '')
         
         # Calculate age for each client
         from datetime import date
@@ -423,6 +465,25 @@ def upload_clients(request):
                 
                 if created:
                     logger.info(f"Created pending enrollment for {client.first_name} {client.last_name} in {program_name}")
+                    
+                    # Create audit log entry for enrollment creation
+                    try:
+                        from core.models import create_audit_log
+                        create_audit_log(
+                            entity_name='Enrollment',
+                            entity_id=enrollment.external_id,
+                            action='create',
+                            changed_by=None,  # Bulk import, no specific user
+                            diff_data={
+                                'client': str(enrollment.client),
+                                'program': str(enrollment.program),
+                                'start_date': str(enrollment.start_date),
+                                'status': enrollment.status,
+                                'source': 'bulk_import'
+                            }
+                        )
+                    except Exception as e:
+                        logger.error(f"Error creating audit log for enrollment: {e}")
                 else:
                     logger.info(f"Enrollment already exists for {client.first_name} {client.last_name} in {program_name}")
                     
@@ -759,14 +820,7 @@ def download_sample(request, file_type):
             'city': 'New York',
             'state': 'NY',
             'zip': '10001',
-            'country': 'USA',
-            'source': 'SMIS',
-            'program_name': 'Housing Assistance Program',
-            'program_department': 'Social Services',
-            'intake_date': '2024-01-15',
-            'intake_database': 'CCD',
-            'referral_source': 'SMIS',
-            'intake_housing_status': 'homeless'
+            'country': 'USA'
         },
         {
             'first_name': 'Maria',
@@ -785,14 +839,7 @@ def download_sample(request, file_type):
             'city': 'Los Angeles',
             'state': 'CA',
             'zip': '90210',
-            'country': 'USA',
-            'source': 'EMHWare',
-            'program_name': 'Job Training Program',
-            'program_department': 'Employment',
-            'intake_date': '2024-01-16',
-            'intake_database': 'CCD',
-            'referral_source': 'EMHWare',
-            'intake_housing_status': 'at_risk'
+            'country': 'USA'
         },
         {
             'first_name': 'David',
@@ -811,14 +858,7 @@ def download_sample(request, file_type):
             'city': 'Chicago',
             'state': 'IL',
             'zip': '60601',
-            'country': 'USA',
-            'source': 'FFAI',
-            'program_name': 'Mental Health Services',
-            'program_department': 'Healthcare',
-            'intake_date': '2024-01-17',
-            'intake_database': 'CCD',
-            'referral_source': 'FFAI',
-            'intake_housing_status': 'homeless'
+            'country': 'USA'
         },
         {
             'first_name': 'Sarah',
@@ -837,14 +877,7 @@ def download_sample(request, file_type):
             'city': 'Seattle',
             'state': 'WA',
             'zip': '98101',
-            'country': 'USA',
-            'source': 'FFAI',
-            'program_name': 'Mental Health Services',
-            'program_department': 'Healthcare',
-            'intake_date': '2024-01-17',
-            'intake_database': 'CCD',
-            'referral_source': 'FFAI',
-            'intake_housing_status': 'homeless'
+            'country': 'USA'
         },
         {
             'first_name': 'Michael',
@@ -863,14 +896,7 @@ def download_sample(request, file_type):
             'city': 'Boston',
             'state': 'MA',
             'zip': '02101',
-            'country': 'USA',
-            'source': 'FFAI',
-            'program_name': 'Mental Health Services',
-            'program_department': 'Healthcare',
-            'intake_date': '2024-01-17',
-            'intake_database': 'CCD',
-            'referral_source': 'FFAI',
-            'intake_housing_status': 'homeless'
+            'country': 'USA'
         },
         {
             'first_name': 'Lisa',
@@ -1135,13 +1161,25 @@ class ClientDedupeView(TemplateView):
         return context
 
 
-@require_http_methods(["POST"])
+@require_http_methods(["GET", "POST"])
 def mark_duplicate_action(request, duplicate_id, action):
     """Handle duplicate actions (confirm, not_duplicate, merge)"""
     try:
         print(f"mark_duplicate_action called with duplicate_id={duplicate_id}, action={action}")
         duplicate = get_object_or_404(ClientDuplicate, id=duplicate_id)
         print(f"Found duplicate: {duplicate}")
+        
+        # If this is a GET request with confirm=true, show confirmation page
+        if request.method == 'GET' and request.GET.get('confirm') == 'true':
+            action_names = {
+                'not_duplicate': 'Mark as Not Duplicate',
+                'merge_confirm': 'Confirm Merge Clients'
+            }
+            return render(request, 'clients/duplicate_confirm.html', {
+                'duplicate': duplicate,
+                'action': action,
+                'action_name': action_names.get(action, action.title())
+            })
         
         # Get the current user (you might need to adjust this based on your auth system)
         reviewed_by = None
@@ -1154,28 +1192,72 @@ def mark_duplicate_action(request, duplicate_id, action):
                 print(f"Could not get staff profile: {e}")
                 pass
         
-        # Get notes from request
-        data = json.loads(request.body) if request.body else {}
-        notes = data.get('notes', '')
+        # Get notes from request - handle both JSON and form data
+        notes = ''
+        if request.content_type == 'application/json':
+            # Handle JSON data (from AJAX requests)
+            data = json.loads(request.body) if request.body else {}
+            notes = data.get('notes', '')
+        else:
+            # Handle form data (from regular form submissions)
+            notes = request.POST.get('notes', '')
         print(f"Notes: {notes}")
         
         if action == 'confirm':
             # Redirect directly to comparison view without modal
-            return JsonResponse({
-                'success': True,
-                'redirect': f'/clients/dedupe/compare/{duplicate_id}/'
-            })
+            if request.content_type == 'application/json':
+                return JsonResponse({
+                    'success': True,
+                    'redirect': f'/clients/dedupe/compare/{duplicate_id}/'
+                })
+            else:
+                return redirect(f'/clients/dedupe/compare/{duplicate_id}/')
         elif action == 'merge':
             # Redirect to merge view
-            return JsonResponse({
-                'success': True,
-                'redirect': f'/clients/dedupe/merge/{duplicate_id}/'
-            })
+            if request.content_type == 'application/json':
+                return JsonResponse({
+                    'success': True,
+                    'redirect': f'/clients/dedupe/merge/{duplicate_id}/'
+                })
+            else:
+                return redirect(f'/clients/dedupe/merge/{duplicate_id}/')
         elif action == 'not_duplicate':
             # Mark as not duplicate and keep the client
             duplicate.mark_as_not_duplicate(reviewed_by, notes)
             message = f'Confirmed {duplicate.duplicate_client} is NOT a duplicate. Client kept in system and duplicate flag removed.'
             print(f"Marked as not duplicate: {message}")
+        elif action == 'merge_confirm':
+            # Check if this is coming from the merge interface (POST request)
+            if request.method == 'POST':
+                # This is the actual merge processing
+                print(f"Processing actual merge for duplicate {duplicate_id}")
+                
+                # Get the duplicate record
+                duplicate = get_object_or_404(ClientDuplicate, id=duplicate_id)
+                
+                # Get the primary client (the one we want to keep)
+                primary_client = duplicate.primary_client
+                duplicate_client = duplicate.duplicate_client
+                
+                # Get the duplicate client name before deleting
+                duplicate_client_name = f"{duplicate_client.first_name} {duplicate_client.last_name}"
+                
+                # Mark the duplicate as resolved BEFORE deleting the client
+                duplicate.status = 'resolved'
+                duplicate.resolved_by = reviewed_by
+                duplicate.resolved_at = timezone.now()
+                duplicate.resolution_notes = notes
+                duplicate.save()
+                
+                # Now delete the duplicate client
+                duplicate_client.delete()
+                
+                print(f"Merge completed: Deleted duplicate client {duplicate_client_name}, kept primary client")
+                return redirect(f'/clients/dedupe/?success=merge&client={duplicate_client_name}')
+            else:
+                # This is the initial confirmation, redirect to merge interface
+                print(f"Redirecting to merge page: /clients/dedupe/merge/{duplicate_id}/")
+                return redirect(f'/clients/dedupe/merge/{duplicate_id}/')
         elif action == 'merge':
             # For merge, we'll keep the primary client and delete the duplicate
             duplicate_client_name = f"{duplicate.duplicate_client.first_name} {duplicate.duplicate_client.last_name}"
@@ -1191,16 +1273,23 @@ def mark_duplicate_action(request, duplicate_id, action):
             print(f"Merged and deleted duplicate client: {message}")
         else:
             print(f"Invalid action: {action}")
-            return JsonResponse({
-                'success': False,
-                'error': 'Invalid action'
-            }, status=400)
+            if request.content_type == 'application/json':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Invalid action'
+                }, status=400)
+            else:
+                return redirect('/clients/dedupe/')
         
         print(f"Returning success response: {message}")
-        return JsonResponse({
-            'success': True,
-            'message': message
-        })
+        if request.content_type == 'application/json':
+            return JsonResponse({
+                'success': True,
+                'message': message
+            })
+        else:
+            # For form submissions, redirect back to dedupe page with success message
+            return redirect('/clients/dedupe/?success=resolved')
         
     except Exception as e:
         print(f"Error in mark_duplicate_action: {str(e)}")
@@ -1492,6 +1581,77 @@ def client_merge_view(request, duplicate_id):
         primary_client = duplicate.primary_client
         duplicate_client = duplicate.duplicate_client
         
+        # Define all possible fields to check
+        all_fields = {
+            # Basic Information
+            'first_name': 'First Name',
+            'last_name': 'Last Name',
+            'preferred_name': 'Preferred Name',
+            'alias': 'Alias',
+            'dob': 'Date of Birth',
+            'gender': 'Gender',
+            'sexual_orientation': 'Sexual Orientation',
+            'citizenship_status': 'Citizenship Status',
+            'indigenous_status': 'Indigenous Status',
+            'country_of_birth': 'Country of Birth',
+            'languages_spoken': 'Languages Spoken',
+            'ethnicity': 'Ethnicity',
+            
+            # Contact Information
+            'email': 'Email',
+            'phone': 'Phone',
+            'phone_work': 'Work Phone',
+            'phone_alt': 'Alternative Phone',
+            'addresses': 'Addresses',
+            
+            # Medical Information
+            'primary_diagnosis': 'Primary Diagnosis',
+            'medical_conditions': 'Medical Conditions',
+            'support_workers': 'Support Workers',
+            
+            # Emergency Contacts
+            'next_of_kin': 'Next of Kin',
+            'emergency_contact': 'Emergency Contact',
+            
+            # Additional Information
+            'permission_to_phone': 'Permission to Phone',
+            'permission_to_email': 'Permission to Email',
+            'comments': 'Comments',
+        }
+        
+        # Check which fields have values in either client
+        fields_with_values = {}
+        for field_name, field_label in all_fields.items():
+            primary_value = getattr(primary_client, field_name, None)
+            duplicate_value = getattr(duplicate_client, field_name, None)
+            
+            # More comprehensive check for values
+            def has_value(value):
+                if value is None:
+                    return False
+                if isinstance(value, str):
+                    return value.strip() != ''
+                if isinstance(value, list):
+                    return len(value) > 0
+                if isinstance(value, dict):
+                    return len(value) > 0
+                if isinstance(value, bool):
+                    return True  # Include boolean fields even if False
+                return True
+            
+            has_primary_value = has_value(primary_value)
+            has_duplicate_value = has_value(duplicate_value)
+            
+            # Always include the field if either client has a value
+            if has_primary_value or has_duplicate_value:
+                fields_with_values[field_name] = {
+                    'label': field_label,
+                    'primary_value': primary_value,
+                    'duplicate_value': duplicate_value,
+                    'has_primary': has_primary_value,
+                    'has_duplicate': has_duplicate_value,
+                }
+        
         context = {
             'duplicate': duplicate,
             'primary_client': primary_client,
@@ -1499,6 +1659,7 @@ def client_merge_view(request, duplicate_id):
             'similarity_score': duplicate.similarity_score,
             'match_type': duplicate.match_type,
             'confidence_level': duplicate.confidence_level,
+            'fields_with_values': fields_with_values,
         }
         
         return render(request, 'clients/client_merge.html', context)
@@ -1549,12 +1710,15 @@ def merge_clients(request, duplicate_id):
             else:
                 continue
                 
-            # Handle special fields
+            # Handle special fields that need special processing
             if field_name in ['email', 'phone']:
                 # Update contact_information
                 contact_info = merged_client.contact_information or {}
                 contact_info[field_name] = value
                 merged_client.contact_information = contact_info
+            elif field_name in ['addresses', 'next_of_kin', 'emergency_contact', 'support_workers', 'languages_spoken']:
+                # Handle JSON fields - copy the entire structure
+                setattr(merged_client, field_name, value)
             else:
                 # Update regular fields
                 setattr(merged_client, field_name, value)
@@ -1585,4 +1749,172 @@ def merge_clients(request, duplicate_id):
             'success': False,
             'error': f'An error occurred: {str(e)}'
         }, status=500)
+
+
+def export_clients(request):
+    """Export clients to CSV with current filters applied"""
+    try:
+        # Get the same queryset as the list view
+        queryset = Client.objects.all()
+        
+        # Apply the same filters as the list view
+        search_query = request.GET.get('search', '')
+        program_filter = request.GET.get('program', '')
+        department_filter = request.GET.get('department', '')
+        status_filter = request.GET.get('status', '')
+        manager_filter = request.GET.get('manager', '')
+        
+        # Apply search filter
+        if search_query:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search_query) |
+                Q(last_name__icontains=search_query) |
+                Q(email__icontains=search_query) |
+                Q(phone__icontains=search_query) |
+                Q(client_id__icontains=search_query)
+            )
+        
+        # Apply program filter
+        if program_filter:
+            queryset = queryset.filter(clientprogramenrollment__program__id=program_filter).distinct()
+        
+        # Apply department filter
+        if department_filter:
+            queryset = queryset.filter(clientprogramenrollment__program__department__id=department_filter).distinct()
+        
+        # Apply status filter
+        if status_filter:
+            if status_filter == 'enrolled':
+                queryset = queryset.filter(clientprogramenrollment__status='active').distinct()
+            elif status_filter == 'not_enrolled':
+                queryset = queryset.exclude(clientprogramenrollment__status='active').distinct()
+        
+        # Apply gender filter
+        gender_filter = request.GET.get('gender', '')
+        if gender_filter:
+            if gender_filter == 'Other':
+                # Show all clients whose gender is not Male or Female
+                queryset = queryset.exclude(gender__in=['Male', 'Female'])
+            else:
+                queryset = queryset.filter(gender=gender_filter)
+        
+        # Apply program manager filter
+        if manager_filter:
+            queryset = queryset.filter(
+                clientprogramenrollment__program__manager_assignments__staff_id=manager_filter,
+                clientprogramenrollment__program__manager_assignments__is_active=True
+            ).distinct()
+        
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="clients_export.csv"'
+        
+        writer = csv.writer(response)
+        
+        # Write header row with all fields from client detail view
+        writer.writerow([
+            'First Name',
+            'Last Name',
+            'Preferred Name',
+            'Alias',
+            'Date of Birth',
+            'Gender',
+            'Sexual Orientation',
+            'Citizenship Status',
+            'Indigenous Status',
+            'Country of Birth',
+            'Languages Spoken',
+            'Ethnicity',
+            'Phone',
+            'Work Phone',
+            'Alternative Phone',
+            'Email',
+            'Permission to Phone',
+            'Permission to Email',
+            'Address Line 2',
+            'Addresses (JSON)',
+            'Contact Information (JSON)',
+            'Primary Diagnosis',
+            'Medical Conditions',
+            'Support Workers (JSON)',
+            'Next of Kin (JSON)',
+            'Emergency Contact (JSON)',
+            'Program Enrollments',
+            'Program Status',
+            'Program Start Dates',
+            'Program End Dates',
+            'Comments',
+            'Profile Picture URL',
+            'Image URL',
+            'External UID',
+            'Updated By',
+            'Created Date',
+            'Updated Date'
+        ])
+        
+        # Write data rows
+        for client in queryset:
+            # Get contact information from JSON field
+            contact_info = client.contact_information or {}
+            phone = contact_info.get('phone', '') if contact_info else ''
+            email = contact_info.get('email', '') if contact_info else ''
+            
+            # Get program enrollment information
+            enrollments = client.clientprogramenrollment_set.all()
+            program_names = []
+            program_statuses = []
+            start_dates = []
+            end_dates = []
+            
+            for enrollment in enrollments:
+                program_names.append(enrollment.program.name if enrollment.program else 'Unknown Program')
+                program_statuses.append(enrollment.status)
+                start_dates.append(enrollment.start_date.strftime('%Y-%m-%d') if enrollment.start_date else 'null')
+                end_dates.append(enrollment.end_date.strftime('%Y-%m-%d') if enrollment.end_date else 'null')
+            
+            writer.writerow([
+                client.first_name or 'null',
+                client.last_name or 'null',
+                client.preferred_name or 'null',
+                client.alias or 'null',
+                client.dob.strftime('%Y-%m-%d') if client.dob else 'null',
+                client.gender or 'null',
+                client.sexual_orientation or 'null',
+                client.citizenship_status or 'null',
+                client.indigenous_status or 'null',
+                client.country_of_birth or 'null',
+                ', '.join(client.languages_spoken) if client.languages_spoken else 'null',
+                ', '.join(client.ethnicity) if client.ethnicity else 'null',
+                phone or 'null',
+                client.phone_work or 'null',
+                client.phone_alt or 'null',
+                email or 'null',
+                'Yes' if client.permission_to_phone else 'No',
+                'Yes' if client.permission_to_email else 'No',
+                client.address_2 or 'null',
+                str(client.addresses) if client.addresses else 'null',
+                str(client.contact_information) if client.contact_information else 'null',
+                client.primary_diagnosis or 'null',
+                client.medical_conditions or 'null',
+                str(client.support_workers) if client.support_workers else 'null',
+                str(client.next_of_kin) if client.next_of_kin else 'null',
+                str(client.emergency_contact) if client.emergency_contact else 'null',
+                '; '.join(program_names) if program_names else 'null',
+                '; '.join(program_statuses) if program_statuses else 'null',
+                '; '.join(start_dates) if start_dates else 'null',
+                '; '.join(end_dates) if end_dates else 'null',
+                client.comments or 'null',
+                str(client.profile_picture) if client.profile_picture else 'null',
+                client.image or 'null',
+                client.uid_external or 'null',
+                client.updated_by or 'null',
+                client.created_at.strftime('%Y-%m-%d %H:%M:%S') if client.created_at else 'null',
+                client.updated_at.strftime('%Y-%m-%d %H:%M:%S') if client.updated_at else 'null'
+            ])
+        
+        return response
+        
+    except Exception as e:
+        print(f"Error in export_clients: {str(e)}")
+        return HttpResponse(f"Error exporting clients: {str(e)}", status=500)
 

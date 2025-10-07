@@ -11,7 +11,21 @@ class ProgramListView(ProgramManagerAccessMixin, ListView):
     model = Program
     template_name = 'programs/program_list.html'
     context_object_name = 'programs'
-    paginate_by = 20
+    paginate_by = 10
+    
+    def get_paginate_by(self, queryset):
+        """Get the number of items to paginate by from request parameters"""
+        per_page = self.request.GET.get('per_page', '10')
+        try:
+            per_page = int(per_page)
+            # Limit to reasonable values
+            if per_page < 5:
+                per_page = 5
+            elif per_page > 100:
+                per_page = 100
+        except (ValueError, TypeError):
+            per_page = 10
+        return per_page
 
     def get_queryset(self):
         # First apply the ProgramManagerAccessMixin filtering
@@ -87,6 +101,11 @@ class ProgramListView(ProgramManagerAccessMixin, ListView):
         # Add current filter values
         context['current_department'] = self.request.GET.get('department', '')
         context['current_status'] = self.request.GET.get('status', '')
+        context['per_page'] = self.request.GET.get('per_page', '10')
+        
+        # Force pagination to be enabled if there are any results
+        if context.get('paginator') and context['paginator'].count > 0:
+            context['is_paginated'] = True
         context['current_capacity'] = self.request.GET.get('capacity', '')
         context['search_query'] = self.request.GET.get('search', '')
         

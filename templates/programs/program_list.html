@@ -728,5 +728,13 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('DOM loaded, initializing program search');
     initializeProgramSearch();
 });
+
+// Function to handle rows per page change
+function changeRowsPerPage(perPage) {
+    const url = new URL(window.location);
+    url.searchParams.set('per_page', perPage);
+    url.searchParams.delete('page'); // Reset to first page when changing rows per page
+    window.location.href = url.toString();
+}
 </script>
 {% endblock %}

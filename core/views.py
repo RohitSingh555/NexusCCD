@@ -292,7 +292,26 @@ def approvals(request):
 @jwt_required
 def audit_log(request):
     """Audit log view"""
-    return render(request, 'core/audit_log.html')
+    from .models import AuditLog
+    
+    # Get all audit logs ordered by most recent first
+    audit_logs = AuditLog.objects.select_related('changed_by').order_by('-changed_at')
+    
+    # Get statistics
+    total_events = audit_logs.count()
+    create_events = audit_logs.filter(action='create').count()
+    update_events = audit_logs.filter(action='update').count()
+    delete_events = audit_logs.filter(action='delete').count()
+    
+    context = {
+        'audit_logs': audit_logs,
+        'total_events': total_events,
+        'create_events': create_events,
+        'update_events': update_events,
+        'delete_events': delete_events,
+    }
+    
+    return render(request, 'core/audit_log.html', context)
 
 
 # Department CRUD Views
@@ -366,7 +385,21 @@ class EnrollmentListView(ProgramManagerAccessMixin, ListView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollments.html'
     context_object_name = 'enrollments'
-    paginate_by = 20
+    paginate_by = 10
+    
+    def get_paginate_by(self, queryset):
+        """Get the number of items to paginate by from request parameters"""
+        per_page = self.request.GET.get('per_page', '10')
+        try:
+            per_page = int(per_page)
+            # Limit to reasonable values
+            if per_page < 5:
+                per_page = 5
+            elif per_page > 100:
+                per_page = 100
+        except (ValueError, TypeError):
+            per_page = 10
+        return per_page
     
     def get_queryset(self):
         # First apply the ProgramManagerAccessMixin filtering
@@ -434,6 +467,11 @@ class EnrollmentListView(ProgramManagerAccessMixin, ListView):
         context['current_status'] = self.request.GET.get('status', '')
         context['client_search'] = self.request.GET.get('client_search', '')
         context['program_search'] = self.request.GET.get('program_search', '')
+        context['per_page'] = self.request.GET.get('per_page', '10')
+        
+        # Force pagination to be enabled if there are any results
+        if context.get('paginator') and context['paginator'].count > 0:
+            context['is_paginated'] = True
         
         return context
 
@@ -453,6 +491,33 @@ class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
     form_class = EnrollmentForm
     template_name = 'core/enrollment_form.html'
     success_url = reverse_lazy('core:enrollments')
+    
+    def form_valid(self, form):
+        """Override form_valid to add audit logging"""
+        response = super().form_valid(form)
+        
+        # Create audit log entry
+        try:
+            from .models import create_audit_log
+            create_audit_log(
+                entity_name='Enrollment',
+                entity_id=self.object.external_id,
+                action='create',
+                changed_by=self.request.user,
+                diff_data={
+                    'client': str(self.object.client),
+                    'program': str(self.object.program),
+                    'start_date': str(self.object.start_date),
+                    'status': self.object.status
+                }
+            )
+        except Exception as e:
+            # Log error but don't break the enrollment creation
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error creating audit log for enrollment: {e}")
+        
+        return response
     
     def get_form_kwargs(self):
         """Filter programs and clients to only assigned ones for Program Managers"""
@@ -533,10 +598,26 @@ class EnrollmentUpdateView(ProgramManagerAccessMixin, UpdateView):
         return context
     
     def form_valid(self, form):
-        """Set the updated_by field before saving"""
+        """Set the updated_by field before saving and add audit logging"""
         enrollment = form.save(commit=False)
         enrollment.updated_by = self.request.user.get_full_name() or self.request.user.username
         enrollment.save()
+        
+        # Create audit log entry
+        from .models import create_audit_log
+        create_audit_log(
+            entity_name='Enrollment',
+            entity_id=enrollment.external_id,
+            action='update',
+            changed_by=self.request.user,
+            diff_data={
+                'client': str(enrollment.client),
+                'program': str(enrollment.program),
+                'start_date': str(enrollment.start_date),
+                'end_date': str(enrollment.end_date) if enrollment.end_date else None,
+                'status': enrollment.status
+            }
+        )
         
         messages.success(self.request, 'Enrollment updated successfully.')
         return redirect(self.success_url)
@@ -570,6 +651,22 @@ class EnrollmentDeleteView(ProgramManagerAccessMixin, DeleteView):
             
             client_name = f"{enrollment.client.first_name} {enrollment.client.last_name}"
             program_name = enrollment.program.name
+            
+            # Create audit log entry before deletion
+            from .models import create_audit_log
+            create_audit_log(
+                entity_name='Enrollment',
+                entity_id=enrollment.external_id,
+                action='delete',
+                changed_by=request.user,
+                diff_data={
+                    'client': str(enrollment.client),
+                    'program': str(enrollment.program),
+                    'start_date': str(enrollment.start_date),
+                    'end_date': str(enrollment.end_date) if enrollment.end_date else None,
+                    'status': enrollment.status
+                }
+            )
             
             # Delete the enrollment
             enrollment.delete()
@@ -961,6 +1058,23 @@ def bulk_delete_enrollments(request):
                 'error': 'No enrollments found with the provided IDs'
             }, status=404)
         
+        # Create audit log entries for each enrollment before deletion
+        from .models import create_audit_log
+        for enrollment in enrollments_to_delete:
+            create_audit_log(
+                entity_name='Enrollment',
+                entity_id=enrollment.external_id,
+                action='delete',
+                changed_by=request.user,
+                diff_data={
+                    'client': str(enrollment.client),
+                    'program': str(enrollment.program),
+                    'start_date': str(enrollment.start_date),
+                    'end_date': str(enrollment.end_date) if enrollment.end_date else None,
+                    'status': enrollment.status
+                }
+            )
+        
         # Delete the enrollments
         enrollments_to_delete.delete()
         
@@ -1085,7 +1199,19 @@ def search_programs(request):
         
         if not search_term:
             # If no query, return all active programs (limit to 20 for performance)
-            programs = Program.objects.filter(status='active')[:20]
+            queryset = Program.objects.filter(status='active')
+            
+            # Apply program manager filtering for empty search too
+            if request.user.is_authenticated and not request.user.is_superuser:
+                try:
+                    staff = request.user.staff_profile
+                    if staff.is_program_manager():
+                        assigned_programs = staff.get_assigned_programs()
+                        queryset = queryset.filter(id__in=assigned_programs.values_list('id', flat=True))
+                except:
+                    pass
+            
+            programs = queryset[:20]
             programs_data = []
             for program in programs:
                 programs_data.append({
@@ -1102,15 +1228,15 @@ def search_programs(request):
         # Filter programs based on user's access level
         queryset = Program.objects.filter(status='active')
         
-        # Apply program manager filtering if needed (temporarily disabled for testing)
-        # if request.user.is_authenticated and not request.user.is_superuser:
-        #     try:
-        #         staff = request.user.staff_profile
-        #         if staff.is_program_manager():
-        #             assigned_programs = staff.get_assigned_programs()
-        #             queryset = queryset.filter(id__in=assigned_programs.values_list('id', flat=True))
-        #     except:
-        #         pass
+        # Apply program manager filtering
+        if request.user.is_authenticated and not request.user.is_superuser:
+            try:
+                staff = request.user.staff_profile
+                if staff.is_program_manager():
+                    assigned_programs = staff.get_assigned_programs()
+                    queryset = queryset.filter(id__in=assigned_programs.values_list('id', flat=True))
+            except:
+                pass
         
         # First get programs that start with the search term (highest priority)
         starts_with_programs = queryset.filter(

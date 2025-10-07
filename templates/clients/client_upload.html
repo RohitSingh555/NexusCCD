@@ -7,18 +7,78 @@
 <div class="min-h-screen bg-neutral-50 py-8">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <!-- Header -->
-        <div class="mb-8">
+        <div class="mb-6">
             <div class="flex items-center justify-between">
-                <div>
-                    <h1 class="text-3xl font-bold text-neutral-900 font-header">Upload Clients</h1>
-                    <p class="mt-2 text-lg text-neutral-600 font-body">Import client data from CSV or Excel files</p>
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-sm">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold text-gray-900">Upload Clients</h1>
+                        <p class="text-sm text-gray-600">Import client data from CSV or Excel files</p>
+                    </div>
                 </div>
-                <a href="{% url 'clients:list' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                    </svg>
-                    Back to Clients
-                </a>
+                <div class="flex items-center space-x-2">
+                    <a href="{% url 'clients:list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                        Back to Clients
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Information Section -->
+        <div class="mb-6 bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+            <div class="flex items-start space-x-3">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="flex-1">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3">Bulk Client Upload</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="flex items-start space-x-2">
+                            <div class="w-6 h-6 bg-green-100 rounded flex items-center justify-center flex-shrink-0">
+                                <svg class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-gray-900">CSV Format</h4>
+                                <p class="text-xs text-gray-600">Upload comma-separated values</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-2">
+                            <div class="w-6 h-6 bg-blue-100 rounded flex items-center justify-center flex-shrink-0">
+                                <svg class="w-3 h-3 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-gray-900">Excel Format</h4>
+                                <p class="text-xs text-gray-600">Upload .xlsx or .xls files</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start space-x-2">
+                            <div class="w-6 h-6 bg-orange-100 rounded flex items-center justify-center flex-shrink-0">
+                                <svg class="w-3 h-3 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <h4 class="text-sm font-semibold text-gray-900">Data Validation</h4>
+                                <p class="text-xs text-gray-600">Automatic duplicate detection</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -196,10 +256,6 @@
                                 <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
                                 phone_number
                             </div>
-                            <div class="flex items-center text-sm text-neutral-700 font-body">
-                                <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
-                                dob (YYYY-MM-DD)
-                            </div>
                         </div>
                     </div>
                     
@@ -207,6 +263,10 @@
                     <div>
                         <h3 class="text-lg font-bold text-neutral-800 font-subheader mb-4">Optional Columns</h3>
                         <div class="space-y-2">
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                dob (YYYY-MM-DD) - defaults to 1900-01-01 if not provided
+                            </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
                                 preferred_name
@@ -217,7 +277,7 @@
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                gender
+                                gender - defaults to "Unknown" if not provided
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
@@ -245,10 +305,6 @@
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                client_id
-                            </div>
-                            <div class="flex items-center text-sm text-neutral-600 font-body">
-                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
                                 street, city, state, zip, country, address_2
                             </div>
                         </div>
@@ -268,11 +324,11 @@
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                                permission_to_phone (true/false)
+                                permission_to_phone (true/false/yes/no/1/0)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                                permission_to_email (true/false)
+                                permission_to_email (true/false/yes/no/1/0)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
@@ -290,37 +346,42 @@
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
                                 comments
                             </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
+                                next_of_kin (simple text, not JSON)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
+                                emergency_contact (simple text, not JSON)
+                            </div>
                         </div>
                     </div>
                     
-                    <!-- Intake Columns -->
-                    <div>
-                        <h3 class="text-lg font-bold text-neutral-800 font-subheader mb-4">Intake Columns</h3>
-                        <div class="space-y-2">
-                            <div class="flex items-center text-sm text-neutral-600 font-body">
-                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                                source (SMIS, EMHWare, FFAI)
-                            </div>
-                            <div class="flex items-center text-sm text-neutral-600 font-body">
-                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                                program_name
-                            </div>
-                            <div class="flex items-center text-sm text-neutral-600 font-body">
-                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                                program_department
-                            </div>
-                            <div class="flex items-center text-sm text-neutral-600 font-body">
-                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                                intake_date (YYYY-MM-DD)
-                            </div>
-                            <div class="flex items-center text-sm text-neutral-600 font-body">
-                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
-                                intake_housing_status (homeless, at_risk, stably_housed, unknown)
+                </div>
+                
+                <!-- Important Notes -->
+                <div class="mt-8 pt-6 border-t border-neutral-200">
+                    <h3 class="text-lg font-bold text-neutral-800 font-subheader mb-4">Important Notes</h3>
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                        <div class="flex items-start">
+                            <svg class="w-5 h-5 text-blue-400 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                            </svg>
+                            <div class="text-sm text-blue-800">
+                                <p class="font-bold mb-2">Key Points:</p>
+                                <ul class="space-y-1 text-blue-700">
+                                    <li>• Only 4 columns are required: <strong>first_name, last_name, email, phone_number</strong></li>
+                                    <li>• Missing <strong>dob</strong> will default to 1900-01-01</li>
+                                    <li>• Missing <strong>gender</strong> will default to "Unknown"</li>
+                                    <li>• Permission fields accept: true/false/yes/no/1/0 (case insensitive)</li>
+                                    <li>• Avoid JSON format for next_of_kin and emergency_contact - use simple text</li>
+                                    <li>• All other fields are optional and can be added later</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
                 </div>
-                
+
                 <!-- Sample Download -->
                 <div class="mt-8 pt-6 border-t border-neutral-200">
                     <h3 class="text-lg font-bold text-neutral-800 font-subheader mb-4">Sample Files</h3>

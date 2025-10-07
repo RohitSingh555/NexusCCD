@@ -69,6 +69,58 @@
         background-color: #10b981;
         color: white;
     }
+    
+/* Value box selection styles - Much stronger */
+.value-box {
+    position: relative;
+    border-radius: 0.5rem;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+    cursor: pointer;
+}
+
+.value-box:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Selected state - Less dense border */
+.value-box.selected {
+    border: 2px solid #10b981 !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2) !important;
+    background-color: #d1fae5 !important;
+    transform: scale(1.01) !important;
+}
+
+.value-box.selected .bg-primary-50,
+.value-box.selected .bg-secondary-50 {
+    background-color: #d1fae5 !important;
+    border-color: #10b981 !important;
+}
+
+.value-box.selected::after {
+    content: "✓";
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background-color: #10b981;
+    color: white;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    z-index: 10;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Make sure the inner content doesn't interfere */
+.value-box > div {
+    pointer-events: none;
+}
 </style>
 {% endblock %}
 
@@ -92,15 +144,6 @@
                             <p class="mt-2 text-neutral-600">Select which information to keep from each client to create a merged client</p>
                         </div>
                     </div>
-                </div>
-                <div class="flex space-x-3">
-                    <a href="{% url 'clients:dedupe' %}" 
-                       class="inline-flex items-center px-4 py-2 border border-neutral-300 rounded-md shadow-sm text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                        </svg>
-                        Back to Duplicates
-                    </a>
                 </div>
             </div>
         </div>
@@ -190,358 +233,91 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <!-- First Name -->
+                        {% for field_name, field_data in fields_with_values.items %}
                         <tr class="border-b border-neutral-100">
-                            <td class="py-3 px-4 font-medium text-neutral-700">First Name</td>
+                            <td class="py-3 px-4 font-medium text-neutral-700">{{ field_data.label }}</td>
                             <td class="py-3 px-4 text-center">
-                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
-                                    {{ primary_client.first_name }}
+                                <div class="value-box cursor-pointer transition-all duration-200 hover:shadow-md {% if field_data.has_primary and not field_data.has_duplicate %}selected{% elif field_data.has_primary %}selected{% endif %}" 
+                                     data-field="{{ field_name }}" 
+                                     data-source="primary">
+                                    <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
+                                        {% if field_data.has_primary %}
+                                            {% if field_name == 'dob' %}
+                                                {{ field_data.primary_value|date:"M d, Y" }}
+                                            {% elif field_name == 'permission_to_phone' or field_name == 'permission_to_email' %}
+                                                {% if field_data.primary_value %}Yes{% else %}No{% endif %}
+                                            {% elif field_name == 'addresses' %}
+                                                {% for address in field_data.primary_value %}
+                                                    <div class="text-xs">{{ address.type|title }}: {{ address.street }}, {{ address.city }}, {{ address.state }} {{ address.zip }}</div>
+                                                {% endfor %}
+                                            {% elif field_name == 'next_of_kin' or field_name == 'emergency_contact' %}
+                                                {% for key, value in field_data.primary_value.items %}
+                                                    {% if value %}<div class="text-xs"><strong>{{ key|title }}:</strong> {{ value }}</div>{% endif %}
+                                                {% endfor %}
+                                            {% elif field_name == 'support_workers' %}
+                                                {% for worker in field_data.primary_value %}
+                                                    <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-1 mb-1">{{ worker }}</span>
+                                                {% endfor %}
+                                            {% elif field_name == 'languages_spoken' %}
+                                                {% for language in field_data.primary_value %}
+                                                    <span class="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded mr-1 mb-1">{{ language }}</span>
+                                                {% endfor %}
+                                            {% else %}
+                                                {{ field_data.primary_value|default:"—" }}
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-neutral-400">—</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-xs text-center mt-1 font-medium text-primary-600">Original Client</div>
                                 </div>
                             </td>
                             <td class="py-3 px-4 text-center">
-                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
-                                    {{ duplicate_client.first_name }}
+                                <div class="value-box cursor-pointer transition-all duration-200 hover:shadow-md {% if not field_data.has_primary and field_data.has_duplicate %}selected{% endif %}" 
+                                     data-field="{{ field_name }}" 
+                                     data-source="duplicate">
+                                    <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
+                                        {% if field_data.has_duplicate %}
+                                            {% if field_name == 'dob' %}
+                                                {{ field_data.duplicate_value|date:"M d, Y" }}
+                                            {% elif field_name == 'permission_to_phone' or field_name == 'permission_to_email' %}
+                                                {% if field_data.duplicate_value %}Yes{% else %}No{% endif %}
+                                            {% elif field_name == 'addresses' %}
+                                                {% for address in field_data.duplicate_value %}
+                                                    <div class="text-xs">{{ address.type|title }}: {{ address.street }}, {{ address.city }}, {{ address.state }} {{ address.zip }}</div>
+                                                {% endfor %}
+                                            {% elif field_name == 'next_of_kin' or field_name == 'emergency_contact' %}
+                                                {% for key, value in field_data.duplicate_value.items %}
+                                                    {% if value %}<div class="text-xs"><strong>{{ key|title }}:</strong> {{ value }}</div>{% endif %}
+                                                {% endfor %}
+                                            {% elif field_name == 'support_workers' %}
+                                                {% for worker in field_data.duplicate_value %}
+                                                    <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-1 mb-1">{{ worker }}</span>
+                                                {% endfor %}
+                                            {% elif field_name == 'languages_spoken' %}
+                                                {% for language in field_data.duplicate_value %}
+                                                    <span class="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded mr-1 mb-1">{{ language }}</span>
+                                                {% endfor %}
+                                            {% else %}
+                                                {{ field_data.duplicate_value|default:"—" }}
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-neutral-400">—</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="text-xs text-center mt-1 font-medium text-secondary-600">Duplicate Client</div>
                                 </div>
                             </td>
                             <td class="py-3 px-4 text-center">
-                                <div class="flex justify-center space-x-2">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="first_name" value="primary" id="first_name_primary" checked class="mr-1">
-                                        <span class="text-xs text-primary-600">A</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="first_name" value="duplicate" id="first_name_duplicate" class="mr-1">
-                                        <span class="text-xs text-secondary-600">B</span>
-                                    </label>
-                                </div>
+                                <input type="hidden" name="{{ field_name }}" value="{% if field_data.has_primary and not field_data.has_duplicate %}primary{% elif field_data.has_primary %}primary{% elif field_data.has_duplicate %}duplicate{% endif %}" id="{{ field_name }}_hidden">
                             </td>
                         </tr>
-                        <!-- Last Name -->
-                        <tr class="border-b border-neutral-100">
-                            <td class="py-3 px-4 font-medium text-neutral-700">Last Name</td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
-                                    {{ primary_client.last_name }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
-                                    {{ duplicate_client.last_name }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="flex justify-center space-x-2">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="last_name" value="primary" id="last_name_primary" checked class="mr-1">
-                                        <span class="text-xs text-primary-600">A</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="last_name" value="duplicate" id="last_name_duplicate" class="mr-1">
-                                        <span class="text-xs text-secondary-600">B</span>
-                                    </label>
-                                </div>
-                            </td>
-                        </tr>
-                        <!-- Date of Birth -->
-                        <tr class="border-b border-neutral-100">
-                            <td class="py-3 px-4 font-medium text-neutral-700">Date of Birth</td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
-                                    {{ primary_client.dob|date:"M d, Y" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
-                                    {{ duplicate_client.dob|date:"M d, Y" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="flex justify-center space-x-2">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="dob" value="primary" id="dob_primary" checked class="mr-1">
-                                        <span class="text-xs text-primary-600">A</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="dob" value="duplicate" id="dob_duplicate" class="mr-1">
-                                        <span class="text-xs text-secondary-600">B</span>
-                                    </label>
-                                </div>
-                            </td>
-                        </tr>
-                        
-                        <!-- Gender -->
-                        <tr class="border-b border-neutral-100">
-                            <td class="py-3 px-4 font-medium text-neutral-700">Gender</td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
-                                    {{ primary_client.gender }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
-                                    {{ duplicate_client.gender }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="flex justify-center space-x-2">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="gender" value="primary" id="gender_primary" checked class="mr-1">
-                                        <span class="text-xs text-primary-600">A</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="gender" value="duplicate" id="gender_duplicate" class="mr-1">
-                                        <span class="text-xs text-secondary-600">B</span>
-                                    </label>
-                                </div>
-                            </td>
-                        </tr>
-                        
-                        <!-- Email -->
-                        <tr class="border-b border-neutral-100">
-                            <td class="py-3 px-4 font-medium text-neutral-700">Email</td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
-                                    {{ primary_client.email|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
-                                    {{ duplicate_client.email|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="flex justify-center space-x-2">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="email" value="primary" id="email_primary" checked class="mr-1">
-                                        <span class="text-xs text-primary-600">A</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="email" value="duplicate" id="email_duplicate" class="mr-1">
-                                        <span class="text-xs text-secondary-600">B</span>
-                                    </label>
-                                </div>
-                            </td>
-                        </tr>
-                        
-                        <!-- Phone -->
-                        <tr class="border-b border-neutral-100">
-                            <td class="py-3 px-4 font-medium text-neutral-700">Phone</td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
-                                    {{ primary_client.phone|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
-                                    {{ duplicate_client.phone|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="flex justify-center space-x-2">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="phone" value="primary" id="phone_primary" checked class="mr-1">
-                                        <span class="text-xs text-primary-600">A</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="phone" value="duplicate" id="phone_duplicate" class="mr-1">
-                                        <span class="text-xs text-secondary-600">B</span>
-                                    </label>
-                                </div>
-                            </td>
-                        </tr>
-                        
-                        <!-- Preferred Name -->
-                        <tr class="border-b border-neutral-100">
-                            <td class="py-3 px-4 font-medium text-neutral-700">Preferred Name</td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
-                                    {{ primary_client.preferred_name|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
-                                    {{ duplicate_client.preferred_name|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="flex justify-center space-x-2">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="preferred_name" value="primary" id="preferred_name_primary" checked class="mr-1">
-                                        <span class="text-xs text-primary-600">A</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="preferred_name" value="duplicate" id="preferred_name_duplicate" class="mr-1">
-                                        <span class="text-xs text-secondary-600">B</span>
-                                    </label>
-                                </div>
-                            </td>
-                        </tr>
-                        
-                        <!-- Client ID -->
-                        <tr class="border-b border-neutral-100">
-                            <td class="py-3 px-4 font-medium text-neutral-700">Client ID</td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
-                                    {{ primary_client.client_id|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
-                                    {{ duplicate_client.client_id|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="flex justify-center space-x-2">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="client_id" value="primary" id="client_id_primary" checked class="mr-1">
-                                        <span class="text-xs text-primary-600">A</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="client_id" value="duplicate" id="client_id_duplicate" class="mr-1">
-                                        <span class="text-xs text-secondary-600">B</span>
-                                    </label>
-                                </div>
-                            </td>
-                        </tr>
-                        
-                        <!-- Alias -->
-                        <tr class="border-b border-neutral-100">
-                            <td class="py-3 px-4 font-medium text-neutral-700">Alias</td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
-                                    {{ primary_client.alias|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
-                                    {{ duplicate_client.alias|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="flex justify-center space-x-2">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="alias" value="primary" id="alias_primary" checked class="mr-1">
-                                        <span class="text-xs text-primary-600">A</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="alias" value="duplicate" id="alias_duplicate" class="mr-1">
-                                        <span class="text-xs text-secondary-600">B</span>
-                                    </label>
-                                </div>
-                            </td>
-                        </tr>
-                        
-                        <!-- Sexual Orientation -->
-                        <tr class="border-b border-neutral-100">
-                            <td class="py-3 px-4 font-medium text-neutral-700">Sexual Orientation</td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
-                                    {{ primary_client.sexual_orientation|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
-                                    {{ duplicate_client.sexual_orientation|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="flex justify-center space-x-2">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="sexual_orientation" value="primary" id="sexual_orientation_primary" checked class="mr-1">
-                                        <span class="text-xs text-primary-600">A</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="sexual_orientation" value="duplicate" id="sexual_orientation_duplicate" class="mr-1">
-                                        <span class="text-xs text-secondary-600">B</span>
-                                    </label>
-                                </div>
-                            </td>
-                        </tr>
-                        
-                        <!-- Citizenship Status -->
-                        <tr class="border-b border-neutral-100">
-                            <td class="py-3 px-4 font-medium text-neutral-700">Citizenship Status</td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
-                                    {{ primary_client.citizenship_status|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
-                                    {{ duplicate_client.citizenship_status|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="flex justify-center space-x-2">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="citizenship_status" value="primary" id="citizenship_status_primary" checked class="mr-1">
-                                        <span class="text-xs text-primary-600">A</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="citizenship_status" value="duplicate" id="citizenship_status_duplicate" class="mr-1">
-                                        <span class="text-xs text-secondary-600">B</span>
-                                    </label>
-                                </div>
-                            </td>
-                        </tr>
-                        
-                        <!-- Comments -->
-                        <tr class="border-b border-neutral-100">
-                            <td class="py-3 px-4 font-medium text-neutral-700">Comments</td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
-                                    {{ primary_client.comments|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
-                                    {{ duplicate_client.comments|default:"Not provided" }}
-                                </div>
-                            </td>
-                            <td class="py-3 px-4 text-center">
-                                <div class="flex justify-center space-x-2">
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="comments" value="primary" id="comments_primary" checked class="mr-1">
-                                        <span class="text-xs text-primary-600">A</span>
-                                    </label>
-                                    <label class="flex items-center cursor-pointer">
-                                        <input type="radio" name="comments" value="duplicate" id="comments_duplicate" class="mr-1">
-                                        <span class="text-xs text-secondary-600">B</span>
-                                    </label>
-                                </div>
-                            </td>
-                        </tr>
+                        {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- Action Section -->
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h3 class="text-lg font-semibold text-neutral-900">Merge Clients</h3>
-                    <p class="text-sm text-neutral-600">Create a single client with the selected information from both clients</p>
-                </div>
-                <div class="flex space-x-3">
-                    <button onclick="mergeClients()" 
-                            class="inline-flex items-center px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm font-semibold transition-all duration-200">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
-                        </svg>
-                        Confirm Merge
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Notes Section -->
-            <div class="mt-4">
-                <label for="merge-notes" class="block text-sm font-medium text-neutral-700 mb-2">Merge Notes (optional)</label>
-                <textarea id="merge-notes" rows="3" 
-                          class="w-full px-3 py-2 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" 
-                          placeholder="Add any notes about this merge..."></textarea>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -564,7 +340,7 @@
                 <button onclick="closeConfirmationModal()" class="px-4 py-2 bg-neutral-300 text-neutral-800 rounded-md hover:bg-neutral-400 mr-2">
                     Cancel
                 </button>
-                <button onclick="confirmMerge()" class="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">
+                <button onclick="console.log('Confirm Merge button clicked'); confirmMerge();" class="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">
                     Confirm Merge
                 </button>
             </div>
@@ -573,10 +349,39 @@
 </div>
 
 {% endblock %}
-
 {% block extra_js %}
 <script>
 const duplicateId = {{ duplicate.id }};
+
+function showSuccessMessage(message) {
+    // Create success notification
+    const notification = document.createElement('div');
+    notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300';
+    notification.style.transform = 'translateX(100%)';
+    notification.innerHTML = `
+        <div class="flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            ${message}
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.style.transform = 'translateX(0)';
+    }, 100);
+    
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 300);
+    }, 3000);
+}
 
 function mergeClients() {
     // Show confirmation modal first
@@ -588,19 +393,28 @@ function closeConfirmationModal() {
 }
 
 function confirmMerge() {
+    console.log('=== CONFIRM MERGE FUNCTION CALLED ===');
+    
     const notes = document.getElementById('merge-notes').value;
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
     
-    // Collect all selected field values
-    const selectedFields = {};
-    const fieldNames = ['first_name', 'last_name', 'dob', 'gender', 'email', 'phone', 'preferred_name', 'client_id', 'alias', 'sexual_orientation', 'citizenship_status', 'comments'];
+    console.log('Notes:', notes);
+    console.log('CSRF Token:', csrfToken);
+    console.log('Duplicate ID:', duplicateId);
     
-    fieldNames.forEach(fieldName => {
-        const selected = document.querySelector(`input[name="${fieldName}"]:checked`);
-        if (selected) {
-            selectedFields[fieldName] = selected.value;
+    // Collect all selected field values from hidden inputs
+    const selectedFields = {};
+    const hiddenInputs = document.querySelectorAll('input[type="hidden"][name]');
+    console.log('Found hidden inputs:', hiddenInputs.length);
+    
+    hiddenInputs.forEach(input => {
+        console.log('Hidden input:', input.name, '=', input.value);
+        if (input.value) {
+            selectedFields[input.name] = input.value;
         }
     });
+    
+    console.log('Selected fields:', selectedFields);
     
     fetch(`/clients/dedupe/merge/${duplicateId}/process/`, {
         method: 'POST',
@@ -616,37 +430,24 @@ function confirmMerge() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Show success message and redirect
-            window.location.href = '/clients/dedupe/?success=merge&client=' + encodeURIComponent(data.merged_client_name);
+            // Show success message like other actions
+            showSuccessMessage(data.message);
+            // Close modal and redirect after a short delay
+            setTimeout(() => {
+                window.location.href = '/clients/dedupe/';
+            }, 1500);
         } else {
             alert('Error: ' + (data.error || 'Unknown error'));
         }
     })
     .catch(error => {
+        console.error('Error:', error);
         alert('An error occurred while processing the request.');
     });
     
     closeConfirmationModal();
 }
 
-// Add visual feedback for radio button changes
-document.addEventListener('DOMContentLoaded', function() {
-    const radioButtons = document.querySelectorAll('input[type="radio"]');
-    radioButtons.forEach(radio => {
-        radio.addEventListener('change', function() {
-            const fieldName = this.name;
-            const selectedValue = this.value;
-            
-            // Update visual feedback
-            document.querySelectorAll(`[id*="${fieldName}"]`).forEach(element => {
-                if (element.id.includes(selectedValue)) {
-                    element.classList.add('selected');
-                } else {
-                    element.classList.remove('selected');
-                }
-            });
-        });
-    });
-});
 </script>
 {% endblock %}
+

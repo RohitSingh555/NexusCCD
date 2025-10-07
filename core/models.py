@@ -604,6 +604,30 @@ class AuditLog(BaseModel):
         return f"{self.entity} {self.action} - {self.changed_at}"
 
 
+def create_audit_log(entity_name, entity_id, action, changed_by=None, diff_data=None):
+    """Create an audit log entry"""
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    
+    # Get the staff profile if changed_by is a User
+    staff_profile = None
+    if changed_by and hasattr(changed_by, 'staff_profile'):
+        staff_profile = changed_by.staff_profile
+    elif changed_by and isinstance(changed_by, Staff):
+        staff_profile = changed_by
+    
+    # Create the audit log entry
+    audit_log = AuditLog.objects.create(
+        entity=entity_name,
+        entity_id=entity_id,
+        action=action,
+        changed_by=staff_profile,
+        diff_json=diff_data or {}
+    )
+    
+    return audit_log
+
+
 class PendingChange(BaseModel):
     STATUS_CHOICES = [
         ('pending', 'Pending'),

@@ -266,7 +266,7 @@
                         <div class="relative" x-data="{ userMenuOpen: false }">
                             <button @click="userMenuOpen = !userMenuOpen" class="max-w-xs bg-white flex items-center text-sm rounded-xl px-3 py-2 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200">
                                 <div class="h-8 w-8 rounded-lg flex items-center justify-center shadow-sm overflow-hidden">
-                                    <img x-show="user && user.profile_photo" :src="user.profile_photo" :alt="userName" class="h-8 w-8 object-cover rounded-lg">
+                                    <img x-show="user && user.profile_photo" :src="user ? user.profile_photo : ''" :alt="userName" class="h-8 w-8 object-cover rounded-lg">
                                     <div x-show="!user || !user.profile_photo" class="h-8 w-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-full flex items-center justify-center">
                                         <span class="text-white font-bold text-xs" x-text="userInitials"></span>
                                     </div>

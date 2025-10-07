@@ -11,7 +11,7 @@ class ClientForm(forms.ModelForm):
             'sexual_orientation', 'languages_spoken', 'ethnicity', 'citizenship_status', 
             'indigenous_status', 'country_of_birth', 'contact_information', 'addresses', 'image',
             'profile_picture', 'address_2', 'permission_to_phone', 'permission_to_email',
-            'phone_work', 'phone_alt', 'client_id', 'medical_conditions', 'primary_diagnosis',
+            'phone_work', 'phone_alt', 'medical_conditions', 'primary_diagnosis',
             'support_workers', 'next_of_kin', 'emergency_contact', 'comments'
         ]
         widgets = {

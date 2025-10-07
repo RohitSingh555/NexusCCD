@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Selection Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .value-box {
+            position: relative;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease;
+            border: 2px solid transparent;
+        }
+        
+        .value-box:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .value-box.selected {
+            border: 3px solid #10b981 !important;
+            box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.4) !important;
+            background-color: #d1fae5 !important;
+        }
+        
+        .value-box.selected::after {
+            content: "✓";
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            background-color: #10b981;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body class="p-8">
+    <h1 class="text-2xl font-bold mb-4">Selection Test</h1>
+    
+    <div class="grid grid-cols-2 gap-4">
+        <div class="value-box cursor-pointer" 
+             data-field="test_field" 
+             data-source="primary"
+             onclick="selectValue(this, 'test_field', 'primary')">
+            <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
+                Primary Value
+            </div>
+            <div class="text-xs text-center mt-1 font-medium text-primary-600">Original Client</div>
+        </div>
+        
+        <div class="value-box cursor-pointer" 
+             data-field="test_field" 
+             data-source="duplicate"
+             onclick="selectValue(this, 'test_field', 'duplicate')">
+            <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
+                Duplicate Value
+            </div>
+            <div class="text-xs text-center mt-1 font-medium text-secondary-600">Duplicate Client</div>
+        </div>
+    </div>
+    
+    <input type="hidden" name="test_field" value="primary" id="test_field_hidden">
+    
+    <script>
+    function selectValue(element, fieldName, source) {
+        console.log('Selecting value:', fieldName, source);
+        
+        // Remove selected class from all value boxes for this field
+        const allValueBoxes = document.querySelectorAll(`[data-field="${fieldName}"]`);
+        console.log('Found value boxes:', allValueBoxes.length);
+        allValueBoxes.forEach(box => {
+            box.classList.remove('selected');
+        });
+        
+        // Add selected class to clicked element
+        element.classList.add('selected');
+        console.log('Added selected class to element');
+        
+        // Update the hidden input value
+        const hiddenInput = document.getElementById(`${fieldName}_hidden`);
+        if (hiddenInput) {
+            hiddenInput.value = source;
+            console.log('Updated hidden input:', hiddenInput.name, '=', hiddenInput.value);
+        } else {
+            console.log('Hidden input not found:', `${fieldName}_hidden`);
+        }
+        
+        // Visual feedback
+        element.style.transform = 'scale(1.02)';
+        setTimeout(() => {
+            element.style.transform = '';
+        }, 200);
+    }
+    </script>
+</body>
+</html>

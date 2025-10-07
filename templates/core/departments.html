@@ -58,7 +58,7 @@
 
     <!-- Department Stats -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 relative">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
                     <div class="w-12 h-12 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm">
@@ -67,14 +67,30 @@
                         </svg>
                     </div>
                 </div>
-                <div class="ml-4">
+                <div class="ml-4 flex-1">
                     <p class="text-sm font-bold text-neutral-600 font-subheader">Total Departments</p>
                     <p class="text-2xl font-black text-neutral-900 font-header">{{ total_departments }}</p>
                 </div>
             </div>
+            <!-- Info Icon -->
+            <div class="absolute top-4 right-4">
+                <div class="relative group">
+                    <button class="w-5 h-5 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors duration-200">
+                        <svg class="w-3 h-3 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                    <!-- Tooltip -->
+                    <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                        <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
+                        <p class="font-medium mb-1">Total Departments</p>
+                        <p class="text-gray-300">This shows the total number of departments in your organization that manage different programs and services.</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 relative">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
                     <div class="w-12 h-12 bg-gradient-to-br from-brand-lime to-brand-moss rounded-xl flex items-center justify-center shadow-sm">
@@ -83,14 +99,30 @@
                         </svg>
                     </div>
                 </div>
-                <div class="ml-4">
+                <div class="ml-4 flex-1">
                     <p class="text-sm font-bold text-neutral-600 font-subheader">Total Programs</p>
                     <p class="text-2xl font-black text-neutral-900 font-header">{{ total_programs }}</p>
                 </div>
             </div>
+            <!-- Info Icon -->
+            <div class="absolute top-4 right-4">
+                <div class="relative group">
+                    <button class="w-5 h-5 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors duration-200">
+                        <svg class="w-3 h-3 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                    <!-- Tooltip -->
+                    <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                        <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
+                        <p class="font-medium mb-1">Total Programs</p>
+                        <p class="text-gray-300">This shows the total number of programs available across all departments that clients can enroll in.</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 relative">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
                     <div class="w-12 h-12 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-xl flex items-center justify-center shadow-sm">
@@ -99,9 +131,25 @@
                         </svg>
                     </div>
                 </div>
-                <div class="ml-4">
+                <div class="ml-4 flex-1">
                     <p class="text-sm font-bold text-neutral-600 font-subheader">Total Staff</p>
                     <p class="text-2xl font-black text-neutral-900 font-header">{{ total_staff }}</p>
+                </div>
+            </div>
+            <!-- Info Icon -->
+            <div class="absolute top-4 right-4">
+                <div class="relative group">
+                    <button class="w-5 h-5 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors duration-200">
+                        <svg class="w-3 h-3 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                    <!-- Tooltip -->
+                    <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                        <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
+                        <p class="font-medium mb-1">Total Staff</p>
+                        <p class="text-gray-300">This shows the total number of staff members across all departments who have access to the system.</p>
+                    </div>
                 </div>
             </div>
         </div>

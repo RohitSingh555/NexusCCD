@@ -1,0 +1,377 @@
+{% extends 'dashboard_base.html' %}
+{% load static %}
+
+{% block title %}Merge Duplicate Clients{% endblock %}
+{% block page_title %}Merge Duplicate Clients{% endblock %}
+
+{% block extra_css %}
+<style>
+    .client-card {
+        transition: all 0.2s ease-in-out;
+    }
+    
+    .client-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .field-comparison {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        align-items: center;
+    }
+    
+    .field-label {
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 0.5rem;
+    }
+    
+    .field-value {
+        padding: 0.75rem;
+        background-color: #f9fafb;
+        border-radius: 0.5rem;
+        border: 1px solid #e5e7eb;
+        min-height: 2.5rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .field-value.selected {
+        background-color: #d1fae5;
+        border-color: #10b981;
+    }
+    
+    .merge-option {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .merge-option input[type="radio"] {
+        margin: 0 0.5rem;
+    }
+    
+    .merge-option label {
+        cursor: pointer;
+        padding: 0.5rem;
+        border-radius: 0.5rem;
+        transition: all 0.2s;
+    }
+    
+    .merge-option label:hover {
+        background-color: #f3f4f6;
+    }
+    
+    .merge-option input[type="radio"]:checked + label {
+        background-color: #10b981;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- CSRF Token -->
+{% csrf_token %}
+<div class="min-h-screen bg-neutral-50 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="flex items-center space-x-3">
+                        <div class="p-3 bg-primary-100 rounded-xl">
+                            <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold text-neutral-900">Merge Duplicate Clients</h1>
+                            <p class="text-neutral-600">Combine information from both clients into a single record</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Match Information -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-neutral-900">Merge Information</h3>
+                    <div class="mt-2 flex items-center space-x-6 text-sm text-neutral-600">
+                        <span>Similarity: {{ similarity_score }}%</span>
+                        <span>Match Type: {{ match_type }}</span>
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
+                            {% if confidence_level == 'high' %}bg-red-100 text-red-800
+                            {% elif confidence_level == 'medium' %}bg-yellow-100 text-yellow-800
+                            {% else %}bg-green-100 text-green-800{% endif %}">
+                            {{ confidence_level|title }} Confidence
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Client Headers -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
+            <div class="grid grid-cols-2 gap-8">
+                <!-- Primary Client -->
+                <div class="text-center">
+                    <div class="bg-primary-50 border-2 border-primary-300 rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-center mb-3">
+                            <div class="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center">
+                                <span class="text-white font-bold text-sm">A</span>
+                            </div>
+                        </div>
+                        <h3 class="text-lg font-bold text-primary-800">{{ primary_client.first_name }} {{ primary_client.last_name }}</h3>
+                        <p class="text-sm text-primary-600">Original Client</p>
+                    </div>
+                </div>
+
+                <!-- Duplicate Client -->
+                <div class="text-center">
+                    <div class="bg-secondary-50 border-2 border-secondary-300 rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center justify-center mb-3">
+                            <div class="w-8 h-8 bg-secondary-500 rounded-full flex items-center justify-center">
+                                <span class="text-white font-bold text-sm">B</span>
+                            </div>
+                        </div>
+                        <h3 class="text-lg font-bold text-secondary-800">{{ duplicate_client.first_name }} {{ duplicate_client.last_name }}</h3>
+                        <p class="text-sm text-secondary-600">Duplicate Client</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Field Comparison -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
+            <h3 class="text-lg font-semibold text-neutral-900 mb-6">Select Information to Keep</h3>
+            <p class="text-sm text-neutral-600 mb-6">Choose which client's information to keep for each field. The selected information will be used in the final merged client.</p>
+            
+            <!-- Dynamic Field Comparison Table -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-neutral-200">
+                            <th class="text-left py-3 px-4 font-semibold text-neutral-700">Field</th>
+                            <th class="text-center py-3 px-4 font-semibold text-primary-800">Original Client</th>
+                            <th class="text-center py-3 px-4 font-semibold text-secondary-800">Duplicate Client</th>
+                            <th class="text-center py-3 px-4 font-semibold text-neutral-700">Select</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for field_name, field_data in fields_with_values.items %}
+                        <tr class="border-b border-neutral-100">
+                            <td class="py-3 px-4 font-medium text-neutral-700">{{ field_data.label }}</td>
+                            <td class="py-3 px-4 text-center">
+                                <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
+                                    {% if field_data.has_primary %}
+                                        {% if field_name == 'dob' %}
+                                            {{ field_data.primary_value|date:"M d, Y" }}
+                                        {% elif field_name == 'permission_to_phone' or field_name == 'permission_to_email' %}
+                                            {% if field_data.primary_value %}Yes{% else %}No{% endif %}
+                                        {% elif field_name == 'addresses' %}
+                                            {% for address in field_data.primary_value %}
+                                                <div class="text-xs">{{ address.type|title }}: {{ address.street }}, {{ address.city }}, {{ address.state }} {{ address.zip }}</div>
+                                            {% endfor %}
+                                        {% elif field_name == 'next_of_kin' or field_name == 'emergency_contact' %}
+                                            {% for key, value in field_data.primary_value.items %}
+                                                {% if value %}<div class="text-xs"><strong>{{ key|title }}:</strong> {{ value }}</div>{% endif %}
+                                            {% endfor %}
+                                        {% elif field_name == 'support_workers' %}
+                                            {% for worker in field_data.primary_value %}
+                                                <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-1 mb-1">{{ worker }}</span>
+                                            {% endfor %}
+                                        {% elif field_name == 'languages_spoken' %}
+                                            {% for language in field_data.primary_value %}
+                                                <span class="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded mr-1 mb-1">{{ language }}</span>
+                                            {% endfor %}
+                                        {% else %}
+                                            {{ field_data.primary_value|default:"—" }}
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-neutral-400">—</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
+                                    {% if field_data.has_duplicate %}
+                                        {% if field_name == 'dob' %}
+                                            {{ field_data.duplicate_value|date:"M d, Y" }}
+                                        {% elif field_name == 'permission_to_phone' or field_name == 'permission_to_email' %}
+                                            {% if field_data.duplicate_value %}Yes{% else %}No{% endif %}
+                                        {% elif field_name == 'addresses' %}
+                                            {% for address in field_data.duplicate_value %}
+                                                <div class="text-xs">{{ address.type|title }}: {{ address.street }}, {{ address.city }}, {{ address.state }} {{ address.zip }}</div>
+                                            {% endfor %}
+                                        {% elif field_name == 'next_of_kin' or field_name == 'emergency_contact' %}
+                                            {% for key, value in field_data.duplicate_value.items %}
+                                                {% if value %}<div class="text-xs"><strong>{{ key|title }}:</strong> {{ value }}</div>{% endif %}
+                                            {% endfor %}
+                                        {% elif field_name == 'support_workers' %}
+                                            {% for worker in field_data.duplicate_value %}
+                                                <span class="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-1 mb-1">{{ worker }}</span>
+                                            {% endfor %}
+                                        {% elif field_name == 'languages_spoken' %}
+                                            {% for language in field_data.duplicate_value %}
+                                                <span class="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded mr-1 mb-1">{{ language }}</span>
+                                            {% endfor %}
+                                        {% else %}
+                                            {{ field_data.duplicate_value|default:"—" }}
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-neutral-400">—</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <div class="flex justify-center space-x-2">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="radio" name="{{ field_name }}" value="primary" id="{{ field_name }}_primary" {% if field_data.has_primary and not field_data.has_duplicate %}checked{% elif field_data.has_primary %}checked{% endif %} class="mr-1">
+                                        <span class="text-xs text-primary-600">A</span>
+                                    </label>
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="radio" name="{{ field_name }}" value="duplicate" id="{{ field_name }}_duplicate" {% if not field_data.has_primary and field_data.has_duplicate %}checked{% endif %} class="mr-1">
+                                        <span class="text-xs text-secondary-600">B</span>
+                                    </label>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Action Section -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-neutral-900">Merge Clients</h3>
+                    <p class="text-sm text-neutral-600">Create a single client with the selected information from both clients</p>
+                </div>
+                <div class="flex space-x-3">
+                    <button onclick="history.back()" class="px-4 py-2 border border-neutral-300 rounded-md text-neutral-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-neutral-500">
+                        Cancel
+                    </button>
+                    <button onclick="mergeClients()" class="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500">
+                        Merge Clients
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Notes Section -->
+            <div class="mt-4">
+                <label for="merge-notes" class="block text-sm font-medium text-neutral-700 mb-2">Merge Notes (optional)</label>
+                <textarea id="merge-notes" rows="3" 
+                          class="w-full px-3 py-2 border border-neutral-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" 
+                          placeholder="Add any notes about this merge..."></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div id="confirmationModal" class="fixed inset-0 bg-neutral-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-center w-12 h-12 mx-auto bg-primary-100 rounded-full">
+                <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+            </div>
+            <div class="mt-2 text-center">
+                <h3 class="text-lg font-medium text-neutral-900">Confirm Merge</h3>
+                <div class="mt-2 px-7 py-3">
+                    <p class="text-sm text-neutral-500">
+                        Are you sure you want to merge these clients? This action cannot be undone. The duplicate client will be deleted and all information will be combined into the primary client.
+                    </p>
+                </div>
+                <div class="flex justify-center space-x-3 mt-4">
+                    <button onclick="closeConfirmationModal()" class="px-4 py-2 bg-neutral-300 text-neutral-700 rounded-md hover:bg-neutral-400">
+                        Cancel
+                    </button>
+                    <button onclick="confirmMerge()" class="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700">
+                        Confirm Merge
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function mergeClients() {
+    document.getElementById('confirmationModal').classList.remove('hidden');
+}
+
+function closeConfirmationModal() {
+    document.getElementById('confirmationModal').classList.add('hidden');
+}
+
+function confirmMerge() {
+    // Collect all form data
+    const formData = new FormData();
+    const selectedFields = {};
+    
+    // Get all radio buttons and collect selected values
+    const radioButtons = document.querySelectorAll('input[type="radio"]:checked');
+    radioButtons.forEach(radio => {
+        selectedFields[radio.name] = radio.value;
+    });
+    
+    // Get notes
+    const notes = document.getElementById('merge-notes').value;
+    
+    // Prepare data for submission
+    const data = {
+        selected_fields: selectedFields,
+        notes: notes
+    };
+    
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    // Show loading state
+    const confirmButton = document.querySelector('button[onclick="confirmMerge()"]');
+    const originalText = confirmButton.textContent;
+    confirmButton.textContent = 'Merging...';
+    confirmButton.disabled = true;
+    
+    // Submit the merge request
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            alert(data.message);
+            // Redirect to dedupe page
+            window.location.href = '{% url "clients:dedupe" %}';
+        } else {
+            alert('Error: ' + data.error);
+            // Reset button
+            confirmButton.textContent = originalText;
+            confirmButton.disabled = false;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while merging clients');
+        // Reset button
+        confirmButton.textContent = originalText;
+        confirmButton.disabled = false;
+    });
+}
+</script>
+{% endblock %}

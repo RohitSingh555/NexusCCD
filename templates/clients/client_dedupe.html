@@ -24,6 +24,208 @@
         box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
     }
     
+    /* Modal comparison content styling to match main page - More specific selectors */
+    #comparisonContent,
+    #comparisonContent * {
+        font-size: 12px !important;
+        line-height: 1.5 !important;
+    }
+    
+    #comparisonContent h1,
+    #comparisonContent .text-3xl {
+        font-size: 1.25rem !important;
+        font-weight: 600 !important;
+    }
+    
+    #comparisonContent h2,
+    #comparisonContent .text-2xl {
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+    }
+    
+    #comparisonContent h3,
+    #comparisonContent .text-xl {
+        font-size: 0.875rem !important;
+        font-weight: 600 !important;
+    }
+    
+    #comparisonContent h4,
+    #comparisonContent .text-lg {
+        font-size: 0.8125rem !important;
+        font-weight: 600 !important;
+    }
+    
+    #comparisonContent p,
+    #comparisonContent .text-base,
+    #comparisonContent .text-sm {
+        font-size: 0.75rem !important;
+        line-height: 1.4 !important;
+    }
+    
+    #comparisonContent .text-xs {
+        font-size: 0.625rem !important;
+    }
+    
+    /* Override any inline styles */
+    #comparisonContent [style*="font-size"] {
+        font-size: 0.75rem !important;
+    }
+    
+    /* Target specific comparison page elements */
+    #comparisonContent .client-card h3,
+    #comparisonContent .field-label,
+    #comparisonContent .field-value {
+        font-size: 0.75rem !important;
+    }
+    
+    #comparisonContent .comparison-section h4 {
+        font-size: 0.8125rem !important;
+    }
+    
+    #comparisonContent .text-gray-600,
+    #comparisonContent .text-gray-500 {
+        font-size: 0.625rem !important;
+    }
+    
+    /* Reduce padding and margins in comparison content */
+    #comparisonContent .p-6 {
+        padding: 1rem !important;
+    }
+    
+    #comparisonContent .p-8 {
+        padding: 1.5rem !important;
+    }
+    
+    #comparisonContent .mb-8 {
+        margin-bottom: 1.5rem !important;
+    }
+    
+    #comparisonContent .mb-6 {
+        margin-bottom: 1rem !important;
+    }
+    
+    #comparisonContent .space-y-4 > * + * {
+        margin-top: 0.75rem !important;
+    }
+    
+    #comparisonContent .space-y-2 > * + * {
+        margin-top: 0.5rem !important;
+    }
+    
+    /* Make comparison content more compact */
+    #comparisonContent .grid {
+        gap: 0.75rem !important;
+    }
+    
+    #comparisonContent .gap-8 {
+        gap: 1rem !important;
+    }
+    
+    #comparisonContent .gap-6 {
+        gap: 0.75rem !important;
+    }
+    
+    /* Merge modal content styling to match comparison modal */
+    #mergeContent,
+    #mergeContent * {
+        font-size: 12px !important;
+        line-height: 1.5 !important;
+    }
+    
+    #mergeContent h1,
+    #mergeContent .text-3xl {
+        font-size: 1.25rem !important;
+        font-weight: 600 !important;
+    }
+    
+    #mergeContent h2,
+    #mergeContent .text-2xl {
+        font-size: 1rem !important;
+        font-weight: 600 !important;
+    }
+    
+    #mergeContent h3,
+    #mergeContent .text-xl {
+        font-size: 0.875rem !important;
+        font-weight: 600 !important;
+    }
+    
+    #mergeContent h4,
+    #mergeContent .text-lg {
+        font-size: 0.8125rem !important;
+        font-weight: 600 !important;
+    }
+    
+    #mergeContent p,
+    #mergeContent .text-base,
+    #mergeContent .text-sm {
+        font-size: 0.75rem !important;
+        line-height: 1.4 !important;
+    }
+    
+    #mergeContent .text-xs {
+        font-size: 0.625rem !important;
+    }
+    
+    /* Override any inline styles in merge content */
+    #mergeContent [style*="font-size"] {
+        font-size: 0.75rem !important;
+    }
+    
+    /* Target specific merge page elements */
+    #mergeContent .client-card h3,
+    #mergeContent .field-label,
+    #mergeContent .field-value {
+        font-size: 0.75rem !important;
+    }
+    
+    #mergeContent .comparison-section h4 {
+        font-size: 0.8125rem !important;
+    }
+    
+    #mergeContent .text-gray-600,
+    #mergeContent .text-gray-500 {
+        font-size: 0.625rem !important;
+    }
+    
+    /* Reduce padding and margins in merge content */
+    #mergeContent .p-6 {
+        padding: 1rem !important;
+    }
+    
+    #mergeContent .p-8 {
+        padding: 1.5rem !important;
+    }
+    
+    #mergeContent .mb-8 {
+        margin-bottom: 1.5rem !important;
+    }
+    
+    #mergeContent .mb-6 {
+        margin-bottom: 1rem !important;
+    }
+    
+    #mergeContent .space-y-4 > * + * {
+        margin-top: 0.75rem !important;
+    }
+    
+    #mergeContent .space-y-2 > * + * {
+        margin-top: 0.5rem !important;
+    }
+    
+    /* Make merge content more compact */
+    #mergeContent .grid {
+        gap: 0.75rem !important;
+    }
+    
+    #mergeContent .gap-8 {
+        gap: 1rem !important;
+    }
+    
+    #mergeContent .gap-6 {
+        gap: 0.75rem !important;
+    }
+    
     .new-entry {
         border-left: 4px solid #10b981;
         background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
@@ -177,9 +379,9 @@
 
         <!-- Stats Cards -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-300">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-300 relative">
                 <div class="flex items-center justify-between">
-                    <div>
+                    <div class="flex-1">
                         <div class="flex items-center space-x-2 mb-1">
                             <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
                             <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Total Duplicates</p>
@@ -193,11 +395,27 @@
                         </svg>
                     </div>
                 </div>
+                <!-- Info Icon -->
+                <div class="absolute top-3 right-3">
+                    <div class="relative group">
+                        <button class="w-5 h-5 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors duration-200">
+                            <svg class="w-3 h-3 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                            </svg>
+                        </button>
+                        <!-- Tooltip -->
+                        <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                            <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
+                            <p class="font-medium mb-1">Total Duplicates</p>
+                            <p class="text-gray-300">This shows the total number of potential duplicate client relationships that have been flagged by the system for review.</p>
+                        </div>
+                    </div>
+                </div>
             </div>
             
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-300">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-300 relative">
                 <div class="flex items-center justify-between">
-                    <div>
+                    <div class="flex-1">
                         <div class="flex items-center space-x-2 mb-1">
                             <div class="w-2 h-2 bg-amber-500 rounded-full"></div>
                             <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Pending Review</p>
@@ -211,11 +429,27 @@
                         </svg>
                     </div>
                 </div>
+                <!-- Info Icon -->
+                <div class="absolute top-3 right-3">
+                    <div class="relative group">
+                        <button class="w-5 h-5 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors duration-200">
+                            <svg class="w-3 h-3 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                            </svg>
+                        </button>
+                        <!-- Tooltip -->
+                        <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                            <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
+                            <p class="font-medium mb-1">Pending Review</p>
+                            <p class="text-gray-300">This shows the number of duplicate relationships that are waiting for your review and decision (mark as duplicate, not duplicate, or merge).</p>
+                        </div>
+                    </div>
+                </div>
             </div>
             
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-300">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all duration-300 relative">
                 <div class="flex items-center justify-between">
-                    <div>
+                    <div class="flex-1">
                         <div class="flex items-center space-x-2 mb-1">
                             <div class="w-2 h-2 bg-red-500 rounded-full"></div>
                             <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide">High Confidence</p>
@@ -227,6 +461,22 @@
                         <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
                         </svg>
+                    </div>
+                </div>
+                <!-- Info Icon -->
+                <div class="absolute top-3 right-3">
+                    <div class="relative group">
+                        <button class="w-5 h-5 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors duration-200">
+                            <svg class="w-3 h-3 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                            </svg>
+                        </button>
+                        <!-- Tooltip -->
+                        <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                            <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
+                            <p class="font-medium mb-1">High Confidence</p>
+                            <p class="text-gray-300">This shows the number of duplicate relationships that the system has identified with high confidence based on matching criteria like name, date of birth, and contact information.</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -320,7 +570,7 @@
                     </div>
                     <div class="flex space-x-2">
                         <div class="tooltip">
-                            <button onclick="bulkAction('confirm')" class="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-xs font-medium transition-all duration-200 border border-red-200 flex items-center">
+                            <button onclick="bulkMarkDuplicate()" class="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-xs font-medium transition-all duration-200 border border-red-200 flex items-center">
                                 <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                 </svg>
@@ -329,7 +579,7 @@
                             <span class="tooltiptext">Confirm these are the same person and open comparison view</span>
                         </div>
                         <div class="tooltip">
-                            <button onclick="bulkAction('not_duplicate')" class="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-xs font-medium transition-all duration-200 border border-green-200 flex items-center">
+                            <button onclick="bulkNotDuplicate()" class="px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-xs font-medium transition-all duration-200 border border-green-200 flex items-center">
                                 <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                                 </svg>
@@ -338,7 +588,7 @@
                             <span class="tooltiptext">Confirm these are different people and keep both clients</span>
                         </div>
                         <div class="tooltip">
-                            <button onclick="bulkAction('merge')" class="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-xs font-medium transition-all duration-200 border border-blue-200 flex items-center">
+                            <button onclick="bulkMerge()" class="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-xs font-medium transition-all duration-200 border border-blue-200 flex items-center">
                                 <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
                                 </svg>
@@ -572,27 +822,27 @@
                                         
                                         {% if duplicate.status == 'pending' %}
                                         <div class="space-y-1">
-                                            <button onclick="duplicateAction({{ duplicate.id }}, 'confirm')" 
-                                                    class="w-full px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-xs font-medium transition-all duration-200 border border-red-200 flex items-center justify-center">
+                                            <button onclick="openMarkDuplicateModal({{ duplicate.id }})" 
+                                               class="w-full inline-flex items-center justify-center px-3 py-1.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-xs font-medium transition-all duration-200 border border-red-200">
                                                 <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                                 </svg>
                                                 Mark as Duplicate
                                             </button>
-                                            <button onclick="duplicateAction({{ duplicate.id }}, 'not_duplicate')" 
-                                                    class="w-full px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-xs font-medium transition-all duration-200 border border-green-200 flex items-center justify-center">
+                                            <button onclick="openNotDuplicateModal({{ duplicate.id }})" 
+                                               class="w-full inline-flex items-center justify-center px-3 py-1.5 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-xs font-medium transition-all duration-200 border border-green-200">
                                                 <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                                                 </svg>
                                                 Not Duplicate
                                             </button>
-                                            <a href="{% url 'clients:duplicate-merge' duplicate.id %}" 
+                                            <button onclick="openMergeModal({{ duplicate.id }})" 
                                                class="w-full inline-flex items-center justify-center px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-xs font-medium transition-all duration-200 border border-blue-200">
                                                 <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
                                                 </svg>
                                                 Merge Clients
-                                            </a>
+                                            </button>
                                         </div>
                                         {% elif duplicate.status == 'confirmed_duplicate' %}
                                         <div class="text-xs text-gray-500 text-center bg-gray-50 rounded-lg p-2">
@@ -641,7 +891,7 @@
 
 <!-- Action Modal -->
 <div id="actionModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
-    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-lg bg-white">
         <div class="mt-3">
             <div class="flex items-center justify-center w-12 h-12 mx-auto bg-blue-100 rounded-full">
                 <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -655,201 +905,289 @@
                 </div>
                 <div class="mt-4">
                     <label for="actionNotes" class="block text-sm font-medium text-gray-700 mb-2">Notes (optional)</label>
-                    <textarea id="actionNotes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Add any notes about this action..."></textarea>
+                    <textarea id="actionNotes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Add any notes about this action..."></textarea>
                 </div>
             </div>
-            <div class="flex items-center justify-end px-4 py-3 bg-gray-50 rounded-b-md">
-                <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 mr-2">
+            <div class="flex items-center justify-end px-4 py-3 bg-gray-50 rounded-b-lg">
+                <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 mr-2 text-sm font-medium transition-all duration-200">
                     Cancel
                 </button>
-                <button onclick="confirmAction()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" id="confirmButton">
+                <button onclick="confirmAction()" class="px-4 py-2 text-white rounded-lg hover:opacity-90 text-sm font-medium transition-all duration-200" id="confirmButton">
                     Confirm
                 </button>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
+<!-- Mark as Duplicate Modal - Comparison View -->
+<div id="markDuplicateModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-8 mx-auto p-4 border w-5/6 max-w-4xl shadow-lg rounded-lg bg-white">
+        <div class="flex justify-between items-center mb-3">
+            <h3 class="text-lg font-semibold text-gray-900">Compare Duplicate Clients</h3>
+            <div class="flex items-center space-x-3">
+                <button onclick="console.log('Modal Confirm Resolution button clicked'); showResolutionConfirmation();" 
+                        class="inline-flex items-center px-3 py-1.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium transition-all duration-200">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    Confirm Resolution
+                </button>
+                <button onclick="closeMarkDuplicateModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div id="comparisonContent" class="min-h-[28rem] max-h-[40rem] overflow-y-auto">
+            <!-- Comparison content will be loaded here -->
+            <div class="flex items-center justify-center h-80">
+                <div class="text-center">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                    <p class="text-sm text-gray-600">Loading comparison...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Not Duplicate Modal -->
+<div id="notDuplicateModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-lg bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-center w-12 h-12 mx-auto bg-green-100 rounded-full">
+                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </div>
+            <div class="mt-2 px-7 py-3">
+                <h3 class="text-lg font-medium text-gray-900">Not Duplicate</h3>
+                <div class="mt-2">
+                    <p class="text-sm text-gray-500">Are you sure these are different people? Both clients will be kept in the system.</p>
+                </div>
+            </div>
+            <div class="flex items-center justify-end px-4 py-3 bg-gray-50 rounded-b-lg">
+                <button onclick="closeNotDuplicateModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 mr-2 text-sm font-medium transition-all duration-200">
+                    Cancel
+                </button>
+                <button onclick="confirmNotDuplicate()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-all duration-200">
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Merge Modal - Merge Interface -->
+<div id="mergeModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-4 mx-auto p-4 border w-5/6 max-w-4xl shadow-lg rounded-lg bg-white">
+        <div class="flex justify-between items-center mb-3">
+            <h3 class="text-lg font-semibold text-gray-900">Merge Duplicate Clients</h3>
+            <div class="flex items-center space-x-3">
+                <button onclick="console.log('Modal Confirm Merge button clicked'); mergeClients();" 
+                        class="inline-flex items-center px-3 py-1.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm font-medium transition-all duration-200">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                    </svg>
+                    Confirm Merge
+                </button>
+                <button onclick="closeMergeModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div id="mergeContent" class="min-h-[28rem] max-h-[40rem] overflow-y-auto">
+            <!-- Merge content will be loaded here -->
+            <div class="flex items-center justify-center h-80">
+                <div class="text-center">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                    <p class="text-sm text-gray-600">Loading merge interface...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
-let currentAction = null;
 let currentDuplicateId = null;
-let selectedDuplicates = new Set();
+let selectedDuplicates = [];
 
-// Get CSRF token from Django
-const csrfTokenElement = document.querySelector('[name=csrfmiddlewaretoken]');
-console.log('CSRF Token element:', csrfTokenElement);
-const csrfToken = csrfTokenElement ? csrfTokenElement.value : null;
-console.log('CSRF Token:', csrfToken);
-
-if (!csrfToken) {
-    console.error('CSRF Token not found!');
-}
-
-function updateBulkActions() {
-    const checkboxes = document.querySelectorAll('.duplicate-checkbox:checked');
-    selectedDuplicates = new Set(Array.from(checkboxes).map(cb => cb.dataset.duplicateId));
-    
-    const bulkActions = document.getElementById('bulk-actions');
-    const selectedCount = document.getElementById('selected-count');
-    
-    if (selectedDuplicates.size > 0) {
-        bulkActions.style.display = 'block';
-        selectedCount.textContent = `${selectedDuplicates.size} selected`;
-    } else {
-        bulkActions.style.display = 'none';
-    }
-}
-
-function clearSelection() {
-    document.querySelectorAll('.duplicate-checkbox').forEach(cb => cb.checked = false);
-    updateBulkActions();
-}
-
-function duplicateAction(duplicateId, action) {
-    // For 'confirm' action, redirect directly to comparison view
-    if (action === 'confirm') {
-        window.location.href = `/clients/dedupe/compare/${duplicateId}/`;
-        return;
-    }
-    
-    // For other actions, show the modal
-    currentAction = action;
+// Individual action modals
+function openMarkDuplicateModal(duplicateId) {
     currentDuplicateId = duplicateId;
+    document.getElementById('markDuplicateModal').classList.remove('hidden');
     
-    const modal = document.getElementById('actionModal');
-    const title = document.getElementById('modalTitle');
-    const message = document.getElementById('modalMessage');
-    const button = document.getElementById('confirmButton');
-    
-    if (!modal) {
-        alert('Modal not found!');
-        return;
-    }
-    
-    const actionTexts = {
-        'not_duplicate': 'Mark as Not Duplicate',
-        'merge': 'Merge Clients'
-    };
-    
-    const actionMessages = {
-        'not_duplicate': 'This will confirm that the client is NOT a duplicate and keep it in the system. The duplicate flag will be removed.',
-        'merge': 'This will mark the client for merging with the primary client.'
-    };
-    
-    title.textContent = actionTexts[action];
-    message.textContent = actionMessages[action];
-    button.textContent = actionTexts[action];
-    button.className = `px-4 py-2 text-white rounded-md hover:opacity-90 ${getActionButtonClass(action)}`;
-    
-    modal.classList.remove('hidden');
+    // Load comparison content via AJAX
+    loadComparisonContent(duplicateId);
 }
 
-function bulkAction(action) {
-    if (selectedDuplicates.size === 0) return;
-    
-    currentAction = action;
+function closeMarkDuplicateModal() {
+    document.getElementById('markDuplicateModal').classList.add('hidden');
     currentDuplicateId = null;
-    
-    const modal = document.getElementById('actionModal');
-    const title = document.getElementById('modalTitle');
-    const message = document.getElementById('modalMessage');
-    const button = document.getElementById('confirmButton');
-    
-    const actionTexts = {
-        'confirm': 'Mark as Duplicates',
-        'not_duplicate': 'Mark as Not Duplicates',
-        'merge': 'Merge Clients'
-    };
-    
-    const actionMessages = {
-        'confirm': `This will mark ${selectedDuplicates.size} client(s) as confirmed duplicates.`,
-        'not_duplicate': `This will confirm that ${selectedDuplicates.size} client(s) are not duplicates.`,
-        'merge': `This will mark ${selectedDuplicates.size} client(s) for merging.`
-    };
-    
-    title.textContent = actionTexts[action];
-    message.textContent = actionMessages[action];
-    button.textContent = actionTexts[action];
-    button.className = `px-4 py-2 text-white rounded-md hover:opacity-90 ${getActionButtonClass(action)}`;
-    
-    modal.classList.remove('hidden');
+    // Clear the content
+    document.getElementById('comparisonContent').innerHTML = `
+        <div class="flex items-center justify-center h-96">
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-gray-600">Loading comparison...</p>
+            </div>
+        </div>
+    `;
 }
 
-function getActionButtonClass(action) {
-    const classes = {
-        'confirm': 'bg-red-600 hover:bg-red-700',
-        'not_duplicate': 'bg-green-600 hover:bg-green-700',
-        'merge': 'bg-blue-600 hover:bg-blue-700'
-    };
-    return classes[action] || 'bg-blue-600 hover:bg-blue-700';
-}
-
-function closeModal() {
-    document.getElementById('actionModal').classList.add('hidden');
-    currentAction = null;
-    currentDuplicateId = null;
-}
-
-function confirmAction() {
+function loadComparisonContent(duplicateId) {
+    const comparisonUrl = "{% url 'clients:duplicate-comparison' 0 %}".replace('0', duplicateId);
     
-    const notes = document.getElementById('actionNotes').value;
-    
-    if (currentDuplicateId) {
-        // Single action
-        const url = `/clients/dedupe/action/${currentDuplicateId}/${currentAction}/`;
-        
-        fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify({ notes: notes })
-        })
-        .then(response => {
-            console.log('Response status:', response.status);
-            return response.json();
-        })
-        .then(data => {
-            console.log('Response data:', data);
-            if (data.success) {
-                if (data.redirect) {
-                    window.location.href = data.redirect;
-                } else {
-                    location.reload();
-                }
-            } else {
-                alert('Error: ' + (data.error || 'Unknown error'));
-            }
+    fetch(comparisonUrl)
+        .then(response => response.text())
+        .then(html => {
+            // Extract the main content from the comparison page
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            
+            // Find the main content area (adjust selector based on your comparison page structure)
+            const mainContent = doc.querySelector('.container, main, .content, #main-content') || doc.body;
+            
+            // Update the modal content
+            document.getElementById('comparisonContent').innerHTML = mainContent.innerHTML;
+            
+            // Re-execute any scripts that were in the loaded content
+            const scripts = document.getElementById('comparisonContent').querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                newScript.textContent = script.textContent;
+                document.head.appendChild(newScript);
+                document.head.removeChild(newScript);
+            });
+            
+            // Re-bind event listeners for buttons and interactive elements
+            rebindComparisonEvents(duplicateId);
+            
+            // Apply font size overrides after content is loaded
+            applyFontSizeOverrides();
         })
         .catch(error => {
-            console.error('Error:', error);
-            alert('An error occurred while processing the request.');
+            console.error('Error loading comparison:', error);
+            document.getElementById('comparisonContent').innerHTML = `
+                <div class="flex items-center justify-center h-96">
+                    <div class="text-center">
+                        <div class="text-red-500 mb-4">
+                            <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                            </svg>
+                        </div>
+                        <p class="text-red-600">Error loading comparison. Please try again.</p>
+                        <button onclick="loadComparisonContent(${duplicateId})" class="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            Retry
+                        </button>
+                    </div>
+                </div>
+            `;
         });
-    } else {
-        // Bulk action
-        console.log('Making bulk action request');
-        fetch('/clients/dedupe/bulk-action/', {
+}
+
+function rebindComparisonEvents(duplicateId) {
+    // Re-bind any form submissions or button clicks in the comparison content
+    const comparisonContent = document.getElementById('comparisonContent');
+    
+    // Make selectClient function available globally for the comparison page
+    window.selectClient = function(clientId) {
+        // Remove selection from all clients
+        const allSelectors = comparisonContent.querySelectorAll('.client-selector');
+        allSelectors.forEach(selector => {
+            selector.classList.remove('bg-green-500', 'border-green-500');
+            selector.classList.add('border-gray-300');
+        });
+        
+        // Remove selected class from all client cards
+        const allCards = comparisonContent.querySelectorAll('.client-card');
+        allCards.forEach(card => {
+            card.classList.remove('selected');
+        });
+        
+        // Select the clicked client
+        const selector = comparisonContent.querySelector(`#selector-${clientId}`);
+        const card = comparisonContent.querySelector(`[data-client-id="${clientId}"]`);
+        
+        if (selector) {
+            selector.classList.add('bg-green-500', 'border-green-500');
+            selector.classList.remove('border-gray-300');
+        }
+        
+        if (card) {
+            card.classList.add('selected');
+        }
+        
+        // Store the selected client ID
+        window.selectedClientId = clientId;
+        
+        // Enable/disable the resolve button
+        const resolveButton = comparisonContent.querySelector('#resolve-button');
+        if (resolveButton) {
+            resolveButton.disabled = false;
+            resolveButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    };
+    
+    // Make resolveDuplicate function available globally
+    window.resolveDuplicate = function() {
+        if (!window.selectedClientId) {
+            alert('Please click on the client you want to KEEP');
+        return;
+    }
+    
+        const selectedClientName = comparisonContent.querySelector(`[data-client-id="${window.selectedClientId}"] h3`).textContent;
+        const otherClientName = comparisonContent.querySelector(`[data-client-id]:not([data-client-id="${window.selectedClientId}"]) h3`).textContent;
+        
+        // Show confirmation modal
+        const confirmationModal = comparisonContent.querySelector('#confirmationModal');
+        if (confirmationModal) {
+            const message = confirmationModal.querySelector('#confirmation-message');
+            if (message) {
+                message.innerHTML = 
+                    `You are about to:<br><br>
+                    <strong>✅ KEEP:</strong> ${selectedClientName}<br>
+                    <strong>❌ DELETE:</strong> ${otherClientName}<br><br>
+                    <strong>⚠️ WARNING:</strong> The other client will be permanently deleted and cannot be recovered!`;
+            }
+            confirmationModal.classList.remove('hidden');
+        } else {
+            // Fallback: direct confirmation
+            if (confirm(`You are about to KEEP: ${selectedClientName} and DELETE: ${otherClientName}. Continue?`)) {
+                window.confirmResolution();
+            }
+        }
+    };
+    
+    // Make confirmResolution function available globally
+    window.confirmResolution = function() {
+        const notes = comparisonContent.querySelector('#resolution-notes')?.value || '';
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        if (!window.selectedClientId) {
+            alert('No client selected!');
+        return;
+    }
+    
+        fetch(`/clients/dedupe/resolve/${duplicateId}/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken
             },
             body: JSON.stringify({
-                duplicate_ids: Array.from(selectedDuplicates),
-                action: currentAction,
+                selected_client_id: window.selectedClientId,
                 notes: notes
             })
         })
-        .then(response => {
-            console.log('Bulk response status:', response.status);
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            console.log('Bulk response data:', data);
             if (data.success) {
+                // Close modal and reload the dedupe page
+                closeMarkDuplicateModal();
                 location.reload();
             } else {
                 alert('Error: ' + (data.error || 'Unknown error'));
@@ -859,27 +1197,776 @@ function confirmAction() {
             console.error('Error:', error);
             alert('An error occurred while processing the request.');
         });
-    }
+    };
     
-    closeModal();
-}
-
-// Initialize
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM loaded, initializing dedupe functionality');
-    console.log('duplicateAction function available:', typeof duplicateAction);
-    updateBulkActions();
+    // Make closeConfirmationModal function available globally
+    window.closeConfirmationModal = function() {
+        const confirmationModal = comparisonContent.querySelector('#confirmationModal');
+        if (confirmationModal) {
+            confirmationModal.classList.add('hidden');
+        }
+    };
     
-    // Add click listeners to all action buttons for debugging
-    const actionButtons = document.querySelectorAll('button[onclick*="duplicateAction"]');
-    console.log('Found', actionButtons.length, 'action buttons');
-    
-    actionButtons.forEach((button, index) => {
-        console.log('Found action button:', button);
-        button.addEventListener('click', function(e) {
-            console.log('Button clicked:', e.target);
+    // Handle form submissions
+    const forms = comparisonContent.querySelectorAll('form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const action = form.action;
+            
+            fetch(action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Close modal and reload the dedupe page
+                    closeMarkDuplicateModal();
+                    location.reload();
+                } else {
+                    alert('Error processing request. Please try again.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error processing request. Please try again.');
+            });
         });
     });
+    
+    // Handle button clicks that should submit forms
+    const buttons = comparisonContent.querySelectorAll('button[type="submit"], input[type="submit"]');
+    buttons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            const form = button.closest('form');
+            if (form) {
+                form.dispatchEvent(new Event('submit'));
+            }
+        });
+    });
+    
+    // The comparison page functions are now available globally
+    console.log('Comparison page functions loaded:', {
+        selectClient: typeof window.selectClient,
+        resolveDuplicate: typeof window.resolveDuplicate,
+        confirmResolution: typeof window.confirmResolution,
+        closeConfirmationModal: typeof window.closeConfirmationModal
+    });
+    
+    // Handle client card clicks
+    const clientCards = comparisonContent.querySelectorAll('.client-card[data-client-id]');
+    clientCards.forEach(card => {
+        card.addEventListener('click', function(e) {
+            e.preventDefault();
+            const clientId = card.getAttribute('data-client-id');
+            window.selectClient(clientId);
+        });
+    });
+    
+    // Handle any other interactive elements
+    const selectButtons = comparisonContent.querySelectorAll('button[onclick*="select"], button[onclick*="choose"]');
+    selectButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            // Handle the selection logic here
+            console.log('Selection button clicked:', button);
+        });
+    });
+}
+
+function openNotDuplicateModal(duplicateId) {
+    currentDuplicateId = duplicateId;
+    document.getElementById('notDuplicateModal').classList.remove('hidden');
+}
+
+function closeNotDuplicateModal() {
+    document.getElementById('notDuplicateModal').classList.add('hidden');
+    currentDuplicateId = null;
+}
+
+function showSuccessMessage(message) {
+    // Create success message element
+    const successDiv = document.createElement('div');
+    successDiv.id = 'success-message';
+    successDiv.className = 'fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg shadow-lg z-50 flex items-center';
+    successDiv.innerHTML = `
+        <svg class="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <span>${message}</span>
+    `;
+    
+    // Add to page
+    document.body.appendChild(successDiv);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+        if (successDiv.parentNode) {
+            successDiv.parentNode.removeChild(successDiv);
+        }
+    }, 3000);
+}
+
+function applyFontSizeOverrides() {
+    const comparisonContent = document.getElementById('comparisonContent');
+    if (!comparisonContent) return;
+    
+    // Apply font sizes to all elements
+    const allElements = comparisonContent.querySelectorAll('*');
+    allElements.forEach(element => {
+        // Override any existing font-size styles
+        element.style.fontSize = '12px';
+        
+        // Apply specific sizes based on element type
+        if (element.tagName === 'H1' || element.classList.contains('text-3xl')) {
+            element.style.fontSize = '20px';
+        } else if (element.tagName === 'H2' || element.classList.contains('text-2xl')) {
+            element.style.fontSize = '16px';
+        } else if (element.tagName === 'H3' || element.classList.contains('text-xl')) {
+            element.style.fontSize = '14px';
+        } else if (element.tagName === 'H4' || element.classList.contains('text-lg')) {
+            element.style.fontSize = '13px';
+        } else if (element.tagName === 'P' || element.classList.contains('text-base') || element.classList.contains('text-sm')) {
+            element.style.fontSize = '12px';
+        } else if (element.classList.contains('text-xs')) {
+            element.style.fontSize = '10px';
+        }
+        
+        // Override any inline styles
+        if (element.hasAttribute('style') && element.getAttribute('style').includes('font-size')) {
+            element.style.fontSize = '12px';
+        }
+    });
+    
+    console.log('Font size overrides applied to comparison content');
+}
+
+function applyMergeFontSizeOverrides() {
+    const mergeContent = document.getElementById('mergeContent');
+    if (!mergeContent) return;
+    
+    // Apply font sizes to all elements
+    const allElements = mergeContent.querySelectorAll('*');
+    allElements.forEach(element => {
+        // Override any existing font-size styles
+        element.style.fontSize = '12px';
+        
+        // Apply specific sizes based on element type
+        if (element.tagName === 'H1' || element.classList.contains('text-3xl')) {
+            element.style.fontSize = '20px';
+        } else if (element.tagName === 'H2' || element.classList.contains('text-2xl')) {
+            element.style.fontSize = '16px';
+        } else if (element.tagName === 'H3' || element.classList.contains('text-xl')) {
+            element.style.fontSize = '14px';
+        } else if (element.tagName === 'H4' || element.classList.contains('text-lg')) {
+            element.style.fontSize = '13px';
+        } else if (element.tagName === 'P' || element.classList.contains('text-base') || element.classList.contains('text-sm')) {
+            element.style.fontSize = '12px';
+        } else if (element.classList.contains('text-xs')) {
+            element.style.fontSize = '10px';
+        }
+        
+        // Override any inline styles
+        if (element.hasAttribute('style') && element.getAttribute('style').includes('font-size')) {
+            element.style.fontSize = '12px';
+        }
+    });
+    
+    console.log('Font size overrides applied to merge content');
+}
+
+function openMergeModal(duplicateId) {
+    currentDuplicateId = duplicateId;
+    document.getElementById('mergeModal').classList.remove('hidden');
+    
+    // Load merge content via AJAX
+    loadMergeContent(duplicateId);
+}
+
+function closeMergeModal() {
+    document.getElementById('mergeModal').classList.add('hidden');
+    currentDuplicateId = null;
+    // Clear the content
+    document.getElementById('mergeContent').innerHTML = `
+        <div class="flex items-center justify-center h-80">
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-3"></div>
+                <p class="text-sm text-gray-600">Loading merge interface...</p>
+            </div>
+        </div>
+    `;
+}
+
+function loadMergeContent(duplicateId) {
+    const mergeUrl = "{% url 'clients:duplicate-merge' 0 %}".replace('0', duplicateId);
+    
+    fetch(mergeUrl)
+        .then(response => response.text())
+        .then(html => {
+            // Extract the main content from the merge page
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            
+            // Find the main content area (adjust selector based on your merge page structure)
+            const mainContent = doc.querySelector('.container, main, .content, #main-content') || doc.body;
+            
+            // Update the modal content
+            document.getElementById('mergeContent').innerHTML = mainContent.innerHTML;
+            
+            // Re-execute any scripts that were in the loaded content
+            const scripts = document.getElementById('mergeContent').querySelectorAll('script');
+            scripts.forEach(script => {
+                const newScript = document.createElement('script');
+                newScript.textContent = script.textContent;
+                document.head.appendChild(newScript);
+                document.head.removeChild(newScript);
+            });
+            
+            // Re-bind event listeners for buttons and interactive elements
+            rebindMergeEvents(duplicateId);
+            
+            // Set up value box selection functionality
+            setupValueBoxSelection();
+            
+            // Apply font size overrides after content is loaded
+            applyMergeFontSizeOverrides();
+        })
+        .catch(error => {
+            console.error('Error loading merge content:', error);
+            document.getElementById('mergeContent').innerHTML = `
+                <div class="flex items-center justify-center h-80">
+                    <div class="text-center">
+                        <div class="text-red-500 mb-4">
+                            <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                            </svg>
+                        </div>
+                        <p class="text-red-600">Error loading merge interface. Please try again.</p>
+                        <button onclick="loadMergeContent(${duplicateId})" class="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            Retry
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+}
+
+function rebindMergeEvents(duplicateId) {
+    // Re-bind any form submissions or button clicks in the merge content
+    const mergeContent = document.getElementById('mergeContent');
+    
+    // Handle form submissions
+    const forms = mergeContent.querySelectorAll('form');
+    forms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(form);
+            const action = form.action;
+            
+            fetch(action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Close modal and reload the dedupe page
+                    closeMergeModal();
+                    location.reload();
+                } else {
+                    alert('Error processing request. Please try again.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error processing request. Please try again.');
+            });
+        });
+    });
+    
+    // Handle button clicks that should submit forms
+    const buttons = mergeContent.querySelectorAll('button[type="submit"], input[type="submit"]');
+    buttons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            const form = button.closest('form');
+            if (form) {
+                form.dispatchEvent(new Event('submit'));
+            }
+        });
+    });
+    
+    console.log('Merge events bound to merge content');
+}
+
+
+// Confirmation actions - Mark as Duplicate now opens comparison in modal
+    
+function confirmNotDuplicate() {
+    console.log('confirmNotDuplicate called, currentDuplicateId:', currentDuplicateId);
+    
+    if (currentDuplicateId) {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        console.log('CSRF Token:', csrfToken ? 'Found' : 'Not found');
+        
+        if (!csrfToken) {
+            alert('CSRF token not found. Please refresh the page and try again.');
+            return;
+        }
+        
+        // Directly process the not_duplicate action without second confirmation
+        fetch("{% url 'clients:duplicate_action' 0 'not_duplicate' %}".replace('0', currentDuplicateId), {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                notes: ''
+            })
+        })
+        .then(response => {
+            console.log('Response status:', response.status);
+            return response.json();
+        })
+        .then(data => {
+            console.log('Response data:', data);
+            if (data.success) {
+                // Show success message before closing modal
+                showSuccessMessage(data.message || 'Duplicate marked as not duplicate successfully!');
+                closeNotDuplicateModal();
+                // Reload after a short delay to show the success message
+                setTimeout(() => {
+                    location.reload();
+                }, 1500);
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while processing the request.');
+        });
+    } else {
+        console.error('No currentDuplicateId set');
+        alert('No duplicate selected. Please try again.');
+    }
+}
+
+function confirmMerge() {
+    if (currentDuplicateId) {
+        window.location.href = "{% url 'clients:duplicate-merge' 0 %}".replace('0', currentDuplicateId);
+    }
+}
+
+// Bulk actions
+function bulkMarkDuplicate() {
+    const selected = getSelectedDuplicates();
+    if (selected.length === 0) {
+        alert('Please select at least one duplicate pair.');
+        return;
+    }
+    // For bulk actions, open the first selected duplicate's comparison in modal
+    if (selected.length > 0) {
+        openMarkDuplicateModal(selected[0]);
+    }
+}
+
+function bulkNotDuplicate() {
+    const selected = getSelectedDuplicates();
+    if (selected.length === 0) {
+        alert('Please select at least one duplicate pair.');
+        return;
+    }
+    // Process each selected duplicate
+    selected.forEach(duplicateId => {
+        fetch("{% url 'clients:duplicate_action' 0 'not_duplicate' %}".replace('0', duplicateId), {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                notes: ''
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log(`Processed duplicate ${duplicateId}: ${data.message}`);
+            } else {
+                console.error(`Error processing duplicate ${duplicateId}:`, data.error);
+            }
+        })
+        .catch(error => {
+            console.error(`Error processing duplicate ${duplicateId}:`, error);
+        });
+    });
+    
+    // Show success message and reload after processing all
+    setTimeout(() => {
+        showSuccessMessage(`Successfully processed ${selected.length} duplicate(s) as not duplicate!`);
+        setTimeout(() => {
+            location.reload();
+        }, 1500);
+    }, 1000);
+}
+
+function bulkMerge() {
+    const selected = getSelectedDuplicates();
+    if (selected.length === 0) {
+        alert('Please select at least one duplicate pair.');
+        return;
+    }
+    // For bulk merge, open the first selected duplicate's merge interface in modal
+    if (selected.length > 0) {
+        openMergeModal(selected[0]);
+    }
+}
+
+function getSelectedDuplicates() {
+    const checkboxes = document.querySelectorAll('input[name="duplicate_ids"]:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+function clearSelection() {
+    const checkboxes = document.querySelectorAll('input[name="duplicate_ids"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    updateSelectedCount();
+}
+
+function updateSelectedCount() {
+    const selected = getSelectedDuplicates();
+    document.getElementById('selected-count').textContent = `${selected.length} selected`;
+}
+
+// Test function to verify JavaScript is working
+function testSelection() {
+    console.log('=== TEST SELECTION FUNCTION CALLED ===');
+    alert('JavaScript is working! Check console for details.');
+    
+    // Try to find and select the first value box
+    const firstBox = document.querySelector('.value-box');
+    if (firstBox) {
+        console.log('Found first value box:', firstBox);
+        const fieldName = firstBox.getAttribute('data-field');
+        const source = firstBox.getAttribute('data-source');
+        console.log('Trying to select:', fieldName, source);
+        selectValue(firstBox, fieldName, source);
+    } else {
+        console.log('No value boxes found!');
+    }
+}
+
+function selectValue(element, fieldName, source) {
+    console.log('=== SELECT VALUE FUNCTION CALLED ===');
+    console.log('Field name:', fieldName);
+    console.log('Source:', source);
+    console.log('Element:', element);
+    
+    // Remove selected class from all value boxes for this field
+    const allValueBoxes = document.querySelectorAll(`[data-field="${fieldName}"]`);
+    console.log('Found value boxes for field', fieldName, ':', allValueBoxes.length);
+    
+    allValueBoxes.forEach(box => {
+        console.log('Removing selection from box:', box);
+        box.classList.remove('selected');
+        // Reset inline styles
+        box.style.border = '';
+        box.style.backgroundColor = '';
+        box.style.boxShadow = '';
+        box.style.transform = '';
+    });
+    
+    // Add selected class to clicked element
+    console.log('Adding selected class to element:', element);
+    element.classList.add('selected');
+    
+    // Force apply selection styles with inline styles - Less dense
+    console.log('Applying styles to element:', element);
+    console.log('Element before styles:', element.style.cssText);
+    
+    element.style.setProperty('border', '2px solid #10b981', 'important');
+    element.style.setProperty('background-color', '#d1fae5', 'important');
+    element.style.setProperty('box-shadow', '0 0 0 3px rgba(16, 185, 129, 0.2)', 'important');
+    element.style.setProperty('transform', 'scale(1.01)', 'important');
+    
+    console.log('Element after styles:', element.style.cssText);
+    console.log('Computed border:', window.getComputedStyle(element).border);
+    console.log('Computed background:', window.getComputedStyle(element).backgroundColor);
+    
+    console.log('Applied selection styles to element');
+    console.log('Element classes after selection:', element.classList.toString());
+    
+    // Update the hidden input value
+    const hiddenInput = document.getElementById(`${fieldName}_hidden`);
+    if (hiddenInput) {
+        hiddenInput.value = source;
+        console.log('Updated hidden input:', hiddenInput.name, '=', hiddenInput.value);
+    } else {
+        console.log('Hidden input not found:', `${fieldName}_hidden`);
+    }
+    
+    // Visual feedback
+    setTimeout(() => {
+        element.style.transform = 'scale(1.02) !important';
+    }, 50);
+}
+
+function mergeClients() {
+    console.log('=== MERGE CLIENTS FUNCTION CALLED ===');
+    // Show confirmation modal first
+    const confirmationModal = document.getElementById('confirmationModal');
+    if (confirmationModal) {
+        confirmationModal.classList.remove('hidden');
+        console.log('Confirmation modal shown');
+    } else {
+        console.error('Confirmation modal not found!');
+    }
+}
+
+function closeConfirmationModal() {
+    console.log('=== CLOSE CONFIRMATION MODAL CALLED ===');
+    const confirmationModal = document.getElementById('confirmationModal');
+    if (confirmationModal) {
+        confirmationModal.classList.add('hidden');
+        console.log('Confirmation modal hidden');
+    }
+}
+
+function showResolutionConfirmation() {
+    console.log('=== SHOW RESOLUTION CONFIRMATION CALLED ===');
+    
+    // First try to find the confirmation modal in the comparison content
+    const comparisonContent = document.getElementById('comparisonContent');
+    console.log('Comparison content found:', comparisonContent);
+    
+    let confirmationModal = null;
+    if (comparisonContent) {
+        confirmationModal = comparisonContent.querySelector('#confirmationModal');
+        console.log('Confirmation modal in comparison content:', confirmationModal);
+    }
+    
+    // If not found in comparison content, try to find it directly
+    if (!confirmationModal) {
+        confirmationModal = document.getElementById('confirmationModal');
+        console.log('Confirmation modal direct:', confirmationModal);
+    }
+    
+    if (confirmationModal) {
+        // Update the confirmation message
+        const messageElement = confirmationModal.querySelector('#confirmation-message');
+        if (messageElement) {
+            messageElement.textContent = 'Are you sure you want to resolve this duplicate? The selected client will be kept and the other will be deleted permanently.';
+            console.log('Updated confirmation message');
+        } else {
+            console.log('Message element not found');
+        }
+        confirmationModal.classList.remove('hidden');
+        
+        // Force visibility with inline styles
+        confirmationModal.style.display = 'block';
+        confirmationModal.style.visibility = 'visible';
+        confirmationModal.style.zIndex = '9999';
+        confirmationModal.style.position = 'fixed';
+        confirmationModal.style.top = '0';
+        confirmationModal.style.left = '0';
+        confirmationModal.style.width = '100%';
+        confirmationModal.style.height = '100%';
+        
+        console.log('Resolution confirmation modal shown');
+        console.log('Modal classes after showing:', confirmationModal.classList.toString());
+        console.log('Modal style display:', window.getComputedStyle(confirmationModal).display);
+        console.log('Modal style visibility:', window.getComputedStyle(confirmationModal).visibility);
+        console.log('Modal style z-index:', window.getComputedStyle(confirmationModal).zIndex);
+    } else {
+        console.error('Confirmation modal not found anywhere!');
+        // Use browser confirm as fallback
+        if (confirm('Are you sure you want to resolve this duplicate? The selected client will be kept and the other will be deleted permanently.')) {
+            // Call the resolution function directly
+            if (typeof confirmResolution === 'function') {
+                confirmResolution();
+            } else {
+                console.error('confirmResolution function not found');
+            }
+        }
+    }
+    
+    // If modal was found but still not visible, use browser confirm as backup
+    setTimeout(() => {
+        const modal = document.getElementById('confirmationModal') || document.querySelector('#confirmationModal');
+        if (modal && !modal.classList.contains('hidden')) {
+            const rect = modal.getBoundingClientRect();
+            console.log('Modal position:', rect);
+            if (rect.width === 0 || rect.height === 0) {
+                console.log('Modal has no size, using browser confirm instead');
+                modal.classList.add('hidden');
+                if (confirm('Are you sure you want to resolve this duplicate? The selected client will be kept and the other will be deleted permanently.')) {
+                    if (typeof confirmResolution === 'function') {
+                        confirmResolution();
+                    }
+                }
+            }
+        }
+    }, 100);
+}
+
+function confirmMerge() {
+    console.log('=== CONFIRM MERGE FUNCTION CALLED ===');
+    
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    
+    if (!csrfToken) {
+        console.error('CSRF token not found!');
+        return;
+    }
+    
+    console.log('CSRF Token:', csrfToken.value);
+    console.log('Duplicate ID:', currentDuplicateId);
+    
+    // Collect all selected field values from hidden inputs
+    const selectedFields = {};
+    const hiddenInputs = document.querySelectorAll('input[type="hidden"][name]');
+    console.log('Found hidden inputs:', hiddenInputs.length);
+    
+    hiddenInputs.forEach(input => {
+        console.log('Hidden input:', input.name, '=', input.value);
+        if (input.value) {
+            selectedFields[input.name] = input.value;
+        }
+    });
+    
+    console.log('Selected fields:', selectedFields);
+    
+    if (Object.keys(selectedFields).length === 0) {
+        alert('Please select at least one field to merge.');
+        return;
+    }
+    
+    fetch(`/clients/dedupe/merge/${currentDuplicateId}/process/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken.value
+        },
+        body: JSON.stringify({
+            selected_fields: selectedFields,
+            notes: ''
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Merge response:', data);
+        if (data.success) {
+            // Show success message
+            showSuccessMessage(data.message);
+            // Close modal and redirect after a short delay
+            setTimeout(() => {
+                window.location.href = '/clients/dedupe/';
+            }, 1500);
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while processing the request.');
+    });
+    
+    closeConfirmationModal();
+}
+
+function setupValueBoxSelection() {
+    console.log('Setting up value box selection...');
+    
+    // Add click listeners to all value boxes
+    const valueBoxes = document.querySelectorAll('.value-box');
+    console.log('Found value boxes:', valueBoxes.length);
+    
+    valueBoxes.forEach((box, index) => {
+        console.log(`Setting up box ${index}:`, box);
+        console.log('Box data-field:', box.getAttribute('data-field'));
+        console.log('Box data-source:', box.getAttribute('data-source'));
+        console.log('Box classes:', box.classList.toString());
+        
+        // Remove any existing listeners first
+        if (box._clickHandler) {
+            box.removeEventListener('click', box._clickHandler);
+        }
+        
+        // Add click listener
+        box._clickHandler = function(e) {
+            console.log('=== CLICK EVENT TRIGGERED ===');
+            console.log('Event:', e);
+            console.log('Target:', e.target);
+            console.log('Current target:', e.currentTarget);
+            console.log('This element:', this);
+            console.log('This data-field:', this.getAttribute('data-field'));
+            console.log('This data-source:', this.getAttribute('data-source'));
+            
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const fieldName = this.getAttribute('data-field');
+            const source = this.getAttribute('data-source');
+            
+            console.log('Value box clicked:', fieldName, source, this);
+            console.log('About to call selectValue function');
+            
+            // Test if function exists
+            if (typeof selectValue === 'function') {
+                console.log('selectValue function exists, calling it...');
+                selectValue(this, fieldName, source);
+            } else {
+                console.error('selectValue function not found!');
+            }
+        };
+        
+        box.addEventListener('click', box._clickHandler);
+        
+        // Add hover effects for better UX
+        box.addEventListener('mouseenter', function() {
+            if (!this.classList.contains('selected')) {
+                this.style.border = '2px solid #3b82f6';
+                this.style.backgroundColor = '#eff6ff';
+            }
+        });
+        
+        box.addEventListener('mouseleave', function() {
+            if (!this.classList.contains('selected')) {
+                this.style.border = '';
+                this.style.backgroundColor = '';
+            }
+        });
+        
+        // Apply initial selection styles to pre-selected boxes
+        if (box.classList.contains('selected')) {
+            console.log('Applying initial selection to box:', box);
+            box.style.border = '2px solid #10b981';
+            box.style.backgroundColor = '#d1fae5';
+            box.style.boxShadow = '0 0 0 3px rgba(16, 185, 129, 0.2)';
+            box.style.transform = 'scale(1.01)';
+        }
+    });
+    
+    console.log('Value box selection setup complete');
+}
+
+// Close modals when clicking outside
+document.addEventListener('click', function(event) {
+    if (event.target.classList.contains('fixed')) {
+        document.getElementById('markDuplicateModal').classList.add('hidden');
+        document.getElementById('notDuplicateModal').classList.add('hidden');
+        document.getElementById('mergeModal').classList.add('hidden');
+    }
 });
 </script>
+
 {% endblock %}
+
+
