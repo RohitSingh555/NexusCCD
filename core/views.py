@@ -1,17 +1,20 @@
 from django.shortcuts import render, redirect
 from django.db.models import Count, Q
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import get_user_model
 from functools import wraps
 import json
+import csv
 from django.contrib import messages
+from .message_utils import success_message, error_message, warning_message, info_message, create_success, update_success, delete_success, validation_error, permission_error, not_found_error
 from django.urls import reverse_lazy
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
 from datetime import datetime
-from .models import Client, Program, Staff, PendingChange, ClientProgramEnrollment, Department, ServiceRestriction
+from django.utils import timezone
+from .models import Client, Program, Staff, ClientProgramEnrollment, Department, ServiceRestriction, AuditLog
 from .forms import EnrollmentForm
 from .forms import UserProfileForm, StaffProfileForm, PasswordChangeForm, ServiceRestrictionForm
 
@@ -133,7 +136,6 @@ def dashboard(request):
     total_clients = Client.objects.count()
     active_programs = Program.objects.count()
     total_staff = Staff.objects.count()
-    pending_approvals = PendingChange.objects.filter(status='pending').count()
     
     # Get recent clients (last 5)
     recent_clients = Client.objects.order_by('-created_at')[:5]
@@ -179,10 +181,8 @@ def dashboard(request):
         'total_clients': total_clients,
         'active_programs': active_programs,
         'total_staff': total_staff,
-        'pending_approvals': pending_approvals,
         'recent_clients': recent_clients,
         'program_status': program_status,
-        'pending_approvals_count': pending_approvals,
     }
     
     return render(request, 'dashboard.html', context)
@@ -253,65 +253,184 @@ def enrollments(request):
     return render(request, 'core/enrollments.html', context)
 
 
-@jwt_required
-def restrictions(request):
-    """Service restrictions management view"""
-    from django.utils import timezone as django_timezone
+@method_decorator(jwt_required, name='dispatch')
+class RestrictionListView(ProgramManagerAccessMixin, ListView):
+    model = ServiceRestriction
+    template_name = 'core/restrictions.html'
+    context_object_name = 'restrictions'
+    paginate_by = 10
     
-    # Get all restrictions with related data
-    restrictions = ServiceRestriction.objects.select_related(
-        'client', 'program', 'program__department'
-    ).order_by('-start_date')
+    def get_paginate_by(self, queryset):
+        """Get the number of items to paginate by from request parameters"""
+        per_page = self.request.GET.get('per_page', '10')
+        try:
+            per_page = int(per_page)
+            # Limit to reasonable values
+            if per_page < 5:
+                per_page = 5
+            elif per_page > 100:
+                per_page = 100
+        except (ValueError, TypeError):
+            per_page = 10
+        return per_page
     
-    # Calculate statistics
-    total_restrictions = restrictions.count()
-    active_restrictions = restrictions.filter(
-        end_date__isnull=True
-    ).count()
-    org_restrictions = restrictions.filter(scope='org').count()
-    program_restrictions = restrictions.filter(scope='program').count()
+    def get_queryset(self):
+        # First apply the ProgramManagerAccessMixin filtering
+        queryset = super().get_queryset()
+        
+        # Apply additional filters
+        restriction_type_filter = self.request.GET.get('restriction_type', '')
+        scope_filter = self.request.GET.get('scope', '')
+        status_filter = self.request.GET.get('status', '')
+        search_query = self.request.GET.get('search', '').strip()
+        
+        if restriction_type_filter:
+            queryset = queryset.filter(restriction_type=restriction_type_filter)
+        
+        if scope_filter:
+            queryset = queryset.filter(scope=scope_filter)
+        
+        if status_filter:
+            if status_filter == 'active':
+                queryset = queryset.filter(end_date__isnull=True) | queryset.filter(end_date__gt=timezone.now().date())
+            elif status_filter == 'expired':
+                queryset = queryset.filter(end_date__lt=timezone.now().date())
+        
+        if search_query:
+            queryset = queryset.filter(
+                Q(client__first_name__icontains=search_query) |
+                Q(client__last_name__icontains=search_query) |
+                Q(notes__icontains=search_query)
+            )
+        
+        # Apply client search
+        client_search_query = self.request.GET.get('client_search', '').strip()
+        if client_search_query:
+            queryset = queryset.filter(
+                Q(client__first_name__icontains=client_search_query) |
+                Q(client__last_name__icontains=client_search_query)
+            )
+        
+        # Apply program search
+        program_search_query = self.request.GET.get('program_search', '').strip()
+        if program_search_query:
+            queryset = queryset.filter(
+                Q(program__name__icontains=program_search_query)
+            )
+        
+        return queryset.select_related('client', 'program', 'program__department').order_by('-start_date')
     
-    context = {
-        'restrictions': restrictions,
-        'total_restrictions': total_restrictions,
-        'active_restrictions': active_restrictions,
-        'org_restrictions': org_restrictions,
-        'program_restrictions': program_restrictions,
-        'today': django_timezone.now().date(),
-    }
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get all restrictions for statistics (not paginated)
+        all_restrictions = ServiceRestriction.objects.select_related(
+            'client', 'program', 'program__department'
+        )
+        
+        # Calculate statistics
+        context['total_restrictions'] = all_restrictions.count()
+        context['active_restrictions'] = all_restrictions.filter(
+            end_date__isnull=True
+        ).count()
+        context['org_restrictions'] = all_restrictions.filter(scope='org').count()
+        context['program_restrictions'] = all_restrictions.filter(scope='program').count()
+        from django.utils import timezone as django_timezone
+        context['today'] = django_timezone.now().date()
+        
+        # Add filter options to context
+        context['restriction_type_choices'] = [
+            ('', 'All Types'),
+            ('bill_168', 'Bill 168 (Violence Against Staff)'),
+            ('no_trespass', 'No Trespass Order'),
+            ('behaviors', 'Behavioral Restrictions'),
+        ]
+        
+        context['scope_choices'] = [
+            ('', 'All Scopes'),
+            ('org', 'Organization'),
+            ('program', 'Program'),
+        ]
+        
+        context['status_choices'] = [
+            ('', 'All Statuses'),
+            ('active', 'Active'),
+            ('expired', 'Expired'),
+        ]
+        
+        # Add current filter values
+        context['current_restriction_type'] = self.request.GET.get('restriction_type', '')
+        context['current_scope'] = self.request.GET.get('scope', '')
+        context['current_status'] = self.request.GET.get('status', '')
+        context['current_search'] = self.request.GET.get('search', '')
+        context['per_page'] = self.request.GET.get('per_page', '10')
+        
+        # Add search parameters
+        context['client_search'] = self.request.GET.get('client_search', '')
+        context['program_search'] = self.request.GET.get('program_search', '')
+        
+        # Override pagination context
+        context['is_paginated'] = True  # Always show pagination controls
+        context['per_page'] = str(self.get_paginate_by(self.get_queryset()))
+        
+        return context
     
-    return render(request, 'core/restrictions.html', context)
+    def get_paginate_by(self, queryset):
+        """Get the number of items to paginate by from request parameters"""
+        per_page = self.request.GET.get('per_page', '10')
+        try:
+            per_page = int(per_page)
+            # Limit to reasonable values
+            if per_page < 5:
+                per_page = 5
+            elif per_page > 100:
+                per_page = 100
+        except (ValueError, TypeError):
+            per_page = 10
+        return per_page
 
 
-@jwt_required
-def approvals(request):
-    """Pending approvals management view"""
-    return render(request, 'core/approvals.html')
 
 
-@jwt_required
-def audit_log(request):
-    """Audit log view"""
-    from .models import AuditLog
+@method_decorator(jwt_required, name='dispatch')
+class AuditLogListView(ListView):
+    """Audit log list view with pagination"""
+    model = AuditLog
+    template_name = 'core/audit_log.html'
+    context_object_name = 'audit_logs'
+    paginate_by = 10  # Default: Show 10 audit logs per page
     
-    # Get all audit logs ordered by most recent first
-    audit_logs = AuditLog.objects.select_related('changed_by').order_by('-changed_at')
+    def get_paginate_by(self, queryset):
+        """Get number of items to paginate by from request parameter"""
+        per_page = self.request.GET.get('per_page', self.paginate_by)
+        try:
+            return int(per_page)
+        except (ValueError, TypeError):
+            return self.paginate_by
     
-    # Get statistics
-    total_events = audit_logs.count()
-    create_events = audit_logs.filter(action='create').count()
-    update_events = audit_logs.filter(action='update').count()
-    delete_events = audit_logs.filter(action='delete').count()
+    def get_queryset(self):
+        """Get audit logs ordered by most recent first"""
+        return AuditLog.objects.select_related('changed_by').order_by('-changed_at')
     
-    context = {
-        'audit_logs': audit_logs,
-        'total_events': total_events,
-        'create_events': create_events,
-        'update_events': update_events,
-        'delete_events': delete_events,
-    }
-    
-    return render(request, 'core/audit_log.html', context)
+    def get_context_data(self, **kwargs):
+        """Add statistics to context"""
+        context = super().get_context_data(**kwargs)
+        
+        # Get all audit logs for statistics (not just current page)
+        all_audit_logs = AuditLog.objects.all()
+        
+        context['total_events'] = all_audit_logs.count()
+        context['create_events'] = all_audit_logs.filter(action='create').count()
+        context['update_events'] = all_audit_logs.filter(action='update').count()
+        context['delete_events'] = all_audit_logs.filter(action='delete').count()
+        
+        # Add per_page to context for the template
+        context['per_page'] = str(self.get_paginate_by(self.get_queryset()))
+        
+        # Ensure is_paginated is always available
+        context['is_paginated'] = True
+        
+        return context
 
 
 # Department CRUD Views
@@ -411,17 +530,31 @@ class EnrollmentListView(ProgramManagerAccessMixin, ListView):
         client_search = self.request.GET.get('client_search', '').strip()
         program_search = self.request.GET.get('program_search', '').strip()
         
+        # Handle department filter first
         if department_filter:
             queryset = queryset.filter(program__department__name=department_filter)
         
+        # Handle status filtering
         if status_filter:
-            if status_filter == 'active':
-                queryset = queryset.filter(end_date__isnull=True)
+            if status_filter == 'active_only':
+                # Show only non-archived enrollments
+                queryset = queryset.filter(is_archived=False)
+            elif status_filter == 'pending':
+                # Show enrollments with status='pending' and not archived
+                queryset = queryset.filter(status='pending', is_archived=False)
+            elif status_filter == 'active':
+                # Show enrollments with status='active' and not archived
+                queryset = queryset.filter(status='active', is_archived=False)
             elif status_filter == 'completed':
-                queryset = queryset.filter(end_date__isnull=False)
+                # Show enrollments with status='completed' and not archived
+                queryset = queryset.filter(status='completed', is_archived=False)
             elif status_filter == 'future':
+                # Show future enrollments (start date in future and not archived)
                 from django.utils import timezone
-                queryset = queryset.filter(start_date__gt=timezone.now().date())
+                queryset = queryset.filter(start_date__gt=timezone.now().date(), is_archived=False)
+            elif status_filter == 'archived':
+                # Show only archived enrollments
+                queryset = queryset.filter(is_archived=True)
         
         if client_search:
             queryset = queryset.filter(
@@ -457,9 +590,12 @@ class EnrollmentListView(ProgramManagerAccessMixin, ListView):
         context['departments'] = Department.objects.all().order_by('name')
         context['status_choices'] = [
             ('', 'All Statuses'),
+            ('pending', 'Pending'),
             ('active', 'Active'),
             ('completed', 'Completed'),
             ('future', 'Future Start'),
+            ('archived', 'Archived'),
+            ('active_only', 'All Non-Archived'),
         ]
         
         # Add current filter values
@@ -492,32 +628,52 @@ class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
     template_name = 'core/enrollment_form.html'
     success_url = reverse_lazy('core:enrollments')
     
-    def form_valid(self, form):
-        """Override form_valid to add audit logging"""
-        response = super().form_valid(form)
+    def post(self, request, *args, **kwargs):
+        """Override post method to handle form validation"""
+        form = self.get_form()
         
-        # Create audit log entry
+        if form.is_valid():
+            return self.form_valid(form)
+        else:
+            return self.form_invalid(form)
+    
+    def form_valid(self, form):
+        """Override form_valid to set created_by and add audit logging"""
         try:
-            from .models import create_audit_log
-            create_audit_log(
-                entity_name='Enrollment',
-                entity_id=self.object.external_id,
-                action='create',
-                changed_by=self.request.user,
-                diff_data={
-                    'client': str(self.object.client),
-                    'program': str(self.object.program),
-                    'start_date': str(self.object.start_date),
-                    'status': self.object.status
-                }
-            )
+            enrollment = form.save(commit=False)
+            enrollment.created_by = self.request.user.get_full_name() or self.request.user.username
+            enrollment.save()
+            
+            # Create audit log entry
+            try:
+                from .models import create_audit_log
+                create_audit_log(
+                    entity_name='Enrollment',
+                    entity_id=enrollment.external_id,
+                    action='create',
+                    changed_by=self.request.user,
+                    diff_data={
+                        'client': str(enrollment.client),
+                        'program': str(enrollment.program),
+                        'start_date': str(enrollment.start_date),
+                        'status': enrollment.status
+                    }
+                )
+            except Exception as e:
+                # Log error but don't break the enrollment creation
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error creating audit log for enrollment: {e}")
+            
+            messages.success(self.request, 'Enrollment created successfully.')
+            return super().form_valid(form)
+            
         except Exception as e:
-            # Log error but don't break the enrollment creation
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Error creating audit log for enrollment: {e}")
-        
-        return response
+            logger.error(f"Error in form_valid method: {e}")
+            # Still call super to maintain normal behavior
+            return super().form_valid(form)
     
     def get_form_kwargs(self):
         """Filter programs and clients to only assigned ones for Program Managers"""
@@ -539,11 +695,19 @@ class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
     
     def form_invalid(self, form):
         """Handle form validation errors"""
-        return super().form_invalid(form)
-    
-    def form_valid(self, form):
-        """Handle successful form submission"""
-        return super().form_valid(form)
+        print("=== ENROLLMENT FORM_INVALID CALLED ===")
+        print(f"Form errors: {form.errors}")
+        
+        # Add error messages to the form
+        for field, errors in form.errors.items():
+            for error in errors:
+                if field == '__all__':
+                    messages.error(self.request, str(error))
+                else:
+                    messages.error(self.request, f"{field}: {error}")
+        
+        # Return the form with errors
+        return self.render_to_response(self.get_context_data(form=form))
 
 
 @method_decorator(jwt_required, name='dispatch')
@@ -637,50 +801,57 @@ class EnrollmentDeleteView(ProgramManagerAccessMixin, DeleteView):
         context['enrollment'] = self.get_object()
         return context
     
-    def delete(self, request, *args, **kwargs):
-        """Override to handle confirmation text validation"""
+    def form_valid(self, form):
+        """Override to archive enrollment instead of deleting"""
         try:
+            print(f"Form valid method called for enrollment archiving")
+            print(f"Request method: {self.request.method}")
+            print(f"Request POST data: {self.request.POST}")
+            
             # Get the enrollment object first
             enrollment = self.get_object()
-            
-            # Check confirmation text
-            confirmation = request.POST.get('confirmation_text', '').strip().upper()
-            if confirmation != 'DELETE':
-                messages.error(request, 'Please type "DELETE" to confirm deletion.')
-                return redirect('core:enrollments_detail', external_id=enrollment.external_id)
+            print(f"Found enrollment: {enrollment.client.first_name} {enrollment.client.last_name}")
             
             client_name = f"{enrollment.client.first_name} {enrollment.client.last_name}"
             program_name = enrollment.program.name
             
-            # Create audit log entry before deletion
+            # Archive the enrollment instead of deleting
+            enrollment.is_archived = True
+            enrollment.status = 'archived'
+            enrollment.updated_by = self.request.user.get_full_name() or self.request.user.username
+            enrollment.save()
+            
+            print(f"Enrollment archived successfully: {client_name} - {program_name}")
+            print(f"is_archived: {enrollment.is_archived}, status: {enrollment.status}")
+            
+            # Create audit log entry for archiving
             from .models import create_audit_log
             create_audit_log(
                 entity_name='Enrollment',
                 entity_id=enrollment.external_id,
-                action='delete',
-                changed_by=request.user,
+                action='update',
+                changed_by=self.request.user,
                 diff_data={
                     'client': str(enrollment.client),
                     'program': str(enrollment.program),
                     'start_date': str(enrollment.start_date),
                     'end_date': str(enrollment.end_date) if enrollment.end_date else None,
-                    'status': enrollment.status
+                    'status': 'archived',
+                    'is_archived': True
                 }
             )
             
-            # Delete the enrollment
-            enrollment.delete()
-            print(f"Deleted enrollment: {client_name} - {program_name}")
+            print(f"Archived enrollment: {client_name} - {program_name}")
             
             messages.success(
-                request, 
-                f'Enrollment for {client_name} in {program_name} has been deleted successfully.'
+                self.request, 
+                f'Enrollment for {client_name} in {program_name} has been archived successfully.'
             )
             return redirect(self.success_url)
             
         except Exception as e:
-            print(f"Error deleting enrollment: {str(e)}")
-            messages.error(request, f'Error deleting enrollment: {str(e)}')
+            print(f"Error archiving enrollment: {str(e)}")
+            messages.error(self.request, f'Error archiving enrollment: {str(e)}')
             return redirect(self.success_url)
 
 
@@ -803,27 +974,7 @@ def search_clients(request):
 
 
 # Service Restriction CRUD Views
-class RestrictionListView(ProgramManagerAccessMixin, ListView):
-    model = ServiceRestriction
-    template_name = 'core/restrictions.html'
-    context_object_name = 'restrictions'
-    paginate_by = 10
-    
-    def get_queryset(self):
-        return ServiceRestriction.objects.select_related(
-            'client', 'program', 'program__department'
-        ).order_by('-created_at')
-    
-    def get_context_data(self, **kwargs):
-        from django.utils import timezone as django_timezone
-        context = super().get_context_data(**kwargs)
-        restrictions = self.get_queryset()
-        context['total_restrictions'] = restrictions.count()
-        context['active_restrictions'] = restrictions.filter(end_date__isnull=True).count()
-        context['org_restrictions'] = restrictions.filter(scope='org').count()
-        context['program_restrictions'] = restrictions.filter(scope='program').count()
-        context['today'] = django_timezone.now().date()
-        return context
+# Note: RestrictionListView is defined earlier in the file (line 255) with full pagination support
 
 
 class RestrictionDetailView(ProgramManagerAccessMixin, DetailView):
@@ -855,11 +1006,6 @@ class RestrictionCreateView(ProgramManagerAccessMixin, CreateView):
         return kwargs
     
     def form_valid(self, form):
-        print("RestrictionCreateView.form_valid called")
-        print(f"Form is valid: {form.is_valid()}")
-        print(f"Form errors: {form.errors}")
-        print(f"Form cleaned_data: {form.cleaned_data}")
-        
         try:
             # Set the created_by and updated_by fields before saving
             restriction = form.save(commit=False)
@@ -868,7 +1014,31 @@ class RestrictionCreateView(ProgramManagerAccessMixin, CreateView):
             restriction.updated_by = user_name
             restriction.save()
             
-            messages.success(self.request, 'Service restriction created successfully.')
+            # Create audit log entry for restriction creation
+            try:
+                from .models import create_audit_log
+                create_audit_log(
+                    entity_name='Restriction',
+                    entity_id=restriction.external_id,
+                    action='create',
+                    changed_by=self.request.user,
+                    diff_data={
+                        'client': str(restriction.client),
+                        'scope': restriction.scope,
+                        'program': str(restriction.program) if restriction.program else None,
+                        'restriction_type': restriction.restriction_type,
+                        'start_date': str(restriction.start_date),
+                        'end_date': str(restriction.end_date) if restriction.end_date else None,
+                        'is_indefinite': restriction.is_indefinite,
+                        'behaviors': restriction.behaviors,
+                        'notes': restriction.notes or '',
+                        'created_by': restriction.created_by
+                    }
+                )
+            except Exception as e:
+                print(f"Error creating audit log for restriction: {e}")
+            
+            create_success(self.request, 'Service restriction')
             return redirect(self.success_url)
         except Exception as e:
             print(f"Error saving form: {e}")
@@ -907,6 +1077,64 @@ class RestrictionUpdateView(ProgramManagerAccessMixin, UpdateView):
                 pass
         return kwargs
     
+    def form_valid(self, form):
+        """Handle restriction updates with audit logging"""
+        # Get the original restriction data before saving
+        original_restriction = self.get_object()
+        
+        # Set the updated_by field before saving
+        restriction = form.save(commit=False)
+        user_name = self.request.user.get_full_name() or self.request.user.username
+        restriction.updated_by = user_name
+        restriction.save()
+        
+        # Create audit log entry for restriction update
+        try:
+            from .models import create_audit_log
+            
+            # Compare original and updated values to detect changes
+            changes = {}
+            
+            # Check each field for changes
+            if original_restriction.scope != restriction.scope:
+                changes['scope'] = f"{original_restriction.scope} → {restriction.scope}"
+            
+            if original_restriction.program != restriction.program:
+                changes['program'] = f"{str(original_restriction.program) if original_restriction.program else 'None'} → {str(restriction.program) if restriction.program else 'None'}"
+            
+            if original_restriction.restriction_type != restriction.restriction_type:
+                changes['restriction_type'] = f"{original_restriction.restriction_type} → {restriction.restriction_type}"
+            
+            if original_restriction.start_date != restriction.start_date:
+                changes['start_date'] = f"{original_restriction.start_date} → {restriction.start_date}"
+            
+            if original_restriction.end_date != restriction.end_date:
+                changes['end_date'] = f"{original_restriction.end_date} → {restriction.end_date}"
+            
+            if original_restriction.is_indefinite != restriction.is_indefinite:
+                changes['is_indefinite'] = f"{original_restriction.is_indefinite} → {restriction.is_indefinite}"
+            
+            if original_restriction.behaviors != restriction.behaviors:
+                changes['behaviors'] = f"{original_restriction.behaviors} → {restriction.behaviors}"
+            
+            if original_restriction.notes != restriction.notes:
+                changes['notes'] = f"{original_restriction.notes or ''} → {restriction.notes or ''}"
+            
+            # Only create audit log if there were changes
+            if changes:
+                create_audit_log(
+                    entity_name='Restriction',
+                    entity_id=restriction.external_id,
+                    action='update',
+                    changed_by=self.request.user,
+                    diff_data=changes
+                )
+        except Exception as e:
+            print(f"Error creating audit log for restriction update: {e}")
+        
+        update_success(self.request, 'Service restriction')
+        return redirect(self.success_url)
+    
     def get_context_data(self, **kwargs):
         """Add client data for pre-population in edit mode"""
         context = super().get_context_data(**kwargs)
@@ -920,15 +1148,6 @@ class RestrictionUpdateView(ProgramManagerAccessMixin, UpdateView):
                 'last_name': self.object.client.last_name,
             })
         return context
-    
-    def form_valid(self, form):
-        # Set the updated_by field before saving
-        restriction = form.save(commit=False)
-        restriction.updated_by = self.request.user.get_full_name() or self.request.user.username
-        restriction.save()
-        
-        messages.success(self.request, 'Service restriction updated successfully.')
-        return redirect(self.success_url)
 
 
 class RestrictionDeleteView(ProgramManagerAccessMixin, DeleteView):
@@ -944,35 +1163,56 @@ class RestrictionDeleteView(ProgramManagerAccessMixin, DeleteView):
         context['restriction'] = self.get_object()
         return context
     
-    def delete(self, request, *args, **kwargs):
-        """Override to handle confirmation text validation"""
+    def form_valid(self, form):
+        """Handle restriction deletion with audit logging"""
+        print("RestrictionDeleteView.form_valid called")
+        
+        # Get the restriction object first
+        restriction = self.get_object()
+        print(f"Restriction to delete: {restriction}")
+        
+        # Check confirmation text
+        confirmation = self.request.POST.get('confirmation_text', '').strip().upper()
+        if confirmation != 'DELETE':
+            messages.error(self.request, 'Please type "DELETE" to confirm deletion.')
+            return redirect('core:restrictions_detail', external_id=restriction.external_id)
+        
+        client_name = f"{restriction.client.first_name} {restriction.client.last_name}"
+        restriction_type = restriction.get_restriction_type_display()
+        
+        # Create audit log entry before deletion
+        print("Creating audit log for restriction deletion...")
         try:
-            # Get the restriction object first
-            restriction = self.get_object()
-            
-            # Check confirmation text
-            confirmation = request.POST.get('confirmation_text', '').strip().upper()
-            if confirmation != 'DELETE':
-                messages.error(request, 'Please type "DELETE" to confirm deletion.')
-                return redirect('core:restrictions_detail', external_id=restriction.external_id)
-            
-            client_name = f"{restriction.client.first_name} {restriction.client.last_name}"
-            restriction_type = restriction.get_restriction_type_display()
-            
-            # Delete the restriction
-            restriction.delete()
-            print(f"Deleted restriction: {client_name} - {restriction_type}")
-            
-            messages.success(
-                request, 
-                f'Service restriction for {client_name} has been deleted successfully.'
+            from .models import create_audit_log
+            create_audit_log(
+                entity_name='Restriction',
+                entity_id=restriction.external_id,
+                action='delete',
+                changed_by=self.request.user,
+                diff_data={
+                    'client': str(restriction.client),
+                    'scope': restriction.scope,
+                    'program': str(restriction.program) if restriction.program else None,
+                    'restriction_type': restriction.restriction_type,
+                    'start_date': str(restriction.start_date),
+                    'end_date': str(restriction.end_date) if restriction.end_date else None,
+                    'is_indefinite': restriction.is_indefinite,
+                    'behaviors': restriction.behaviors,
+                    'notes': restriction.notes or '',
+                    'deleted_by': f"{self.request.user.first_name} {self.request.user.last_name}".strip() or self.request.user.username
+                }
             )
-            return redirect(self.success_url)
-            
+            print("Audit log created for restriction deletion")
         except Exception as e:
-            print(f"Error deleting restriction: {str(e)}")
-            messages.error(request, f'Error deleting restriction: {str(e)}')
-            return redirect(self.success_url)
+            print(f"Error creating audit log for restriction deletion: {e}")
+        
+        # Delete the restriction
+        print("Deleting restriction...")
+        restriction.delete()
+        print("Restriction deleted successfully")
+        
+        delete_success(self.request, 'Service restriction', client_name)
+        return redirect(self.success_url)
 
 
 @csrf_exempt
@@ -1058,30 +1298,35 @@ def bulk_delete_enrollments(request):
                 'error': 'No enrollments found with the provided IDs'
             }, status=404)
         
-        # Create audit log entries for each enrollment before deletion
+        # Archive the enrollments instead of deleting
         from .models import create_audit_log
         for enrollment in enrollments_to_delete:
+            # Archive the enrollment
+            enrollment.is_archived = True
+            enrollment.status = 'archived'
+            enrollment.updated_by = request.user.get_full_name() or request.user.username
+            enrollment.save()
+            
+            # Create audit log entry for archiving
             create_audit_log(
                 entity_name='Enrollment',
                 entity_id=enrollment.external_id,
-                action='delete',
+                action='update',
                 changed_by=request.user,
                 diff_data={
                     'client': str(enrollment.client),
                     'program': str(enrollment.program),
                     'start_date': str(enrollment.start_date),
                     'end_date': str(enrollment.end_date) if enrollment.end_date else None,
-                    'status': enrollment.status
+                    'status': 'archived',
+                    'is_archived': True
                 }
             )
-        
-        # Delete the enrollments
-        enrollments_to_delete.delete()
         
         return JsonResponse({
             'success': True,
             'deleted_count': deleted_count,
-            'message': f'Successfully deleted {deleted_count} enrollment(s)'
+            'message': f'Successfully archived {deleted_count} enrollment(s)'
         })
         
     except json.JSONDecodeError:
@@ -1161,6 +1406,98 @@ def edit_profile(request):
     }
     
     return render(request, 'core/edit_profile.html', context)
+
+
+@jwt_required
+def test_messages(request):
+    """Test page for message system"""
+    return render(request, 'test_messages.html')
+
+
+@jwt_required
+def test_success(request):
+    """Test success message"""
+    success_message(request, "This is a test success message!")
+    return redirect('core:test_messages')
+
+
+@jwt_required
+def test_error(request):
+    """Test error message"""
+    error_message(request, "This is a test error message!")
+    return redirect('core:test_messages')
+
+
+@jwt_required
+def test_warning(request):
+    """Test warning message"""
+    warning_message(request, "This is a test warning message!")
+    return redirect('core:test_messages')
+
+
+@jwt_required
+def test_info(request):
+    """Test info message"""
+    info_message(request, "This is a test info message!")
+    return redirect('core:test_messages')
+
+
+@jwt_required
+def test_create_success(request):
+    """Test create success message"""
+    create_success(request, 'Test Entity', 'Sample Item')
+    return redirect('core:test_messages')
+
+
+@jwt_required
+def test_update_success(request):
+    """Test update success message"""
+    update_success(request, 'Test Entity', 'Sample Item')
+    return redirect('core:test_messages')
+
+
+@jwt_required
+def test_delete_success(request):
+    """Test delete success message"""
+    delete_success(request, 'Test Entity', 'Sample Item')
+    return redirect('core:test_messages')
+
+
+@jwt_required
+def test_validation_error(request):
+    """Test validation error message"""
+    validation_error(request, "This field is required.")
+    return redirect('core:test_messages')
+
+
+@jwt_required
+def test_permission_error(request):
+    """Test permission error message"""
+    permission_error(request, "delete this item")
+    return redirect('core:test_messages')
+
+
+@jwt_required
+def test_not_found_error(request):
+    """Test not found error message"""
+    not_found_error(request, 'Test Entity')
+    return redirect('core:test_messages')
+
+
+@jwt_required
+def test_bulk_operation_success(request):
+    """Test bulk operation success message"""
+    from .message_utils import bulk_operation_success
+    bulk_operation_success(request, 'Client', 5, 'processed')
+    return redirect('core:test_messages')
+
+
+@jwt_required
+def test_bulk_operation_error(request):
+    """Test bulk operation error message"""
+    from .message_utils import bulk_operation_error
+    bulk_operation_error(request, 'Client', ['Invalid email', 'Missing phone'])
+    return redirect('core:test_messages')
 
 
 @jwt_required
@@ -1276,3 +1613,207 @@ def search_programs(request):
         return JsonResponse({'success': True, 'programs': programs_data})
     
     return JsonResponse({'error': 'Invalid request method'}, status=405)
+
+
+@method_decorator(jwt_required, name='dispatch')
+class EnrollmentCSVExportView(ProgramManagerAccessMixin, ListView):
+    """Export enrollments to CSV with filtering support"""
+    model = ClientProgramEnrollment
+    template_name = 'core/enrollments.html'
+    
+    def get_queryset(self):
+        # Use the same filtering logic as EnrollmentListView
+        queryset = super().get_queryset()
+        
+        # Apply additional filters
+        department_filter = self.request.GET.get('department', '')
+        status_filter = self.request.GET.get('status', '')
+        client_search = self.request.GET.get('client_search', '').strip()
+        program_search = self.request.GET.get('program_search', '').strip()
+        
+        # Handle department filter first
+        if department_filter:
+            queryset = queryset.filter(program__department__name=department_filter)
+        
+        # Handle status filtering
+        if status_filter:
+            if status_filter == 'active_only':
+                # Show only non-archived enrollments
+                queryset = queryset.filter(is_archived=False)
+            elif status_filter == 'pending':
+                # Show enrollments with status='pending' and not archived
+                queryset = queryset.filter(status='pending', is_archived=False)
+            elif status_filter == 'active':
+                # Show enrollments with status='active' and not archived
+                queryset = queryset.filter(status='active', is_archived=False)
+            elif status_filter == 'completed':
+                # Show enrollments with status='completed' and not archived
+                queryset = queryset.filter(status='completed', is_archived=False)
+            elif status_filter == 'future':
+                # Show future enrollments (start date in future and not archived)
+                from django.utils import timezone
+                queryset = queryset.filter(start_date__gt=timezone.now().date(), is_archived=False)
+            elif status_filter == 'archived':
+                # Show only archived enrollments
+                queryset = queryset.filter(is_archived=True)
+        
+        if client_search:
+            queryset = queryset.filter(
+                Q(client__first_name__icontains=client_search) |
+                Q(client__last_name__icontains=client_search) |
+                Q(client__preferred_name__icontains=client_search) |
+                Q(client__alias__icontains=client_search)
+            )
+        
+        if program_search:
+            queryset = queryset.filter(
+                Q(program__name__icontains=program_search) |
+                Q(program__department__name__icontains=program_search)
+            )
+        
+        return queryset.order_by('-created_at')
+    
+    def get(self, request, *args, **kwargs):
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="enrollments_export.csv"'
+        
+        # Create CSV writer
+        writer = csv.writer(response)
+        
+        # Write header row
+        writer.writerow([
+            'Client Name',
+            'Client ID',
+            'Program Name',
+            'Department',
+            'Start Date',
+            'End Date',
+            'Status',
+            'Notes',
+            'Created By',
+            'Created At',
+            'Updated By',
+            'Updated At',
+            'Is Archived'
+        ])
+        
+        # Get filtered enrollments
+        enrollments = self.get_queryset()
+        
+        # Write data rows
+        for enrollment in enrollments:
+            writer.writerow([
+                f"{enrollment.client.first_name} {enrollment.client.last_name}",
+                enrollment.client.client_id,
+                enrollment.program.name,
+                enrollment.program.department.name,
+                enrollment.start_date.strftime('%Y-%m-%d') if enrollment.start_date else '',
+                enrollment.end_date.strftime('%Y-%m-%d') if enrollment.end_date else '',
+                enrollment.get_status_display(),
+                enrollment.notes or '',
+                enrollment.created_by or '',
+                enrollment.created_at.strftime('%Y-%m-%d %H:%M:%S') if enrollment.created_at else '',
+                enrollment.updated_by or '',
+                enrollment.updated_at.strftime('%Y-%m-%d %H:%M:%S') if enrollment.updated_at else '',
+                'Yes' if enrollment.is_archived else 'No'
+            ])
+        
+        return response
+
+
+@method_decorator(jwt_required, name='dispatch')
+class RestrictionCSVExportView(ProgramManagerAccessMixin, ListView):
+    """Export restrictions to CSV with filtering support"""
+    model = ServiceRestriction
+    template_name = 'core/restrictions.html'
+    
+    def get_queryset(self):
+        # Use the same filtering logic as the restrictions view
+        queryset = super().get_queryset()
+        
+        # Apply additional filters if any
+        restriction_type_filter = self.request.GET.get('restriction_type', '')
+        scope_filter = self.request.GET.get('scope', '')
+        status_filter = self.request.GET.get('status', '')
+        search_query = self.request.GET.get('search', '').strip()
+        
+        if restriction_type_filter:
+            queryset = queryset.filter(restriction_type=restriction_type_filter)
+        
+        if scope_filter:
+            queryset = queryset.filter(scope=scope_filter)
+        
+        if status_filter:
+            if status_filter == 'active':
+                queryset = queryset.filter(end_date__isnull=True) | queryset.filter(end_date__gt=timezone.now().date())
+            elif status_filter == 'expired':
+                queryset = queryset.filter(end_date__lt=timezone.now().date())
+        
+        if search_query:
+            queryset = queryset.filter(
+                Q(client__first_name__icontains=search_query) |
+                Q(client__last_name__icontains=search_query) |
+                Q(notes__icontains=search_query)
+            )
+        
+        return queryset.order_by('-created_at')
+    
+    def get(self, request, *args, **kwargs):
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="restrictions_export.csv"'
+        
+        # Create CSV writer
+        writer = csv.writer(response)
+        
+        # Write header row
+        writer.writerow([
+            'Client Name',
+            'Client ID',
+            'Restriction Type',
+            'Scope',
+            'Program',
+            'Duration',
+            'Start Date',
+            'End Date',
+            'Is Indefinite',
+            'Status',
+            'Notes',
+            'Created By',
+            'Created At',
+            'Updated By',
+            'Updated At'
+        ])
+        
+        # Get filtered restrictions
+        restrictions = self.get_queryset()
+        
+        # Write data rows
+        for restriction in restrictions:
+            # Determine status
+            status = 'Active'
+            if restriction.end_date and restriction.end_date < timezone.now().date():
+                status = 'Expired'
+            elif restriction.is_indefinite:
+                status = 'Indefinite'
+            
+            writer.writerow([
+                f"{restriction.client.first_name} {restriction.client.last_name}",
+                restriction.client.client_id,
+                restriction.get_restriction_type_display(),
+                restriction.get_scope_display(),
+                restriction.program.name if restriction.program else 'All Programs',
+                restriction.get_duration_display() if not restriction.is_indefinite else 'Indefinite',
+                restriction.start_date.strftime('%Y-%m-%d') if restriction.start_date else '',
+                restriction.end_date.strftime('%Y-%m-%d') if restriction.end_date else '',
+                'Yes' if restriction.is_indefinite else 'No',
+                status,
+                restriction.notes or '',
+                restriction.created_by or '',
+                restriction.created_at.strftime('%Y-%m-%d %H:%M:%S') if restriction.created_at else '',
+                restriction.updated_by or '',
+                restriction.updated_at.strftime('%Y-%m-%d %H:%M:%S') if restriction.updated_at else ''
+            ])
+        
+        return response

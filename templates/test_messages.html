@@ -1,0 +1,92 @@
+{% extends 'dashboard_base.html' %}
+{% load static %}
+
+{% block title %}Test Messages - Central Client Database{% endblock %}
+
+{% block page_title %}Test Messages{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+        <h2 class="text-2xl font-bold text-neutral-800 mb-6">Message System Test</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Success Messages -->
+            <div class="space-y-4">
+                <h3 class="text-lg font-bold text-neutral-700">Success Messages</h3>
+                <div class="space-y-2">
+                    <a href="{% url 'core:test_success' %}" class="block w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                        Test Success Message
+                    </a>
+                    <a href="{% url 'core:test_create_success' %}" class="block w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                        Test Create Success
+                    </a>
+                    <a href="{% url 'core:test_update_success' %}" class="block w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                        Test Update Success
+                    </a>
+                    <a href="{% url 'core:test_delete_success' %}" class="block w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                        Test Delete Success
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Error Messages -->
+            <div class="space-y-4">
+                <h3 class="text-lg font-bold text-neutral-700">Error Messages</h3>
+                <div class="space-y-2">
+                    <a href="{% url 'core:test_error' %}" class="block w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                        Test Error Message
+                    </a>
+                    <a href="{% url 'core:test_validation_error' %}" class="block w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                        Test Validation Error
+                    </a>
+                    <a href="{% url 'core:test_permission_error' %}" class="block w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                        Test Permission Error
+                    </a>
+                    <a href="{% url 'core:test_not_found_error' %}" class="block w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                        Test Not Found Error
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Warning Messages -->
+            <div class="space-y-4">
+                <h3 class="text-lg font-bold text-neutral-700">Warning Messages</h3>
+                <div class="space-y-2">
+                    <a href="{% url 'core:test_warning' %}" class="block w-full px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors">
+                        Test Warning Message
+                    </a>
+                    <a href="{% url 'core:test_bulk_operation_error' %}" class="block w-full px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors">
+                        Test Bulk Operation Error
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Info Messages -->
+            <div class="space-y-4">
+                <h3 class="text-lg font-bold text-neutral-700">Info Messages</h3>
+                <div class="space-y-2">
+                    <a href="{% url 'core:test_info' %}" class="block w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        Test Info Message
+                    </a>
+                    <a href="{% url 'core:test_bulk_operation_success' %}" class="block w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        Test Bulk Operation Success
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-8 p-4 bg-neutral-50 rounded-lg">
+            <h4 class="text-lg font-bold text-neutral-700 mb-2">Features:</h4>
+            <ul class="list-disc list-inside space-y-1 text-neutral-600">
+                <li>Auto-dismiss after 5 seconds</li>
+                <li>Manual dismiss with close button</li>
+                <li>Slide-in animations</li>
+                <li>Color-coded by message type</li>
+                <li>Icons for each message type</li>
+                <li>Consistent styling across the app</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

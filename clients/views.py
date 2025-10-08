@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView
 from django.urls import reverse_lazy
 from django.contrib import messages
+from core.message_utils import success_message, error_message, warning_message, info_message, create_success, update_success, delete_success, validation_error, permission_error, not_found_error
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
@@ -191,6 +192,9 @@ class ClientCreateView(CreateView):
             'phone': client.phone,
         }
         
+        # Save the client first before checking for duplicates
+        client.save()
+        
         # Only check for duplicates if no unique identifiers (email/phone)
         if not client.email and not client.phone:
             existing_clients = Client.objects.exclude(id=client.id)
@@ -220,16 +224,56 @@ class ClientCreateView(CreateView):
                         }
                     )
                 
-                messages.warning(
+                warning_message(
                     self.request, 
                     f'Client created with potential duplicates detected. Please review the Probable Duplicate Clients page.'
                 )
             else:
-                messages.success(self.request, 'Client created successfully.')
+                create_success(self.request, 'Client')
         else:
-            messages.success(self.request, 'Client created successfully.')
+            create_success(self.request, 'Client')
         
-        client.save()
+        # Create audit log entry
+        try:
+            from core.models import create_audit_log
+            create_audit_log(
+                entity_name='Client',
+                entity_id=client.external_id,
+                action='create',
+                changed_by=self.request.user,
+                diff_data={
+                    'first_name': client.first_name,
+                    'last_name': client.last_name,
+                    'preferred_name': client.preferred_name or '',
+                    'alias': client.alias or '',
+                    'dob': str(client.dob) if client.dob else '',
+                    'gender': client.gender or '',
+                    'sexual_orientation': client.sexual_orientation or '',
+                    'languages_spoken': str(client.languages_spoken) if client.languages_spoken else '',
+                    'ethnicity': str(client.ethnicity) if client.ethnicity else '',
+                    'citizenship_status': client.citizenship_status or '',
+                    'indigenous_status': client.indigenous_status or '',
+                    'country_of_birth': client.country_of_birth or '',
+                    'contact_information': str(client.contact_information) if client.contact_information else '',
+                    'addresses': str(client.addresses) if client.addresses else '',
+                    'address_2': client.address_2 or '',
+                    'permission_to_email': client.permission_to_email,
+                    'permission_to_phone': client.permission_to_phone,
+                    'phone_work': client.phone_work or '',
+                    'phone_alt': client.phone_alt or '',
+                    'client_id': client.client_id or '',
+                    'medical_conditions': client.medical_conditions or '',
+                    'primary_diagnosis': client.primary_diagnosis or '',
+                    'support_workers': str(client.support_workers) if client.support_workers else '',
+                    'next_of_kin': str(client.next_of_kin) if client.next_of_kin else '',
+                    'emergency_contact': str(client.emergency_contact) if client.emergency_contact else '',
+                    'comments': client.comments or '',
+                    'created_by': client.updated_by
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error creating audit log for client: {e}")
+        
         return super().form_valid(form)
 
 class ClientUpdateView(UpdateView):
@@ -243,6 +287,83 @@ class ClientUpdateView(UpdateView):
     def form_valid(self, form):
         client = form.save(commit=False)
         
+        # Store original values for audit log
+        original_client = Client.objects.get(pk=client.pk)
+        changes = {}
+        
+        # Check for changes in all client fields
+        # Basic Information
+        if original_client.first_name != client.first_name:
+            changes['first_name'] = f"{original_client.first_name} → {client.first_name}"
+        if original_client.last_name != client.last_name:
+            changes['last_name'] = f"{original_client.last_name} → {client.last_name}"
+        if original_client.preferred_name != client.preferred_name:
+            changes['preferred_name'] = f"{original_client.preferred_name or ''} → {client.preferred_name or ''}"
+        if original_client.alias != client.alias:
+            changes['alias'] = f"{original_client.alias or ''} → {client.alias or ''}"
+        if original_client.dob != client.dob:
+            changes['dob'] = f"{original_client.dob or ''} → {client.dob or ''}"
+        if original_client.gender != client.gender:
+            changes['gender'] = f"{original_client.gender or ''} → {client.gender or ''}"
+        if original_client.sexual_orientation != client.sexual_orientation:
+            changes['sexual_orientation'] = f"{original_client.sexual_orientation or ''} → {client.sexual_orientation or ''}"
+        
+        # Languages and Ethnicity
+        if original_client.languages_spoken != client.languages_spoken:
+            changes['languages_spoken'] = f"{str(original_client.languages_spoken) or ''} → {str(client.languages_spoken) or ''}"
+        if original_client.ethnicity != client.ethnicity:
+            changes['ethnicity'] = f"{str(original_client.ethnicity) or ''} → {str(client.ethnicity) or ''}"
+        
+        # Status Information
+        if original_client.citizenship_status != client.citizenship_status:
+            changes['citizenship_status'] = f"{original_client.citizenship_status or ''} → {client.citizenship_status or ''}"
+        if original_client.indigenous_status != client.indigenous_status:
+            changes['indigenous_status'] = f"{original_client.indigenous_status or ''} → {client.indigenous_status or ''}"
+        if original_client.country_of_birth != client.country_of_birth:
+            changes['country_of_birth'] = f"{original_client.country_of_birth or ''} → {client.country_of_birth or ''}"
+        
+        # Contact Information
+        if original_client.contact_information != client.contact_information:
+            changes['contact_information'] = f"{str(original_client.contact_information) or ''} → {str(client.contact_information) or ''}"
+        if original_client.addresses != client.addresses:
+            changes['addresses'] = f"{str(original_client.addresses) or ''} → {str(client.addresses) or ''}"
+        if original_client.address_2 != client.address_2:
+            changes['address_2'] = f"{original_client.address_2 or ''} → {client.address_2 or ''}"
+        
+        # Contact Permissions
+        if original_client.permission_to_email != client.permission_to_email:
+            changes['permission_to_email'] = f"{original_client.permission_to_email} → {client.permission_to_email}"
+        if original_client.permission_to_phone != client.permission_to_phone:
+            changes['permission_to_phone'] = f"{original_client.permission_to_phone} → {client.permission_to_phone}"
+        
+        # Phone Numbers
+        if original_client.phone_work != client.phone_work:
+            changes['phone_work'] = f"{original_client.phone_work or ''} → {client.phone_work or ''}"
+        if original_client.phone_alt != client.phone_alt:
+            changes['phone_alt'] = f"{original_client.phone_alt or ''} → {client.phone_alt or ''}"
+        
+        # Client ID
+        if original_client.client_id != client.client_id:
+            changes['client_id'] = f"{original_client.client_id or ''} → {client.client_id or ''}"
+        
+        # Medical Information
+        if original_client.medical_conditions != client.medical_conditions:
+            changes['medical_conditions'] = f"{original_client.medical_conditions or ''} → {client.medical_conditions or ''}"
+        if original_client.primary_diagnosis != client.primary_diagnosis:
+            changes['primary_diagnosis'] = f"{original_client.primary_diagnosis or ''} → {client.primary_diagnosis or ''}"
+        
+        # Support and Emergency Contacts
+        if original_client.support_workers != client.support_workers:
+            changes['support_workers'] = f"{str(original_client.support_workers) or ''} → {str(client.support_workers) or ''}"
+        if original_client.next_of_kin != client.next_of_kin:
+            changes['next_of_kin'] = f"{str(original_client.next_of_kin) or ''} → {str(client.next_of_kin) or ''}"
+        if original_client.emergency_contact != client.emergency_contact:
+            changes['emergency_contact'] = f"{str(original_client.emergency_contact) or ''} → {str(client.emergency_contact) or ''}"
+        
+        # Comments
+        if original_client.comments != client.comments:
+            changes['comments'] = f"{original_client.comments or ''} → {client.comments or ''}"
+        
         # Set updated_by field
         if self.request.user.is_authenticated:
             client.updated_by = f"{self.request.user.first_name} {self.request.user.last_name}".strip()
@@ -250,7 +371,22 @@ class ClientUpdateView(UpdateView):
                 client.updated_by = self.request.user.username or self.request.user.email
         
         client.save()
-        messages.success(self.request, 'Client updated successfully.')
+        
+        # Create audit log entry if there were changes
+        if changes:
+            try:
+                from core.models import create_audit_log
+                create_audit_log(
+                    entity_name='Client',
+                    entity_id=client.external_id,
+                    action='update',
+                    changed_by=self.request.user,
+                    diff_data=changes
+                )
+            except Exception as e:
+                logger.error(f"Error creating audit log for client update: {e}")
+        
+        update_success(self.request, 'Client')
         return super().form_valid(form)
 
 class ClientDeleteView(DeleteView):
@@ -259,6 +395,56 @@ class ClientDeleteView(DeleteView):
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('clients:list')
+    
+    def form_valid(self, form):
+        client = self.get_object()
+        
+        # Store client data for audit log before deletion
+        client_data = {
+            'first_name': client.first_name,
+            'last_name': client.last_name,
+            'preferred_name': client.preferred_name or '',
+            'alias': client.alias or '',
+            'dob': str(client.dob) if client.dob else '',
+            'gender': client.gender or '',
+            'sexual_orientation': client.sexual_orientation or '',
+            'languages_spoken': str(client.languages_spoken) if client.languages_spoken else '',
+            'ethnicity': str(client.ethnicity) if client.ethnicity else '',
+            'citizenship_status': client.citizenship_status or '',
+            'indigenous_status': client.indigenous_status or '',
+            'country_of_birth': client.country_of_birth or '',
+            'contact_information': str(client.contact_information) if client.contact_information else '',
+            'addresses': str(client.addresses) if client.addresses else '',
+            'address_2': client.address_2 or '',
+            'permission_to_email': client.permission_to_email,
+            'permission_to_phone': client.permission_to_phone,
+            'phone_work': client.phone_work or '',
+            'phone_alt': client.phone_alt or '',
+            'client_id': client.client_id or '',
+            'medical_conditions': client.medical_conditions or '',
+            'primary_diagnosis': client.primary_diagnosis or '',
+            'support_workers': str(client.support_workers) if client.support_workers else '',
+            'next_of_kin': str(client.next_of_kin) if client.next_of_kin else '',
+            'emergency_contact': str(client.emergency_contact) if client.emergency_contact else '',
+            'comments': client.comments or '',
+            'deleted_by': f"{self.request.user.first_name} {self.request.user.last_name}".strip() or self.request.user.username
+        }
+        
+        # Create audit log entry before deletion
+        try:
+            from core.models import create_audit_log
+            create_audit_log(
+                entity_name='Client',
+                entity_id=client.external_id,
+                action='delete',
+                changed_by=self.request.user,
+                diff_data=client_data
+            )
+        except Exception as e:
+            logger.error(f"Error creating audit log for client deletion: {e}")
+        
+        delete_success(self.request, 'Client')
+        return super().form_valid(form)
 
 class ClientUploadView(TemplateView):
     template_name = 'clients/client_upload.html'

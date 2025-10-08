@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     Department, Role, Staff, StaffRole, Program, ProgramStaff,
     Client, ClientProgramEnrollment, Intake, Discharge, ServiceRestriction,
-    AuditLog, PendingChange
+    AuditLog
 )
 
 
@@ -115,11 +115,3 @@ class AuditLogAdmin(admin.ModelAdmin):
     readonly_fields = ['external_id', 'created_at', 'updated_at', 'changed_at']
     date_hierarchy = 'changed_at'
 
-
-@admin.register(PendingChange)
-class PendingChangeAdmin(admin.ModelAdmin):
-    list_display = ['entity', 'entity_id', 'requested_by', 'status', 'created_at']
-    search_fields = ['entity', 'requested_by__first_name', 'requested_by__last_name']
-    list_filter = ['entity', 'status', 'created_at']
-    readonly_fields = ['external_id', 'created_at', 'updated_at']
-    date_hierarchy = 'created_at'

@@ -270,7 +270,7 @@ class Program(BaseModel):
             current_enrollments = self.get_current_enrollments_count()
         return min(100, (current_enrollments / self.capacity_current) * 100)
     
-    def can_enroll_client(self, client, start_date=None):
+    def can_enroll_client(self, client, start_date=None, exclude_instance=None):
         """Check if a client can be enrolled in this program"""
         if start_date is None:
             start_date = timezone.now().date()
@@ -281,15 +281,19 @@ class Program(BaseModel):
             return False, f"Program '{self.name}' is at full capacity on {start_date.strftime('%B %d, %Y')} ({enrollments_on_date}/{self.capacity_current} clients)."
         
         # Check if client is already enrolled in this program on the specific date
-        existing_enrollment = ClientProgramEnrollment.objects.filter(
+        existing_enrollments = ClientProgramEnrollment.objects.filter(
             client=client,
             program=self,
             start_date__lte=start_date
         ).filter(
             models.Q(end_date__isnull=True) | models.Q(end_date__gt=start_date)
-        ).exists()
+        )
         
-        if existing_enrollment:
+        # Exclude the current instance if provided (for editing existing enrollments)
+        if exclude_instance:
+            existing_enrollments = existing_enrollments.exclude(pk=exclude_instance.pk)
+        
+        if existing_enrollments.exists():
             return False, f"Client is already enrolled in '{self.name}' program on {start_date.strftime('%B %d, %Y')}."
         
         return True, "Client can be enrolled."
@@ -415,6 +419,7 @@ class ClientProgramEnrollment(BaseModel):
         ('completed', 'Completed'),
         ('cancelled', 'Cancelled'),
         ('suspended', 'Suspended'),
+        ('archived', 'Archived'),
     ]
     
     client = models.ForeignKey(Client, on_delete=models.CASCADE, db_index=True)
@@ -425,7 +430,9 @@ class ClientProgramEnrollment(BaseModel):
     notes = models.TextField(null=True, blank=True)
     
     # Audit fields
+    created_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who created this record")
     updated_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who last updated this record")
+    is_archived = models.BooleanField(default=False, db_index=True, help_text="Whether this enrollment is archived")
     
     class Meta:
         db_table = 'client_program_enrollments'
@@ -609,47 +616,38 @@ def create_audit_log(entity_name, entity_id, action, changed_by=None, diff_data=
     from django.contrib.auth import get_user_model
     User = get_user_model()
     
+    
     # Get the staff profile if changed_by is a User
     staff_profile = None
     if changed_by and hasattr(changed_by, 'staff_profile'):
         staff_profile = changed_by.staff_profile
     elif changed_by and isinstance(changed_by, Staff):
         staff_profile = changed_by
+    elif changed_by:
+        # Try to find staff profile by user
+        try:
+            staff_profile = Staff.objects.filter(user=changed_by).first()
+        except Exception as e:
+            pass
+    
     
     # Create the audit log entry
-    audit_log = AuditLog.objects.create(
-        entity=entity_name,
-        entity_id=entity_id,
-        action=action,
-        changed_by=staff_profile,
-        diff_json=diff_data or {}
-    )
-    
-    return audit_log
+    try:
+        audit_log = AuditLog.objects.create(
+            entity=entity_name,
+            entity_id=entity_id,
+            action=action,
+            changed_by=staff_profile,
+            diff_json=diff_data or {}
+        )
+        return audit_log
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error creating AuditLog: {e}")
+        return None
 
 
-class PendingChange(BaseModel):
-    STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('approved', 'Approved'),
-        ('declined', 'Declined'),
-    ]
-    
-    entity = models.CharField(max_length=100, db_index=True)
-    entity_id = models.UUIDField(db_index=True)
-    diff_json = models.JSONField()
-    requested_by = models.ForeignKey('core.Staff', on_delete=models.CASCADE, db_index=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
-    reviewed_by = models.ForeignKey('core.Staff', on_delete=models.SET_NULL, null=True, blank=True, 
-                                   related_name='reviewed_changes', db_index=True)
-    reviewed_at = models.DateTimeField(null=True, blank=True, db_index=True)
-    rationale = models.TextField(null=True, blank=True)
-    
-    class Meta:
-        db_table = 'pending_changes'
-    
-    def __str__(self):
-        return f"{self.entity} change - {self.status}"
 
 
 class ClientDuplicate(BaseModel):

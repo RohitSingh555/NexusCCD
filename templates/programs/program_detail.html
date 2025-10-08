@@ -8,272 +8,398 @@
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- Header -->
-    <div class="flex justify-between items-center mb-8">
-        <div class="flex items-center">
-            <div class="w-16 h-16 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm mr-6">
-                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                </svg>
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-16 h-16 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">
+                        {{ program.name }}
+                    </h1>
+                    <p class="text-sm text-gray-600">{{ program.department.name }}</p>
+                </div>
             </div>
-            <div>
-                <h1 class="text-3xl font-bold text-neutral-800 font-header">{{ program.name }}</h1>
-                <p class="text-lg text-neutral-600 font-body">{{ program.department.name }}</p>
+            <div class="flex items-center space-x-2">
+                <a href="{% url 'programs:edit' program.external_id %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    Edit Program
+                </a>
+                <a href="{% url 'programs:delete' program.external_id %}" class="inline-flex items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                    Delete Program
+                </a>
+                <a href="{% url 'programs:list' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Back to Programs
+                </a>
             </div>
-        </div>
-        <div class="flex space-x-3">
-            <a href="{% url 'programs:edit' program.external_id %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                </svg>
-                Edit Program
-            </a>
-            <a href="{% url 'programs:delete' program.external_id %}" class="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-bold rounded-xl text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                </svg>
-                Delete Program
-            </a>
-            <a href="{% url 'programs:list' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                </svg>
-                Back to Programs
-            </a>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Main Content -->
-        <div class="lg:col-span-2 space-y-8">
+    <div class="space-y-6">
+        <!-- Compact Information Cards -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Program Information -->
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <div class="flex items-center mb-6">
-                    <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-4">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                     </div>
-                    <h2 class="text-xl font-bold text-neutral-800 font-header">Program Information</h2>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Program Information</h2>
                 </div>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Program Name</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ program.name }}</p>
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Program Name:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ program.name }}</span>
                     </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Department</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ program.department.name }}</p>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Department:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ program.department.name }}</span>
                     </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Location</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ program.location }}</p>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Location:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ program.location }}</span>
                     </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Current Capacity</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ program.capacity_current }}</p>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Current Capacity:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ program.capacity_current }}</span>
                     </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Capacity Effective Date</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ program.capacity_effective_date|date:"F d, Y"|default:"—" }}</p>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Effective Date:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ program.capacity_effective_date|date:"M d, Y"|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Status:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ program.get_status_display }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Created:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ program.created_at|date:"M d, Y" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Last Updated:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ program.updated_at|date:"M d, Y" }}</span>
                     </div>
                 </div>
             </div>
 
             <!-- Capacity Overview -->
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <div class="flex items-center mb-6">
-                    <div class="w-10 h-10 bg-gradient-to-br from-secondary-400 to-secondary-700 rounded-lg flex items-center justify-center shadow-sm mr-4">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-secondary-400 to-secondary-700 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
                     </div>
-                    <h2 class="text-xl font-bold text-neutral-800 font-header">Capacity Overview</h2>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Capacity Overview</h2>
                 </div>
                 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="text-center p-4 bg-neutral-50 rounded-lg">
-                        <div class="text-3xl font-bold text-brand-sky font-header">
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Total Capacity:</span>
+                        <span class="text-sm text-neutral-900 font-body">
                             {% if program.capacity_current > 0 %}{{ program.capacity_current }}{% else %}∞{% endif %}
-                        </div>
-                        <div class="text-sm text-neutral-600 font-body">Total Capacity</div>
+                        </span>
                     </div>
-                    <div class="text-center p-4 {% if is_at_capacity %}bg-red-50{% else %}bg-green-50{% endif %} rounded-lg">
-                        <div class="text-3xl font-bold {% if is_at_capacity %}text-red-600{% else %}text-green-600{% endif %} font-header">{{ current_enrollments_count }}</div>
-                        <div class="text-sm text-neutral-600 font-body">Currently Enrolled</div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Currently Enrolled:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ current_enrollments_count }}</span>
                     </div>
-                    <div class="text-center p-4 {% if available_capacity and available_capacity > 0 %}bg-blue-50{% else %}bg-neutral-50{% endif %} rounded-lg">
-                        <div class="text-3xl font-bold {% if available_capacity and available_capacity > 0 %}text-blue-600{% else %}text-neutral-600{% endif %} font-header">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Available Spots:</span>
+                        <span class="text-sm text-neutral-900 font-body">
                             {% if available_capacity %}{{ available_capacity }}{% else %}—{% endif %}
-                        </div>
-                        <div class="text-sm text-neutral-600 font-body">Available Spots</div>
+                        </span>
                     </div>
+                    {% if program.capacity_current > 0 %}
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Utilization:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ capacity_percentage|floatformat:1 }}%</span>
+                    </div>
+                    {% endif %}
                 </div>
                 
                 <!-- Capacity Progress Bar -->
                 {% if program.capacity_current > 0 %}
-                <div class="mt-6">
-                    <div class="flex justify-between items-center mb-2">
-                        <span class="text-sm font-bold text-neutral-700 font-body">Capacity Utilization</span>
-                        <span class="text-sm text-neutral-600 font-body">{{ capacity_percentage|floatformat:1 }}%</span>
-                    </div>
-                    <div class="w-full bg-neutral-200 rounded-full h-3">
-                        <div class="h-3 rounded-full {% if is_at_capacity %}bg-red-500{% elif capacity_percentage > 80 %}bg-yellow-500{% else %}bg-brand-sky{% endif %}" 
+                <div class="mt-4">
+                    <div class="w-full bg-neutral-200 rounded-full h-2">
+                        <div class="h-2 rounded-full {% if is_at_capacity %}bg-red-500{% elif capacity_percentage > 80 %}bg-yellow-500{% else %}bg-brand-sky{% endif %}" 
                              style="width: {{ capacity_percentage }}%"></div>
                     </div>
                 </div>
                 {% endif %}
             </div>
+        </div>
 
+        <!-- Current Enrollments and Program Staff -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Current Enrollments -->
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center">
-                        <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-green-700 rounded-lg flex items-center justify-center shadow-sm mr-4">
-                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="w-8 h-8 bg-gradient-to-br from-green-400 to-green-700 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
                             </svg>
                         </div>
-                        <h2 class="text-xl font-bold text-neutral-800 font-header">Current Enrollments</h2>
+                        <h2 class="text-lg font-bold text-neutral-800 font-header">Current Enrollments</h2>
                     </div>
-                    <span class="text-sm text-neutral-600 font-body">{{ current_enrollments_count }} enrolled</span>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-sm text-neutral-600 font-body">{{ current_enrollments_count }} enrolled</span>
+                        <button onclick="toggleEnrollmentForm()" class="inline-flex items-center px-3 py-1.5 border border-green-300 rounded-lg text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200">
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            Enroll Clients
+                        </button>
+                    </div>
                 </div>
                 
-                {% if current_enrollments %}
-                <div class="space-y-3">
-                    {% for enrollment in current_enrollments|slice:":10" %}
-                    <div class="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
-                        <div class="flex items-center">
-                            <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-4">
-                                <span class="text-sm font-bold text-white">
-                                    {{ enrollment.client.first_name|first|upper }}{{ enrollment.client.last_name|first|upper }}
+                <!-- Enrollment Form (Hidden by default) -->
+                <div id="enrollmentForm" class="hidden mb-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                    <form method="post" action="{% url 'programs:bulk_enroll' program.external_id %}">
+                        {% csrf_token %}
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-green-800 mb-2">Start Date:</label>
+                            <input type="date" name="start_date" value="{% now 'Y-m-d' %}" class="w-full px-3 py-2 border border-green-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-green-800 mb-2">Select Clients to Enroll:</label>
+                            <div class="max-h-48 overflow-y-auto border border-green-300 rounded-lg bg-white">
+                                {% for client in available_clients %}
+                                <label class="flex items-center p-2 hover:bg-green-50 cursor-pointer">
+                                    <input type="checkbox" name="client_ids" value="{{ client.id }}" class="mr-3 text-green-600 focus:ring-green-500">
+                                    <div class="flex items-center">
+                                        <div class="w-6 h-6 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center shadow-sm mr-3">
+                                            <span class="text-xs font-bold text-white">
+                                                {{ client.first_name|first|upper }}{{ client.last_name|first|upper }}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <div class="text-sm font-medium text-neutral-900">{{ client.first_name }} {{ client.last_name }}</div>
+                                            {% if client.preferred_name %}
+                                            <div class="text-xs text-neutral-500">Preferred: {{ client.preferred_name }}</div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </label>
+                                {% empty %}
+                                <div class="p-4 text-center text-neutral-500">
+                                    <p class="text-sm">All clients are already enrolled in this program.</p>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-end space-x-2">
+                            <button type="button" onclick="toggleEnrollmentForm()" class="px-3 py-1.5 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-500">
+                                Cancel
+                            </button>
+                            <button type="submit" class="px-4 py-1.5 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                Enroll Selected Clients
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="max-h-96 overflow-y-auto">
+                    {% if current_enrollments %}
+                    <div class="space-y-2">
+                        {% for enrollment in current_enrollments %}
+                        <div class="flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-3">
+                                    <span class="text-xs font-bold text-white">
+                                        {{ enrollment.client.first_name|first|upper }}{{ enrollment.client.last_name|first|upper }}
+                                    </span>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-bold text-neutral-900 font-body">
+                                        {{ enrollment.client.first_name }} {{ enrollment.client.last_name }}
+                                    </div>
+                                    <div class="text-xs text-neutral-500 font-body">
+                                        Enrolled {{ enrollment.start_date|date:"M d, Y" }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold
+                                    {% if enrollment.status == 'active' %}bg-green-100 text-green-800
+                                    {% elif enrollment.status == 'pending' %}bg-yellow-100 text-yellow-800
+                                    {% elif enrollment.status == 'suspended' %}bg-red-100 text-red-800
+                                    {% else %}bg-neutral-100 text-neutral-800{% endif %}">
+                                    {{ enrollment.get_status_display }}
                                 </span>
                             </div>
-                            <div>
-                                <div class="text-sm font-bold text-neutral-900 font-body">
-                                    {{ enrollment.client.first_name }} {{ enrollment.client.last_name }}
-                                </div>
-                                <div class="text-xs text-neutral-500 font-body">
-                                    Enrolled {{ enrollment.start_date|date:"M d, Y" }}
-                                </div>
-                            </div>
                         </div>
-                        <div class="text-right">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold
-                                {% if enrollment.status == 'active' %}bg-green-100 text-green-800
-                                {% elif enrollment.status == 'pending' %}bg-yellow-100 text-yellow-800
-                                {% elif enrollment.status == 'suspended' %}bg-red-100 text-red-800
-                                {% else %}bg-neutral-100 text-neutral-800{% endif %}">
-                                {{ enrollment.get_status_display }}
-                            </span>
-                        </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
-                    {% if current_enrollments.count > 10 %}
-                    <div class="text-center pt-2">
-                        <span class="text-sm text-neutral-500 font-body">... and {{ current_enrollments.count|add:"-10" }} more</span>
+                    {% else %}
+                    <div class="text-center py-6">
+                        <svg class="mx-auto h-8 w-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                        <h3 class="mt-2 text-sm font-bold text-neutral-900 font-body">No current enrollments</h3>
+                        <p class="mt-1 text-xs text-neutral-500 font-body">This program has no active enrollments.</p>
                     </div>
                     {% endif %}
                 </div>
-                {% else %}
-                <div class="text-center py-8">
-                    <svg class="mx-auto h-12 w-12 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                    </svg>
-                    <h3 class="mt-2 text-sm font-bold text-neutral-900 font-body">No current enrollments</h3>
-                    <p class="mt-1 text-sm text-neutral-500 font-body">This program has no active enrollments.</p>
-                </div>
-                {% endif %}
             </div>
-        </div>
 
-        <!-- Sidebar -->
-        <div class="space-y-8">
             <!-- Program Staff -->
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center">
-                        <div class="w-10 h-10 bg-gradient-to-br from-purple-400 to-purple-700 rounded-lg flex items-center justify-center shadow-sm mr-4">
-                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="w-8 h-8 bg-gradient-to-br from-purple-400 to-purple-700 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
                             </svg>
                         </div>
-                        <h2 class="text-xl font-bold text-neutral-800 font-header">Program Staff</h2>
+                        <h2 class="text-lg font-bold text-neutral-800 font-header">Program Staff</h2>
                     </div>
-                    <span class="text-sm text-neutral-600 font-body">{{ program_staff.count }} staff</span>
+                    <div class="flex items-center space-x-3">
+                        <span class="text-sm text-neutral-600 font-body">{{ program_staff.count|add:program_managers.count }} staff</span>
+                        <button onclick="toggleManagerForm()" class="inline-flex items-center px-3 py-1.5 border border-purple-300 rounded-lg text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200">
+                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                            Assign Managers
+                        </button>
+                    </div>
                 </div>
                 
-                {% if program_staff %}
-                <div class="space-y-3">
-                    {% for staff_assignment in program_staff %}
-                    <div class="flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
-                        <div class="flex items-center">
-                            <div class="w-8 h-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-3">
-                                <span class="text-xs font-bold text-white">
-                                    {{ staff_assignment.staff.first_name|first|upper }}{{ staff_assignment.staff.last_name|first|upper }}
-                                </span>
-                            </div>
-                            <div>
-                                <div class="text-sm font-bold text-neutral-900 font-body">
-                                    {{ staff_assignment.staff.first_name }} {{ staff_assignment.staff.last_name }}
+                <!-- Manager Assignment Form (Hidden by default) -->
+                <div id="managerForm" class="hidden mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                    <form method="post" action="{% url 'programs:bulk_assign_managers' program.external_id %}">
+                        {% csrf_token %}
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-purple-800 mb-2">Select Staff Members to Assign as Program Managers:</label>
+                            <div class="max-h-48 overflow-y-auto border border-purple-300 rounded-lg bg-white">
+                                {% for staff in available_staff %}
+                                <label class="flex items-center p-2 hover:bg-purple-50 cursor-pointer">
+                                    <input type="checkbox" name="staff_ids" value="{{ staff.id }}" class="mr-3 text-purple-600 focus:ring-purple-500">
+                                    <div class="flex items-center">
+                                        <div class="w-6 h-6 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full flex items-center justify-center shadow-sm mr-3">
+                                            <span class="text-xs font-bold text-white">
+                                                {{ staff.first_name|first|upper }}{{ staff.last_name|first|upper }}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <div class="text-sm font-medium text-neutral-900">{{ staff.first_name }} {{ staff.last_name }}</div>
+                                            <div class="text-xs text-neutral-500">{{ staff.email }}</div>
+                                        </div>
+                                    </div>
+                                </label>
+                                {% empty %}
+                                <div class="p-4 text-center text-neutral-500">
+                                    <p class="text-sm">All staff members are already assigned as program managers for this program.</p>
                                 </div>
-                                {% if staff_assignment.is_manager %}
-                                <div class="text-xs text-purple-600 font-body">Manager</div>
-                                {% endif %}
+                                {% endfor %}
                             </div>
                         </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <div class="text-center py-6">
-                    <svg class="mx-auto h-8 w-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
-                    </svg>
-                    <h3 class="mt-2 text-sm font-bold text-neutral-900 font-body">No staff assigned</h3>
-                    <p class="mt-1 text-xs text-neutral-500 font-body">No staff members are currently assigned to this program.</p>
-                </div>
-                {% endif %}
-            </div>
-
-            <!-- System Information -->
-            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <div class="flex items-center mb-6">
-                    <div class="w-10 h-10 bg-gradient-to-br from-neutral-500 to-neutral-700 rounded-lg flex items-center justify-center shadow-sm mr-4">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        </svg>
-                    </div>
-                    <h2 class="text-xl font-bold text-neutral-800 font-header">System Information</h2>
+                        
+                        <div class="flex items-center justify-end space-x-2">
+                            <button type="button" onclick="toggleManagerForm()" class="px-3 py-1.5 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-500">
+                                Cancel
+                            </button>
+                            <button type="submit" class="px-4 py-1.5 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500">
+                                Assign Selected Staff
+                            </button>
+                        </div>
+                    </form>
                 </div>
                 
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Program ID</label>
-                        <p class="text-sm text-neutral-900 font-mono font-body">{{ program.external_id }}</p>
+                <div class="max-h-96 overflow-y-auto">
+                    {% if program_managers or program_staff %}
+                    <div class="space-y-2">
+                        <!-- Program Managers -->
+                        {% for manager_assignment in program_managers %}
+                        <div class="flex items-center justify-between p-3 bg-purple-50 rounded-lg border border-purple-200">
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                                    <span class="text-xs font-bold text-white">
+                                        {{ manager_assignment.staff.first_name|first|upper }}{{ manager_assignment.staff.last_name|first|upper }}
+                                    </span>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-bold text-neutral-900 font-body">
+                                        {{ manager_assignment.staff.first_name }} {{ manager_assignment.staff.last_name }}
+                                    </div>
+                                    <div class="text-xs text-purple-600 font-body">Program Manager</div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        
+                        <!-- Regular Program Staff -->
+                        {% for staff_assignment in program_staff %}
+                        <div class="flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-3">
+                                    <span class="text-xs font-bold text-white">
+                                        {{ staff_assignment.staff.first_name|first|upper }}{{ staff_assignment.staff.last_name|first|upper }}
+                                    </span>
+                                </div>
+                                <div>
+                                    <div class="text-sm font-bold text-neutral-900 font-body">
+                                        {{ staff_assignment.staff.first_name }} {{ staff_assignment.staff.last_name }}
+                                    </div>
+                                    {% if staff_assignment.is_manager %}
+                                    <div class="text-xs text-blue-600 font-body">Staff Manager</div>
+                                    {% else %}
+                                    <div class="text-xs text-neutral-500 font-body">Staff</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
                     </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Status</label>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold
-                            {% if program.status == 'active' %}bg-green-100 text-green-800
-                            {% elif program.status == 'inactive' %}bg-red-100 text-red-800
-                            {% else %}bg-yellow-100 text-yellow-800{% endif %}">
-                            {{ program.get_status_display }}
-                        </span>
+                    {% else %}
+                    <div class="text-center py-6">
+                        <svg class="mx-auto h-8 w-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                        </svg>
+                        <h3 class="mt-2 text-sm font-bold text-neutral-900 font-body">No staff assigned</h3>
+                        <p class="mt-1 text-xs text-neutral-500 font-body">No staff members are currently assigned to this program.</p>
                     </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Created</label>
-                        <p class="text-sm text-neutral-900 font-body">{{ program.created_at|date:"M d, Y g:i A" }}</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Last Updated</label>
-                        <p class="text-sm text-neutral-900 font-body">{{ program.updated_at|date:"M d, Y g:i A" }}</p>
-                    </div>
+                    {% endif %}
                 </div>
             </div>
-
         </div>
     </div>
 </div>
+
+<script>
+function toggleEnrollmentForm() {
+    const form = document.getElementById('enrollmentForm');
+    if (form.classList.contains('hidden')) {
+        form.classList.remove('hidden');
+    } else {
+        form.classList.add('hidden');
+    }
+}
+
+function toggleManagerForm() {
+    const form = document.getElementById('managerForm');
+    if (form.classList.contains('hidden')) {
+        form.classList.remove('hidden');
+    } else {
+        form.classList.add('hidden');
+    }
+}
+</script>
 {% endblock %}

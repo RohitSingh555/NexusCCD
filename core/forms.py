@@ -30,6 +30,7 @@ class EnrollmentForm(forms.ModelForm):
     
     def clean(self):
         cleaned_data = super().clean()
+        
         client = cleaned_data.get('client')
         program = cleaned_data.get('program')
         start_date = cleaned_data.get('start_date')
@@ -77,7 +78,10 @@ class EnrollmentForm(forms.ModelForm):
     
     def check_program_capacity(self, client, program, start_date):
         """Check if the program has available capacity for enrollment"""
-        can_enroll, message = program.can_enroll_client(client, start_date)
+        # When editing an existing enrollment, exclude it from duplicate checks
+        exclude_instance = self.instance if self.instance.pk else None
+        
+        can_enroll, message = program.can_enroll_client(client, start_date, exclude_instance)
         
         if not can_enroll:
             if "capacity" in message.lower():

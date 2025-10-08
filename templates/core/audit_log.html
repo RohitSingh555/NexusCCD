@@ -13,6 +13,17 @@
             <p class="text-neutral-600 mt-2 font-body">Track all system changes and user activities</p>
         </div>
         <div class="flex space-x-3">
+            <!-- Rows per page selector -->
+            <div class="flex items-center space-x-2">
+                <label for="per_page" class="text-sm font-bold text-neutral-600 font-subheader">Rows per page:</label>
+                <select id="per_page" name="per_page" onchange="changeRowsPerPage(this.value)" class="px-3 py-2 border border-neutral-300 rounded-lg text-sm font-bold text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-brand-sky transition-all duration-200">
+                    <option value="5" {% if per_page == '5' %}selected{% endif %}>5</option>
+                    <option value="10" {% if per_page == '10' %}selected{% endif %}>10</option>
+                    <option value="20" {% if per_page == '20' %}selected{% endif %}>20</option>
+                    <option value="50" {% if per_page == '50' %}selected{% endif %}>50</option>
+                    <option value="100" {% if per_page == '100' %}selected{% endif %}>100</option>
+                </select>
+            </div>
             <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
@@ -30,7 +41,7 @@
 
     <!-- Audit Log Stats -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 relative">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
                     <div class="w-12 h-12 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm">
@@ -39,14 +50,30 @@
                         </svg>
                     </div>
                 </div>
-                <div class="ml-4">
+                <div class="ml-4 flex-1">
                     <p class="text-sm font-bold text-neutral-600 font-subheader">Total Events</p>
                     <p class="text-2xl font-black text-neutral-900 font-header">{{ total_events }}</p>
                 </div>
             </div>
+            <!-- Info Icon -->
+            <div class="absolute top-4 right-4">
+                <div class="relative group">
+                    <button class="w-5 h-5 bg-neutral-100 hover:bg-neutral-200 rounded-full flex items-center justify-center transition-colors duration-200">
+                        <svg class="w-3 h-3 text-neutral-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                    <!-- Tooltip -->
+                    <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-neutral-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                        <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-neutral-900"></div>
+                        <p class="font-medium mb-1">Total Events</p>
+                        <p class="text-neutral-300">This shows the total number of all audit events recorded in the system, including create, update, and delete operations.</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 relative">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
                     <div class="w-12 h-12 bg-gradient-to-br from-brand-lime to-brand-moss rounded-xl flex items-center justify-center shadow-sm">
@@ -55,14 +82,30 @@
                         </svg>
                     </div>
                 </div>
-                <div class="ml-4">
+                <div class="ml-4 flex-1">
                     <p class="text-sm font-bold text-neutral-600 font-subheader">Created</p>
                     <p class="text-2xl font-black text-neutral-900 font-header">{{ create_events }}</p>
                 </div>
             </div>
+            <!-- Info Icon -->
+            <div class="absolute top-4 right-4">
+                <div class="relative group">
+                    <button class="w-5 h-5 bg-neutral-100 hover:bg-neutral-200 rounded-full flex items-center justify-center transition-colors duration-200">
+                        <svg class="w-3 h-3 text-neutral-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                    <!-- Tooltip -->
+                    <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-neutral-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                        <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-neutral-900"></div>
+                        <p class="font-medium mb-1">Created Events</p>
+                        <p class="text-neutral-300">This shows the number of new records that have been created in the system, such as new clients, programs, or other entities.</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 relative">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
                     <div class="w-12 h-12 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-xl flex items-center justify-center shadow-sm">
@@ -71,14 +114,30 @@
                         </svg>
                     </div>
                 </div>
-                <div class="ml-4">
+                <div class="ml-4 flex-1">
                     <p class="text-sm font-bold text-neutral-600 font-subheader">Updated</p>
                     <p class="text-2xl font-black text-neutral-900 font-header">{{ update_events }}</p>
                 </div>
             </div>
+            <!-- Info Icon -->
+            <div class="absolute top-4 right-4">
+                <div class="relative group">
+                    <button class="w-5 h-5 bg-neutral-100 hover:bg-neutral-200 rounded-full flex items-center justify-center transition-colors duration-200">
+                        <svg class="w-3 h-3 text-neutral-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                    <!-- Tooltip -->
+                    <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-neutral-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                        <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-neutral-900"></div>
+                        <p class="font-medium mb-1">Updated Events</p>
+                        <p class="text-neutral-300">This shows the number of existing records that have been modified in the system, tracking all changes to client information, program details, and other data.</p>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 relative">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
                     <div class="w-12 h-12 bg-gradient-to-br from-accent-400 to-accent-600 rounded-xl flex items-center justify-center shadow-sm">
@@ -87,9 +146,25 @@
                         </svg>
                     </div>
                 </div>
-                <div class="ml-4">
+                <div class="ml-4 flex-1">
                     <p class="text-sm font-bold text-neutral-600 font-subheader">Deleted</p>
                     <p class="text-2xl font-black text-neutral-900 font-header">{{ delete_events }}</p>
+                </div>
+            </div>
+            <!-- Info Icon -->
+            <div class="absolute top-4 right-4">
+                <div class="relative group">
+                    <button class="w-5 h-5 bg-neutral-100 hover:bg-neutral-200 rounded-full flex items-center justify-center transition-colors duration-200">
+                        <svg class="w-3 h-3 text-neutral-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                    <!-- Tooltip -->
+                    <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-neutral-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
+                        <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-neutral-900"></div>
+                        <p class="font-medium mb-1">Deleted Events</p>
+                        <p class="text-neutral-300">This shows the number of records that have been permanently removed from the system, including clients, programs, and other entities.</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -103,9 +178,8 @@
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Timestamp</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Entity</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Action</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Changed By</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Changes</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Actions</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Done By</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Details</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-neutral-200">
@@ -124,6 +198,9 @@
                                 <div class="ml-3">
                                     <div class="text-sm font-bold text-neutral-900 font-body">
                                         {{ log.entity|title }}
+                                        {% if log.action == 'delete' %}
+                                            <span class="text-xs text-red-600 font-bold">(Deleted)</span>
+                                        {% endif %}
                                     </div>
                                     <div class="text-xs text-neutral-500 font-body">
                                         ID: {{ log.entity_id|truncatechars:8 }}
@@ -140,15 +217,38 @@
                             {{ log.changed_by.first_name|default:"System" }} {{ log.changed_by.last_name|default:"" }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
-                            —
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
-                            —
+                            {% if log.action == 'delete' %}
+                                <span class="text-neutral-400 font-bold">
+                                    No Details
+                                </span>
+                            {% else %}
+                                {% if log.entity == 'Enrollment' %}
+                                    <button onclick="checkEntityExists('{% url 'core:enrollments_detail' log.entity_id %}', 'Enrollment', '{{ log.entity_id }}')" class="text-brand-sky hover:text-brand-darkBlue font-bold transition-colors duration-200 cursor-pointer">
+                                        View Details
+                                    </button>
+                                {% elif log.entity == 'Client' %}
+                                    <button onclick="checkEntityExists('{% url 'clients:detail' log.entity_id %}', 'Client', '{{ log.entity_id }}')" class="text-brand-sky hover:text-brand-darkBlue font-bold transition-colors duration-200 cursor-pointer">
+                                        View Details
+                                    </button>
+                                {% elif log.entity == 'Program' %}
+                                    <button onclick="checkEntityExists('{% url 'programs:detail' log.entity_id %}', 'Program', '{{ log.entity_id }}')" class="text-brand-sky hover:text-brand-darkBlue font-bold transition-colors duration-200 cursor-pointer">
+                                        View Details
+                                    </button>
+                                {% elif log.entity == 'Restriction' %}
+                                    <button onclick="checkEntityExists('{% url 'core:restrictions_detail' log.entity_id %}', 'Restriction', '{{ log.entity_id }}')" class="text-brand-sky hover:text-brand-darkBlue font-bold transition-colors duration-200 cursor-pointer">
+                                        View Details
+                                    </button>
+                                {% else %}
+                                    <span class="text-neutral-400 font-bold">
+                                        No Details
+                                    </span>
+                                {% endif %}
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="px-6 py-4 text-center text-neutral-500 font-body">
+                        <td colspan="5" class="px-6 py-4 text-center text-neutral-500 font-body">
                             No audit logs found.
                         </td>
                     </tr>
@@ -157,5 +257,95 @@
             </table>
         </div>
     </div>
+    
+    <!-- Pagination -->
+    {% include 'components/pagination.html' %}
 </div>
+
+<!-- Error Modal -->
+<div id="entityErrorModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div class="p-6">
+            <div class="flex items-center mb-4">
+                <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-bold text-neutral-900">Entity Not Found</h3>
+            </div>
+            <p class="text-neutral-600 mb-6" id="errorMessage">
+                The requested entity has been deleted or no longer exists.
+            </p>
+            <div class="flex justify-end">
+                <button onclick="closeEntityErrorModal()" class="px-4 py-2 bg-neutral-500 text-white rounded-lg hover:bg-neutral-600 transition-colors">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function changeRowsPerPage(value) {
+    const url = new URL(window.location);
+    url.searchParams.set('per_page', value);
+    url.searchParams.delete('page'); // Reset to first page
+    window.location.href = url.toString();
+}
+
+function checkEntityExists(url, entityType, entityId) {
+    // Show loading state
+    const button = event.target;
+    const originalText = button.textContent;
+    button.textContent = 'Checking...';
+    button.disabled = true;
+    
+    fetch(url, {
+        method: 'HEAD', // Use HEAD to check existence without loading content
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (response.ok) {
+            // Entity exists, navigate to it
+            window.location.href = url;
+        } else {
+            // Entity doesn't exist, show error modal
+            showEntityErrorModal(entityType, entityId);
+        }
+    })
+    .catch(error => {
+        // Network error or other issue, show error modal
+        showEntityErrorModal(entityType, entityId);
+    })
+    .finally(() => {
+        // Reset button state
+        button.textContent = originalText;
+        button.disabled = false;
+    });
+}
+
+function showEntityErrorModal(entityType, entityId) {
+    const modal = document.getElementById('entityErrorModal');
+    const errorMessage = document.getElementById('errorMessage');
+    
+    errorMessage.textContent = `The ${entityType} (ID: ${entityId.substring(0, 8)}...) has been deleted or no longer exists. This is normal when entities are removed from the system.`;
+    
+    modal.classList.remove('hidden');
+}
+
+function closeEntityErrorModal() {
+    const modal = document.getElementById('entityErrorModal');
+    modal.classList.add('hidden');
+}
+
+// Close modal when clicking outside
+document.getElementById('entityErrorModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeEntityErrorModal();
+    }
+});
+</script>
 {% endblock %}

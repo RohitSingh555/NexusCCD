@@ -197,18 +197,6 @@
                         </a>
                         {% endif %}
 
-                        <!-- Approvals - Manager and above -->
-                        {% if user_permissions.can_view_approvals|default:False %}
-                        <a href="{% url 'core:approvals' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if 'approvals' in request.resolver_match.url_name %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
-                            <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            <span class="font-bold font-subheader">Approvals</span>
-                            {% if pending_approvals_count > 0 %}
-                            <span class="inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white bg-accent-400 rounded-full ml-auto">{{ pending_approvals_count }}</span>
-                            {% endif %}
-                        </a>
-                        {% endif %}
 
                         <!-- Reports - Staff and above -->
                         {% if user_permissions.can_view_reports|default:False %}
@@ -290,21 +278,7 @@
 
             <!-- Page Content -->
             <main class="flex-1 relative overflow-y-auto focus:outline-none pt-16">
-                {% if messages %}
-                    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-                        {% for message in messages %}
-                            <div class="rounded-md p-4 mb-4 {% if message.tags == 'error' %}bg-red-50 border border-red-200{% elif message.tags == 'success' %}bg-green-50 border border-green-200{% else %}bg-blue-50 border border-blue-200{% endif %}">
-                                <div class="flex">
-                                    <div class="ml-3">
-                                        <p class="text-sm font-bold {% if message.tags == 'error' %}text-red-800{% elif message.tags == 'success' %}text-green-800{% else %}text-blue-800{% endif %}">
-                                            {{ message }}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% endif %}
+                {% include 'components/messages.html' %}
                 
                 {% block content %}{% endblock %}
             </main>

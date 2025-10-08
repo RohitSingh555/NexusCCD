@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.db import models
 from datetime import datetime, date
 import csv
-from core.models import Client, Program, ClientProgramEnrollment, PendingChange
+from core.models import Client, Program, ClientProgramEnrollment
 
 class ReportListView(ListView):
     template_name = 'reports/report_list.html'
@@ -22,7 +22,6 @@ class ReportListView(ListView):
         context['total_clients'] = Client.objects.count()
         context['active_programs'] = Program.objects.count()
         context['enrollment_rate'] = 75.5  # Placeholder - calculate actual rate
-        context['pending_approvals'] = PendingChange.objects.filter(status='pending').count()
         context['recent_reports'] = []  # Placeholder for recent reports
         return context
 

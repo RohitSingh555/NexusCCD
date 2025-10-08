@@ -5,8 +5,11 @@ app_name = 'programs'
 
 urlpatterns = [
     path('', views.ProgramListView.as_view(), name='list'),
+    path('export/', views.ProgramCSVExportView.as_view(), name='export'),
     path('<uuid:external_id>/', views.ProgramDetailView.as_view(), name='detail'),
     path('create/', views.ProgramCreateView.as_view(), name='create'),
     path('<uuid:external_id>/edit/', views.ProgramUpdateView.as_view(), name='edit'),
     path('<uuid:external_id>/delete/', views.ProgramDeleteView.as_view(), name='delete'),
+    path('<uuid:external_id>/enroll/', views.ProgramBulkEnrollView.as_view(), name='bulk_enroll'),
+    path('<uuid:external_id>/assign-managers/', views.ProgramBulkAssignManagersView.as_view(), name='bulk_assign_managers'),
 ]
