@@ -137,6 +137,17 @@ def dashboard(request):
     active_programs = Program.objects.count()
     total_staff = Staff.objects.count()
     
+    # Get active restrictions count
+    from django.utils import timezone
+    from django.db import models
+    today = timezone.now().date()
+    active_restrictions = ServiceRestriction.objects.filter(
+        is_archived=False,
+        start_date__lte=today
+    ).filter(
+        models.Q(end_date__isnull=True) | models.Q(end_date__gte=today)
+    ).count()
+    
     # Get recent clients (last 5)
     recent_clients = Client.objects.order_by('-created_at')[:5]
     
@@ -181,6 +192,7 @@ def dashboard(request):
         'total_clients': total_clients,
         'active_programs': active_programs,
         'total_staff': total_staff,
+        'active_restrictions': active_restrictions,
         'recent_clients': recent_clients,
         'program_status': program_status,
     }
