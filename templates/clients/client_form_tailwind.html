@@ -31,6 +31,29 @@
     <form method="post" enctype="multipart/form-data" class="space-y-8">
         {% csrf_token %}
         
+        <!-- Display non-field errors -->
+        {% if form.non_field_errors %}
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800">Please correct the following errors:</h3>
+                        <div class="mt-2 text-sm text-red-700">
+                            <ul class="list-disc list-inside space-y-1">
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+        
         <!-- 🧍 CLIENT PERSONAL DETAILS -->
         <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
             <div class="flex items-center mb-6">
@@ -690,6 +713,7 @@
                     <input type="text" id="emergency_contact_relationship" placeholder="Relationship" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                     <input type="hidden" name="{{ form.emergency_contact.name }}" id="{{ form.emergency_contact.id_for_label }}" value="{{ form.emergency_contact.value|default:'{}' }}">
                 </div>
+                
 
                 <!-- Comments -->
                 <div class="md:col-span-2">
@@ -806,7 +830,7 @@
                     <div id="subprograms-container" class="space-y-2">
                         <!-- Sub-programs will be added here -->
                     </div>
-                    <button type="button" id="add-subprogram-btn" onclick="addSubprogramRow()" class="mt-2 inline-flex items-center px-3 py-1 border border-gray-300 text-sm font-medium rounded text-gray-700 bg-white hover:bg-gray-50">
+                    <button type="button" id="add-subprogram-btn" class="mt-2 inline-flex items-center px-3 py-1 border border-gray-300 text-sm font-medium rounded text-gray-700 bg-white hover:bg-gray-50">
                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
                         </svg>
@@ -879,7 +903,7 @@
                 <button type="button" id="cancel-modal" onclick="document.getElementById('program-modal').classList.add('hidden')" class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
                     Cancel
                 </button>
-                <button type="button" id="save-program" onclick="saveProgramFromModal()" class="px-4 py-2 bg-brand-sky text-white text-sm font-medium rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky">
+                <button type="button" id="save-program" class="px-4 py-2 bg-brand-sky text-white text-sm font-medium rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky">
                     Save Program
                 </button>
             </div>
@@ -995,40 +1019,6 @@ function addProgramDisplay(programId, programName, subprogramNames, startDate, e
     document.getElementById('program-enrollments-container').appendChild(programDisplay);
 }
 
-function saveProgramFromModal() {
-    const programId = document.getElementById('modal-program-select').value;
-    const programName = document.getElementById('modal-program-select').options[document.getElementById('modal-program-select').selectedIndex].text;
-    const startDate = document.getElementById('modal-start-date').value;
-    const endDate = document.getElementById('modal-end-date').value;
-    const status = document.getElementById('modal-status').value;
-    
-    if (!programId || !startDate) {
-        alert('Please select a program and start date.');
-        return;
-    }
-    
-    // Get subprogram names from text inputs
-    const subprogramInputs = document.querySelectorAll('#subprograms-container input[type="text"]');
-    const subprogramNames = Array.from(subprogramInputs)
-        .map(input => input.value.trim())
-        .filter(name => name);
-    
-    // Get program details
-    const programDetails = {
-        levelOfSupport: document.getElementById('modal-level-of-support').value.trim(),
-        clientType: document.getElementById('modal-client-type').value.trim(),
-        referralSource: document.getElementById('modal-referral-source').value.trim(),
-        supportWorkers: document.getElementById('modal-support-workers').value.trim(),
-        receivingServices: document.getElementById('modal-receiving-services').checked,
-        reasonDischarge: document.getElementById('modal-reason-discharge').value.trim()
-    };
-    
-    // Add program enrollment
-    addProgramDisplay(programId, programName, subprogramNames, startDate, endDate, status, programDetails);
-    
-    // Close modal
-    document.getElementById('program-modal').classList.add('hidden');
-}
 
 document.addEventListener('DOMContentLoaded', function() {
     // Handle Next of Kin fields
@@ -1297,11 +1287,11 @@ document.addEventListener('DOMContentLoaded', function() {
     updateNextOfKin();
     updateEmergencyContact();
     
-    // Handle form submission to prevent page reload and preserve data
+    // Handle form submission - update hidden fields before submission
     const form = document.querySelector('form');
     if (form) {
         form.addEventListener('submit', function(e) {
-            e.preventDefault(); // Prevent default form submission
+            console.log('Form submission started');
             
             // Update all hidden fields before submission
             updateNextOfKin();
@@ -1309,38 +1299,15 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Show loading state
             const submitBtn = form.querySelector('button[type="submit"]');
-            const originalText = submitBtn.textContent;
-            submitBtn.textContent = 'Saving...';
-            submitBtn.disabled = true;
+            if (submitBtn) {
+                const originalText = submitBtn.textContent;
+                submitBtn.textContent = 'Saving...';
+                submitBtn.disabled = true;
+            }
             
-            // Create FormData object
-            const formData = new FormData(form);
-            
-            // Submit form via fetch
-            const formAction = form.action || window.location.href;
-            fetch(formAction, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                }
-            })
-            .then(response => {
-                if (response.ok) {
-                    // If successful, redirect to client list
-                    window.location.href = "{% url 'clients:list' %}";
-                } else {
-                    // If there are validation errors, reload the page to show them
-                    window.location.reload();
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                // Restore button state
-                submitBtn.textContent = originalText;
-                submitBtn.disabled = false;
-                alert('An error occurred while saving. Please try again.');
-            });
+            // Let Django handle the form submission normally
+            // This ensures proper validation and error handling
+            console.log('Form submitted to:', form.action);
         });
     }
 });

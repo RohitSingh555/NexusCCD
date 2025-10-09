@@ -181,6 +181,11 @@ class ClientCreateView(CreateView):
         return context
     
     def form_valid(self, form):
+        print("DEBUG: ClientCreateView.form_valid called")
+        print("DEBUG: Form is valid:", form.is_valid())
+        print("DEBUG: Form errors:", form.errors)
+        print("DEBUG: Form cleaned_data keys:", list(form.cleaned_data.keys()))
+        
         client = form.save(commit=False)
         
         # Set updated_by field
@@ -284,9 +289,19 @@ class ClientCreateView(CreateView):
         
         return super().form_valid(form)
     
+    def form_invalid(self, form):
+        print("DEBUG: ClientCreateView.form_invalid called")
+        print("DEBUG: Form is valid:", form.is_valid())
+        print("DEBUG: Form errors:", form.errors)
+        print("DEBUG: Form non_field_errors:", form.non_field_errors)
+        return super().form_invalid(form)
+    
     def handle_program_enrollments(self, client):
         """Handle multiple program enrollments from form data"""
         program_enrollments_data = {}
+        
+        print("DEBUG: handle_program_enrollments called")
+        print("DEBUG: POST data keys:", [key for key in self.request.POST.keys() if key.startswith('program_enrollments')])
         
         # Extract program enrollment data from POST
         for key, value in self.request.POST.items():
@@ -301,6 +316,9 @@ class ClientCreateView(CreateView):
                     if index not in program_enrollments_data:
                         program_enrollments_data[index] = {}
                     program_enrollments_data[index][field] = value
+                    print(f"DEBUG: Found enrollment data - {key}: {value}")
+        
+        print("DEBUG: Parsed enrollment data:", program_enrollments_data)
         
         # Create program enrollments
         for index, enrollment_data in program_enrollments_data.items():
@@ -317,9 +335,12 @@ class ClientCreateView(CreateView):
             reason_discharge = enrollment_data.get('reason_discharge', '')
             
             # Only create enrollment if program is selected
+            print(f"DEBUG: Processing enrollment {index} - program_id: {program_id}, start_date: {start_date}")
+            print(f"DEBUG: Full enrollment data for {index}: {enrollment_data}")
             if program_id and start_date:
                 try:
                     program = Program.objects.get(id=program_id)
+                    print(f"DEBUG: Found program: {program.name}")
                     
                     # Parse sub-programs from JSON
                     import json
@@ -344,18 +365,30 @@ class ClientCreateView(CreateView):
                     
                     notes = " | ".join(notes_parts) if notes_parts else "Enrollment created from client form"
                     
-                    ClientProgramEnrollment.objects.create(
+                    # Set created_by and updated_by fields
+                    created_by = f"{self.request.user.first_name} {self.request.user.last_name}".strip()
+                    if not created_by:
+                        created_by = self.request.user.username or self.request.user.email
+                    
+                    enrollment = ClientProgramEnrollment.objects.create(
                         client=client,
                         program=program,
                         start_date=start_date,
                         end_date=end_date if end_date else None,
                         status=status,
-                        notes=notes
+                        notes=notes,
+                        created_by=created_by,
+                        updated_by=created_by
                     )
+                    print(f"DEBUG: Created enrollment: {enrollment}")
                 except Program.DoesNotExist:
+                    print(f"DEBUG: Program with ID {program_id} not found")
                     logger.warning(f"Program with ID {program_id} not found")
                 except Exception as e:
+                    print(f"DEBUG: Error creating program enrollment: {e}")
                     logger.error(f"Error creating program enrollment: {e}")
+            else:
+                print(f"DEBUG: Skipping enrollment {index} - missing program_id or start_date")
 
 class ClientUpdateView(UpdateView):
     model = Client
