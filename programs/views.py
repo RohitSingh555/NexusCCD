@@ -90,8 +90,12 @@ class ProgramListView(ProgramManagerAccessMixin, ListView):
                 'is_at_capacity': is_at_capacity,
             })
         
+        # Get the total count of filtered programs (not just current page)
+        total_filtered_count = self.get_queryset().count()
+        
         # Add filter options to context
         context['programs_with_capacity'] = programs_with_capacity
+        context['total_filtered_count'] = total_filtered_count
         context['departments'] = Department.objects.all().order_by('name')
         context['status_choices'] = Program.STATUS_CHOICES
         context['capacity_choices'] = [

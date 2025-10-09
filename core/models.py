@@ -197,7 +197,7 @@ class Program(BaseModel):
     name = models.CharField(max_length=255, db_index=True)
     department = models.ForeignKey(Department, on_delete=models.CASCADE, db_index=True)
     location = models.CharField(max_length=255, db_index=True)
-    capacity_current = models.PositiveIntegerField(default=0)
+    capacity_current = models.PositiveIntegerField(default=100)
     capacity_effective_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', db_index=True)
     description = models.TextField(null=True, blank=True)
@@ -275,6 +275,11 @@ class Program(BaseModel):
         if start_date is None:
             start_date = timezone.now().date()
         
+        # Check for service restrictions first
+        restriction_check = self.check_client_restrictions(client, start_date)
+        if not restriction_check[0]:
+            return restriction_check
+        
         # Check if program is at capacity for the specific date
         if self.is_at_capacity(start_date):
             enrollments_on_date = self.get_enrollments_count_for_date(start_date)
@@ -297,6 +302,53 @@ class Program(BaseModel):
             return False, f"Client is already enrolled in '{self.name}' program on {start_date.strftime('%B %d, %Y')}."
         
         return True, "Client can be enrolled."
+    
+    def check_client_restrictions(self, client, start_date):
+        """Check if client has service restrictions that would prevent enrollment in this program"""
+        from .models import ServiceRestriction
+        
+        # Check for active restrictions that are not archived
+        active_restrictions = ServiceRestriction.objects.filter(
+            client=client,
+            is_archived=False,  # Only check non-archived restrictions
+            start_date__lte=start_date
+        ).filter(
+            models.Q(end_date__isnull=True) | models.Q(end_date__gte=start_date)
+        )
+        
+        # Check for global restrictions (scope='org') - these block ALL programs
+        global_restrictions = active_restrictions.filter(scope='org')
+        if global_restrictions.exists():
+            restriction = global_restrictions.first()
+            end_date_text = restriction.end_date.strftime('%B %d, %Y') if restriction.end_date else 'indefinite'
+            
+            return False, (
+                f"⚠️ ENROLLMENT BLOCKED - ACTIVE GLOBAL SERVICE RESTRICTION\n\n"
+                f"Client: {client.first_name} {client.last_name}\n"
+                f"Restriction Type: {restriction.get_restriction_type_display()}\n"
+                f"Scope: ALL PROGRAMS (Global Restriction)\n"
+                f"Period: {restriction.start_date.strftime('%B %d, %Y')} to {end_date_text}\n"
+                f"Reason: {restriction.notes or 'No reason provided'}\n\n"
+                f"ACTION REQUIRED: This client cannot be enrolled in ANY program due to a global restriction. Please remove or modify the restriction before enrolling this client."
+            )
+        
+        # Check for program-specific restrictions (scope='program') - these only block the specific program
+        program_restrictions = active_restrictions.filter(scope='program', program=self)
+        if program_restrictions.exists():
+            restriction = program_restrictions.first()
+            end_date_text = restriction.end_date.strftime('%B %d, %Y') if restriction.end_date else 'indefinite'
+            
+            return False, (
+                f"⚠️ ENROLLMENT BLOCKED - ACTIVE PROGRAM-SPECIFIC SERVICE RESTRICTION\n\n"
+                f"Client: {client.first_name} {client.last_name}\n"
+                f"Restriction Type: {restriction.get_restriction_type_display()}\n"
+                f"Scope: '{self.name}' program only\n"
+                f"Period: {restriction.start_date.strftime('%B %d, %Y')} to {end_date_text}\n"
+                f"Reason: {restriction.notes or 'No reason provided'}\n\n"
+                f"ACTION REQUIRED: This client cannot be enrolled in the '{self.name}' program due to a program-specific restriction. The client can still be enrolled in other programs."
+            )
+        
+        return True, "No restrictions found."
 
 
 class ProgramStaff(BaseModel):
@@ -313,50 +365,90 @@ class ProgramStaff(BaseModel):
 
 
 class Client(BaseModel):
-    first_name = models.CharField(max_length=100, db_index=True)
+    # 🧍 CLIENT PERSONAL DETAILS
+    client_id = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="External client ID")
     last_name = models.CharField(max_length=100, db_index=True)
+    first_name = models.CharField(max_length=100, db_index=True)
+    middle_name = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     preferred_name = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    alias = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    alias = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Last Name at Birth")
     dob = models.DateField(db_index=True)
+    age = models.IntegerField(null=True, blank=True, help_text="Calculated from DOB")
     gender = models.CharField(max_length=50, db_index=True)
-    sexual_orientation = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    languages_spoken = models.JSONField(default=list)
-    ethnicity = models.JSONField(default=list, help_text="List of ethnicities (multi-select)")
+    gender_identity = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    pronoun = models.CharField(max_length=50, null=True, blank=True, db_index=True)
+    marital_status = models.CharField(max_length=50, null=True, blank=True, db_index=True)
     citizenship_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    indigenous_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    country_of_birth = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    location_county = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    province = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    city = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    postal_code = models.CharField(max_length=20, null=True, blank=True, db_index=True)
+    address = models.CharField(max_length=500, null=True, blank=True)
+    address_2 = models.CharField(max_length=255, null=True, blank=True, help_text="Address line 2")
+    
+    # 🌍 CULTURAL & DEMOGRAPHIC INFO
+    language = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    preferred_language = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    mother_tongue = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    official_language = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    language_interpreter_required = models.BooleanField(default=False, db_index=True)
+    self_identification_race_ethnicity = models.CharField(max_length=200, null=True, blank=True, db_index=True)
+    ethnicity = models.JSONField(default=list, help_text="List of ethnicities (multi-select)")
+    aboriginal_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    lgbtq_status = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="LGBTQ+ Status")
+    highest_level_education = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    children_home = models.BooleanField(default=False, db_index=True)
+    children_number = models.IntegerField(null=True, blank=True)
+    lhin = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Local Health Integration Network")
+    
+    # 💊 MEDICAL & HEALTH INFORMATION
+    medical_conditions = models.TextField(null=True, blank=True, help_text="Medical conditions")
+    primary_diagnosis = models.CharField(max_length=255, null=True, blank=True, help_text="Primary diagnosis")
+    family_doctor = models.CharField(max_length=255, null=True, blank=True)
+    health_card_number = models.CharField(max_length=50, null=True, blank=True, db_index=True, help_text="HC# (Health Card Number)")
+    health_card_version = models.CharField(max_length=10, null=True, blank=True, help_text="HC Version")
+    health_card_exp_date = models.DateField(null=True, blank=True, help_text="HC Exp Date")
+    health_card_issuing_province = models.CharField(max_length=100, null=True, blank=True, help_text="HC Issuing Province")
+    no_health_card_reason = models.CharField(max_length=255, null=True, blank=True, help_text="No HC Reason")
+    
+    # 👥 CONTACT & PERMISSIONS
+    permission_to_phone = models.BooleanField(default=False, db_index=True, help_text="Permission to contact by phone")
+    permission_to_email = models.BooleanField(default=False, db_index=True, help_text="Permission to contact by email")
+    phone = models.CharField(max_length=20, null=True, blank=True, db_index=True)
+    phone_work = models.CharField(max_length=20, null=True, blank=True, help_text="Work phone number")
+    phone_alt = models.CharField(max_length=20, null=True, blank=True, help_text="Alternative phone number")
+    email = models.EmailField(max_length=254, null=True, blank=True, db_index=True)
+    next_of_kin = models.JSONField(default=dict, help_text="Next of kin contact information")
+    emergency_contact = models.JSONField(default=dict, help_text="Emergency contact information")
+    comments = models.TextField(null=True, blank=True, help_text="Additional comments and notes")
+    
+    # 🧑‍💼 PROGRAM / ENROLLMENT DETAILS
+    program = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    sub_program = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    support_workers = models.JSONField(default=list, help_text="List of assigned support workers")
+    level_of_support = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    client_type = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    admission_date = models.DateField(null=True, blank=True, db_index=True)
+    discharge_date = models.DateField(null=True, blank=True, db_index=True)
+    days_elapsed = models.IntegerField(null=True, blank=True)
+    program_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    reason_discharge = models.CharField(max_length=255, null=True, blank=True, help_text="Reason for Discharge/Program Status")
+    receiving_services = models.BooleanField(default=False, db_index=True)
+    referral_source = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    
+    # 🧾 ADMINISTRATIVE / SYSTEM FIELDS
+    chart_number = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    
+    # Legacy fields (keeping for backward compatibility)
     image = models.URLField(max_length=500, null=True, blank=True)
     profile_picture = models.ImageField(upload_to='client_photos/', null=True, blank=True)
     contact_information = models.JSONField(default=dict, help_text="Contact information with phone and email")
     addresses = models.JSONField(default=list, help_text="List of addresses with type, street, city, state, zip, country")
     uid_external = models.CharField(max_length=255, null=True, blank=True, unique=True, db_index=True)
-    
-    # New fields for comprehensive client information
-    # Address fields
-    address_2 = models.CharField(max_length=255, null=True, blank=True, help_text="Address line 2")
-    
-    # Contact permissions
-    permission_to_phone = models.BooleanField(default=False, db_index=True, help_text="Permission to contact by phone")
-    permission_to_email = models.BooleanField(default=False, db_index=True, help_text="Permission to contact by email")
-    
-    # Additional phone numbers
-    phone_work = models.CharField(max_length=20, null=True, blank=True, help_text="Work phone number")
-    phone_alt = models.CharField(max_length=20, null=True, blank=True, help_text="Alternative phone number")
-    
-    # Client ID
-    client_id = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="External client ID")
-    
-    # Medical information
-    medical_conditions = models.TextField(null=True, blank=True, help_text="Medical conditions")
-    primary_diagnosis = models.CharField(max_length=255, null=True, blank=True, help_text="Primary diagnosis")
-    
-    # Support and emergency contacts
-    support_workers = models.JSONField(default=list, help_text="List of assigned support workers")
-    next_of_kin = models.JSONField(default=dict, help_text="Next of kin contact information")
-    emergency_contact = models.JSONField(default=dict, help_text="Emergency contact information")
-    
-    # Comments
-    comments = models.TextField(null=True, blank=True, help_text="Additional comments and notes")
+    languages_spoken = models.JSONField(default=list)
+    indigenous_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    country_of_birth = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    sexual_orientation = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     
     # Audit fields
     updated_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who last updated this record")
@@ -365,6 +457,13 @@ class Client(BaseModel):
         # Auto-generate external ID if not provided
         if not self.uid_external:
             self.uid_external = str(uuid.uuid4())
+        
+        # Calculate age from DOB
+        if self.dob and not self.age:
+            from datetime import date
+            today = date.today()
+            dob_date = self.dob
+            self.age = today.year - dob_date.year - ((today.month, today.day) < (dob_date.month, dob_date.day))
         
         # Set updated_by if not already set
         if not self.updated_by:
@@ -377,13 +476,13 @@ class Client(BaseModel):
         super().save(*args, **kwargs)
     
     @property
-    def email(self):
-        """Get email from contact_information"""
+    def email_legacy(self):
+        """Get email from contact_information (legacy)"""
         return self.contact_information.get('email', '') if self.contact_information else ''
     
     @property
-    def phone(self):
-        """Get phone from contact_information"""
+    def phone_legacy(self):
+        """Get phone from contact_information (legacy)"""
         return self.contact_information.get('phone', '') if self.contact_information else ''
 
     @property
@@ -395,17 +494,39 @@ class Client(BaseModel):
             return self.image
         return None
     
+    @property
+    def calculated_age(self):
+        """Calculate age from DOB"""
+        if self.dob:
+            from datetime import date
+            today = date.today()
+            dob_date = self.dob
+            return today.year - dob_date.year - ((today.month, today.day) < (dob_date.month, dob_date.day))
+        return None
+    
     class Meta:
         db_table = 'clients'
         indexes = [
             models.Index(fields=['first_name', 'last_name', 'dob'], name='client_name_dob_idx'),
             models.Index(fields=['uid_external'], name='client_uid_external_idx'),
             models.Index(fields=['client_id'], name='client_id_idx'),
+            models.Index(fields=['chart_number'], name='client_chart_number_idx'),
             models.Index(fields=['citizenship_status'], name='client_citizenship_status_idx'),
             models.Index(fields=['indigenous_status'], name='client_indigenous_status_idx'),
             models.Index(fields=['country_of_birth'], name='client_country_of_birth_idx'),
             models.Index(fields=['permission_to_phone'], name='client_permission_phone_idx'),
             models.Index(fields=['permission_to_email'], name='client_permission_email_idx'),
+            models.Index(fields=['program'], name='client_program_idx'),
+            models.Index(fields=['program_status'], name='client_program_status_idx'),
+            models.Index(fields=['client_type'], name='client_type_idx'),
+            models.Index(fields=['admission_date'], name='client_admission_date_idx'),
+            models.Index(fields=['discharge_date'], name='client_discharge_date_idx'),
+            models.Index(fields=['health_card_number'], name='client_health_card_idx'),
+            models.Index(fields=['lhin'], name='client_lhin_idx'),
+            models.Index(fields=['location_county'], name='client_location_county_idx'),
+            models.Index(fields=['province'], name='client_province_idx'),
+            models.Index(fields=['city'], name='client_city_idx'),
+            models.Index(fields=['postal_code'], name='client_postal_code_idx'),
         ]
     
     def __str__(self):
@@ -530,6 +651,7 @@ class ServiceRestriction(BaseModel):
     start_date = models.DateField(db_index=True)
     end_date = models.DateField(null=True, blank=True, db_index=True)
     is_indefinite = models.BooleanField(default=False, db_index=True, help_text="Check if this restriction has no end date")
+    is_archived = models.BooleanField(default=False, db_index=True, help_text="Check if this restriction has been archived")
     behaviors = models.JSONField(default=list, help_text="List of behaviors that led to this restriction")
     notes = models.TextField(null=True, blank=True, help_text="Additional notes about the restriction")
     
@@ -564,10 +686,34 @@ class ServiceRestriction(BaseModel):
         from django.utils import timezone
         today = timezone.now().date()
         
+        # If archived, it's not active
+        if self.is_archived:
+            return False
+        
         if self.is_indefinite:
             return self.start_date <= today
         else:
             return self.start_date <= today and (self.end_date is None or self.end_date >= today)
+    
+    def is_expired(self):
+        """Check if the restriction has expired (past end date)"""
+        from django.utils import timezone
+        today = timezone.now().date()
+        
+        # If archived, it's considered expired
+        if self.is_archived:
+            return True
+        
+        # If indefinite, it never expires
+        if self.is_indefinite:
+            return False
+        
+        # If no end date, it doesn't expire
+        if self.end_date is None:
+            return False
+        
+        # Check if past end date
+        return today > self.end_date
     
     def get_duration_display(self):
         """Get a human-readable duration display"""
@@ -586,7 +732,19 @@ class ServiceRestriction(BaseModel):
                 years = days // 365
                 return f"{years} year{'s' if years > 1 else ''}"
         else:
-            return "Ongoing"
+            # Show date range from start date to present
+            from django.utils import timezone
+            today = timezone.now().date()
+            duration = today - self.start_date
+            days = duration.days
+            if days < 30:
+                return f"{days} days (since {self.start_date.strftime('%b %d, %Y')})"
+            elif days < 365:
+                months = days // 30
+                return f"{months} month{'s' if months > 1 else ''} (since {self.start_date.strftime('%b %d, %Y')})"
+            else:
+                years = days // 365
+                return f"{years} year{'s' if years > 1 else ''} (since {self.start_date.strftime('%b %d, %Y')})"
 
 
 class AuditLog(BaseModel):

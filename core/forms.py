@@ -47,33 +47,45 @@ class EnrollmentForm(forms.ModelForm):
     def check_service_restrictions(self, client, program, start_date):
         """Check if client has service restrictions that would prevent enrollment"""
         
-        # Check for ANY active restrictions (organization-wide or program-specific)
-        # This ensures that ANY restriction blocks enrollment in ANY program
+        # Check for active restrictions that are not archived
         active_restrictions = ServiceRestriction.objects.filter(
             client=client,
+            is_archived=False,  # Only check non-archived restrictions
             start_date__lte=start_date
         ).filter(
             models.Q(end_date__isnull=True) | models.Q(end_date__gte=start_date)
         )
         
-        if active_restrictions.exists():
-            restriction = active_restrictions.first()
+        # Check for global restrictions (scope='org') - these block ALL programs
+        global_restrictions = active_restrictions.filter(scope='org')
+        if global_restrictions.exists():
+            restriction = global_restrictions.first()
             end_date_text = restriction.end_date.strftime('%B %d, %Y') if restriction.end_date else 'indefinite'
             
-            # Determine restriction scope for the error message
-            if restriction.scope == 'org':
-                scope_text = "all programs"
-            else:
-                scope_text = f"'{restriction.program.name}' program" if restriction.program else "specific programs"
-            
             raise ValidationError(
-                f"⚠️ ENROLLMENT BLOCKED - ACTIVE SERVICE RESTRICTION\n\n"
+                f"⚠️ ENROLLMENT BLOCKED - ACTIVE GLOBAL SERVICE RESTRICTION\n\n"
                 f"Client: {client.first_name} {client.last_name}\n"
                 f"Restriction Type: {restriction.get_restriction_type_display()}\n"
-                f"Scope: {scope_text}\n"
+                f"Scope: ALL PROGRAMS (Global Restriction)\n"
                 f"Period: {restriction.start_date.strftime('%B %d, %Y')} to {end_date_text}\n"
                 f"Reason: {restriction.notes or 'No reason provided'}\n\n"
-                f"ACTION REQUIRED: Please remove or modify the restriction before enrolling this client."
+                f"ACTION REQUIRED: This client cannot be enrolled in ANY program due to a global restriction. Please remove or modify the restriction before enrolling this client."
+            )
+        
+        # Check for program-specific restrictions (scope='program') - these only block the specific program
+        program_restrictions = active_restrictions.filter(scope='program', program=program)
+        if program_restrictions.exists():
+            restriction = program_restrictions.first()
+            end_date_text = restriction.end_date.strftime('%B %d, %Y') if restriction.end_date else 'indefinite'
+            
+            raise ValidationError(
+                f"⚠️ ENROLLMENT BLOCKED - ACTIVE PROGRAM-SPECIFIC SERVICE RESTRICTION\n\n"
+                f"Client: {client.first_name} {client.last_name}\n"
+                f"Restriction Type: {restriction.get_restriction_type_display()}\n"
+                f"Scope: '{program.name}' program only\n"
+                f"Period: {restriction.start_date.strftime('%B %d, %Y')} to {end_date_text}\n"
+                f"Reason: {restriction.notes or 'No reason provided'}\n\n"
+                f"ACTION REQUIRED: This client cannot be enrolled in the '{program.name}' program due to a program-specific restriction. The client can still be enrolled in other programs."
             )
     
     def check_program_capacity(self, client, program, start_date):

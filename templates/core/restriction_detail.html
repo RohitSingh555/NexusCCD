@@ -6,106 +6,147 @@
 {% block page_title %}{{ restriction.client.first_name }} {{ restriction.client.last_name }} - Service Restriction{% endblock %}
 
 {% block content %}
+{% csrf_token %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- Header -->
-    <div class="flex justify-between items-center mb-8">
-        <div class="flex items-center">
-            <div class="w-16 h-16 bg-gradient-to-br from-accent-400 to-accent-600 rounded-xl flex items-center justify-center shadow-sm mr-6">
-                <span class="text-2xl font-bold text-white">
-                    {{ restriction.client.first_name|first|upper }}{{ restriction.client.last_name|first|upper }}
-                </span>
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-16 h-16 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm">
+                    <span class="text-2xl font-bold text-white">
+                        {{ restriction.client.first_name|first|upper }}{{ restriction.client.last_name|first|upper }}
+                    </span>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">
+                        {{ restriction.client.first_name }} {{ restriction.client.last_name }}
+                    </h1>
+                    <p class="text-sm text-gray-600">Service Restriction</p>
+                    <p class="text-sm text-gray-600">{{ restriction.get_scope_display }}</p>
+                </div>
             </div>
-            <div>
-                <h1 class="text-3xl font-bold text-neutral-800 font-header">
-                    {{ restriction.client.first_name }} {{ restriction.client.last_name }}
-                </h1>
-                <p class="text-lg text-neutral-600 font-body">Service Restriction</p>
-                <p class="text-sm text-neutral-500 font-body">{{ restriction.get_scope_display }}</p>
+            <div class="flex items-center space-x-2">
+                {% if not restriction.is_archived %}
+                <a href="{% url 'core:restrictions_edit' restriction.external_id %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    Edit Restriction
+                </a>
+                <button onclick="showArchiveModal('{{ restriction.external_id }}', '{{ restriction.client.first_name }} {{ restriction.client.last_name }}')" class="inline-flex items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                    Archive Restriction
+                </button>
+                {% else %}
+                <div class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-500 bg-gray-100 cursor-not-allowed">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8l6 6 6-6"></path>
+                    </svg>
+                    Archived Restriction
+                </div>
+                {% endif %}
+                <a href="{% url 'core:restrictions' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Back to Restrictions
+                </a>
             </div>
-        </div>
-        <div class="flex space-x-3">
-            <a href="{% url 'core:restrictions_edit' restriction.external_id %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                </svg>
-                Edit Restriction
-            </a>
-            <a href="{% url 'core:restrictions' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                </svg>
-                Back to Restrictions
-            </a>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Main Content -->
-        <div class="lg:col-span-2 space-y-8">
+    <div class="space-y-6">
+        <!-- Compact Information Cards -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Restriction Information -->
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <div class="flex items-center mb-6">
-                    <div class="w-10 h-10 bg-gradient-to-br from-accent-400 to-accent-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
                         </svg>
                     </div>
-                    <h2 class="text-xl font-bold text-neutral-800 font-header">Restriction Details</h2>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Restriction Details</h2>
                 </div>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Client</label>
-                        <p class="text-lg text-neutral-900 font-body">
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Client:</span>
+                        <span class="text-sm text-neutral-900 font-body">
                             <a href="{% url 'clients:detail' restriction.client.external_id %}" class="text-brand-sky hover:text-brand-darkBlue">
                                 {{ restriction.client.first_name }} {{ restriction.client.last_name }}
                             </a>
-                        </p>
+                        </span>
                     </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Scope</label>
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold {% if restriction.scope == 'org' %}bg-brand-orange text-white{% else %}bg-brand-sky text-white{% endif %}">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Scope:</span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {% if restriction.scope == 'org' %}bg-brand-orange text-white{% else %}bg-brand-sky text-white{% endif %}">
                             {{ restriction.get_scope_display }}
                         </span>
                     </div>
                     {% if restriction.program %}
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Program</label>
-                        <p class="text-lg text-neutral-900 font-body">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Program:</span>
+                        <span class="text-sm text-neutral-900 font-body">
                             <a href="{% url 'programs:detail' restriction.program.external_id %}" class="text-brand-sky hover:text-brand-darkBlue">
                                 {{ restriction.program.name }}
                             </a>
-                        </p>
+                        </span>
                     </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Department</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ restriction.program.department.name }}</p>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Department:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ restriction.program.department.name }}</span>
                     </div>
                     {% endif %}
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Start Date</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ restriction.start_date|date:"F d, Y" }}</p>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Start Date:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ restriction.start_date|date:"M d, Y" }}</span>
                     </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">End Date</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ restriction.end_date|date:"F d, Y"|default:"Indefinite" }}</p>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">End Date:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ restriction.end_date|date:"M d, Y"|default:"—" }}</span>
                     </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Status</label>
-                        {% if restriction.end_date and restriction.end_date < today %}
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-neutral-100 text-neutral-800">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Status:</span>
+                        {% if restriction.is_archived %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-800">
+                                Archived
+                            </span>
+                        {% elif restriction.is_expired %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral-100 text-neutral-800">
                                 Expired
                             </span>
                         {% else %}
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-accent-400 text-white">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-lime text-neutral-800">
                                 Active
                             </span>
                         {% endif %}
                     </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Restriction Type:</span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {% if restriction.restriction_type == 'bill_168' %}bg-red-100 text-red-800{% elif restriction.restriction_type == 'no_trespass' %}bg-orange-100 text-orange-800{% elif restriction.restriction_type == 'behaviors' %}bg-purple-100 text-purple-800{% else %}bg-blue-100 text-blue-800{% endif %}">
+                            {{ restriction.get_restriction_type_display }}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Created By:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ restriction.created_by|default:"System" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Created On:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ restriction.created_at|date:"M d, Y g:i A" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Last Updated:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ restriction.updated_at|date:"M d, Y g:i A" }}</span>
+                    </div>
                 </div>
             </div>
 
-            <!-- Reason Section -->
+            <!-- Restriction Notes -->
+            {% if restriction.notes %}
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
                 <div class="flex items-center mb-6">
                     <div class="w-10 h-10 bg-gradient-to-br from-secondary-400 to-secondary-700 rounded-lg flex items-center justify-center shadow-sm mr-4">
@@ -113,65 +154,137 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>
                     </div>
-                    <h2 class="text-xl font-bold text-neutral-800 font-header">Reason for Restriction</h2>
-                </div>
-                
-                <div class="mb-6">
-                    <label class="block text-sm font-bold text-neutral-500 mb-2 font-subheader">Restriction Type</label>
-                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold {% if restriction.restriction_type == 'bill_168' %}bg-red-100 text-red-800{% elif restriction.restriction_type == 'no_trespass' %}bg-orange-100 text-orange-800{% elif restriction.restriction_type == 'behaviors' %}bg-purple-100 text-purple-800{% else %}bg-blue-100 text-blue-800{% endif %}">
-                        {{ restriction.get_restriction_type_display }}
-                    </span>
+                    <h2 class="text-xl font-bold text-neutral-800 font-header">Restriction Notes</h2>
                 </div>
                 
                 <div class="bg-neutral-50 rounded-lg p-4">
-                    <p class="text-neutral-900 font-body whitespace-pre-wrap">{{ restriction.notes|default:"No additional notes provided." }}</p>
+                    <p class="text-neutral-900 font-body whitespace-pre-wrap">{{ restriction.notes }}</p>
                 </div>
             </div>
-        </div>
+            {% endif %}
 
-        <!-- Sidebar -->
-        <div class="space-y-8">
-            <!-- System Information -->
+            <!-- Client Information -->
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <div class="flex items-center mb-6">
-                    <div class="w-10 h-10 bg-gradient-to-br from-neutral-500 to-neutral-700 rounded-lg flex items-center justify-center shadow-sm mr-4">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-accent-400 to-accent-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                         </svg>
                     </div>
-                    <h2 class="text-xl font-bold text-neutral-800 font-header">System Information</h2>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Client Information</h2>
                 </div>
                 
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Restriction ID</label>
-                        <p class="text-sm text-neutral-900 font-mono font-body">{{ restriction.external_id }}</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Created</label>
-                        <p class="text-sm text-neutral-900 font-body">{{ restriction.created_at|date:"M d, Y g:i A" }}</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Last Updated</label>
-                        <p class="text-sm text-neutral-900 font-body">{{ restriction.updated_at|date:"M d, Y g:i A" }}</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <h3 class="text-lg font-bold text-neutral-800 font-header mb-4">Quick Actions</h3>
                 <div class="space-y-3">
-                    <a href="{% url 'core:restrictions_delete' restriction.external_id %}" class="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 text-sm font-bold rounded-xl text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-sm">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
-                        Delete Restriction
-                    </a>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Client Name:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            <a href="{% url 'clients:detail' restriction.client.external_id %}" class="text-brand-sky hover:text-brand-darkBlue">
+                                {{ restriction.client.first_name }} {{ restriction.client.last_name }}
+                            </a>
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Client ID:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ restriction.client.external_id }}</span>
+                    </div>
+                    {% if restriction.client.date_of_birth %}
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Date of Birth:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ restriction.client.date_of_birth|date:"M d, Y" }}</span>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Archive Confirmation Modal -->
+<div id="archiveModal" class="fixed inset-0 z-50 overflow-y-auto hidden" style="display: none;">
+    <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="hideArchiveModal()"></div>
+        
+        <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <svg class="h-6 w-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                    </div>
+                    <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900">
+                            Archive Restriction
+                        </h3>
+                        <div class="mt-2">
+                            <p class="text-sm text-gray-500">
+                                Are you sure you want to archive the restriction for <span id="clientName" class="font-medium"></span>? This action will move the restriction to archived status and it cannot be undone.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button onclick="confirmArchive()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-600 text-base font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:ml-3 sm:w-auto sm:text-sm">
+                    Archive Restriction
+                </button>
+                <button onclick="hideArchiveModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentRestrictionId = null;
+
+function showArchiveModal(restrictionId, clientName) {
+    currentRestrictionId = restrictionId;
+    document.getElementById('clientName').textContent = clientName;
+    document.getElementById('archiveModal').classList.remove('hidden');
+    document.getElementById('archiveModal').style.display = 'block';
+}
+
+function hideArchiveModal() {
+    document.getElementById('archiveModal').classList.add('hidden');
+    document.getElementById('archiveModal').style.display = 'none';
+    currentRestrictionId = null;
+}
+
+function confirmArchive() {
+    if (currentRestrictionId) {
+        console.log('Archiving restriction:', currentRestrictionId);
+        
+        // Create a form and submit it to the delete URL
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/core/restrictions/${currentRestrictionId}/delete/`;
+        
+        // Add CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrfToken) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = csrfToken.value;
+            form.appendChild(csrfInput);
+            console.log('CSRF token added:', csrfToken.value);
+        } else {
+            console.error('CSRF token not found');
+        }
+        
+        // Add confirmation text
+        const confirmationInput = document.createElement('input');
+        confirmationInput.type = 'hidden';
+        confirmationInput.name = 'confirmation_text';
+        confirmationInput.value = 'ARCHIVE';
+        form.appendChild(confirmationInput);
+        
+        document.body.appendChild(form);
+        console.log('Submitting form to:', form.action);
+        form.submit();
+    }
+}
+</script>
 {% endblock %}

@@ -4,6 +4,7 @@
 {% block title %}Central Client Database - Streamline Your Client Management{% endblock %}
 
 {% block content %}
+<div x-data="{ showRegisterModal: false }">
 <!-- Hero Section -->
 <div class="relative overflow-hidden bg-gradient-to-br from-primary-50 via-white to-secondary-50">
     <!-- Background Pattern -->
@@ -34,12 +35,12 @@
             
             <!-- CTA Buttons -->
             <div class="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-                <a href="{% url 'clients:list' %}" class="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl hover:from-primary-700 hover:to-primary-800 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl">
+                <button @click="showRegisterModal = true" class="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-white bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl hover:from-primary-700 hover:to-primary-800 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl">
                     <span>Get Started Free</span>
                     <svg class="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
                     </svg>
-                </a>
+                </button>
                 <a href="#features" class="inline-flex items-center justify-center px-8 py-4 text-lg font-semibold text-secondary-700 bg-white border-2 border-secondary-200 rounded-xl hover:border-primary-300 hover:text-primary-600 transform hover:scale-105 transition-all duration-200 shadow-sm hover:shadow-md">
                     <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -476,12 +477,12 @@
             </p>
             
             <div class="flex flex-col sm:flex-row gap-6 justify-center mb-16">
-                <a href="{% url 'clients:list' %}" class="group relative inline-flex items-center justify-center px-10 py-5 text-lg font-bold text-primary-700 bg-white rounded-2xl hover:bg-yellow-50 transform hover:scale-105 transition-all duration-200 shadow-xl hover:shadow-2xl">
+                <button @click="showRegisterModal = true" class="group relative inline-flex items-center justify-center px-10 py-5 text-lg font-bold text-primary-700 bg-white rounded-2xl hover:bg-yellow-50 transform hover:scale-105 transition-all duration-200 shadow-xl hover:shadow-2xl">
                     <span>Start Managing Clients</span>
                     <svg class="w-6 h-6 ml-3 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
                     </svg>
-                </a>
+                </button>
                 <a href="{% url 'admin:index' %}" class="inline-flex items-center justify-center px-10 py-5 text-lg font-bold text-white border-2 border-white rounded-2xl hover:bg-white hover:text-primary-700 transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl">
                     <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
@@ -512,5 +513,6 @@
             </div>
         </div>
     </div>
+</div>
 </div>
 {% endblock %}

@@ -3,15 +3,8 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.http import JsonResponse
-from django.contrib.auth import get_user_model
-from core.models import Staff, Role, StaffRole, User
-from .forms import StaffRoleForm
-import uuid
-from core.models import Staff, Role, StaffRole, User, ProgramServiceManagerAssignment, ProgramManagerAssignment, Program
-
-
+from core.models import Staff, Role, StaffRole, User, ProgramManagerAssignment, Program
 from .forms import StaffRoleForm, ProgramManagerAssignmentForm
-from programs.models import ProgramService
 
 class StaffListView(ListView):
     model = Staff
@@ -19,20 +12,84 @@ class StaffListView(ListView):
     context_object_name = 'staff'
     paginate_by = 10
 
+    def get_paginate_by(self, queryset):
+        """Get the number of items to paginate by from request parameters"""
+        per_page = self.request.GET.get('per_page', '10')
+        try:
+            per_page = int(per_page)
+            # Limit to reasonable values
+            if per_page < 5:
+                per_page = 5
+            elif per_page > 100:
+                per_page = 100
+        except (ValueError, TypeError):
+            per_page = 10
+        return per_page
+
     def get_queryset(self):
         # Only show staff members who have a linked user account (can be converted to staff or already are staff)
         queryset = Staff.objects.filter(user__isnull=False).select_related('user')
-        # Add role information to each staff member
-        for staff in queryset:
-            staff.current_roles = staff.staffrole_set.select_related('role').all()
-            # Create a set of role IDs for easy lookup
-            staff.role_ids = set(staff.current_roles.values_list('role_id', flat=True))
-        return queryset
         
+        # Apply search filter
+        search_query = self.request.GET.get('search', '').strip()
+        if search_query:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(first_name__icontains=search_query) |
+                Q(last_name__icontains=search_query) |
+                Q(email__icontains=search_query) |
+                Q(user__first_name__icontains=search_query) |
+                Q(user__last_name__icontains=search_query) |
+                Q(user__email__icontains=search_query)
+            ).distinct()
+        
+        # Apply status filter
+        status_filter = self.request.GET.get('status', '')
+        if status_filter == 'active':
+            queryset = queryset.filter(active=True)
+        elif status_filter == 'inactive':
+            queryset = queryset.filter(active=False)
+        
+        return queryset.order_by('-created_at')
+    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        
+        # Get the queryset and add role information to each staff member
+        staff_list = list(context['staff'])
+        for staff in staff_list:
+            staff.current_roles = staff.staffrole_set.select_related('role').all()
+            # Create a set of role IDs for easy lookup
+            role_ids = []
+            for staff_role in staff.current_roles:
+                role_ids.append(staff_role.role.id)
+            staff.role_ids = set(role_ids)
+        
+        # Update the context with the modified staff list
+        context['staff'] = staff_list
+        
+        # Get the total count of filtered staff (not just current page)
+        total_filtered_count = self.get_queryset().count()
+        
+        # Calculate statistics
+        all_staff = Staff.objects.filter(user__isnull=False)
+        context['total_staff'] = all_staff.count()
+        context['active_staff'] = all_staff.filter(active=True).count()
+        context['inactive_staff'] = all_staff.filter(active=False).count()
+        context['total_filtered_count'] = total_filtered_count
+        
         # Add all available roles to the context for the toggle buttons
         context['available_roles'] = Role.objects.all()
+        
+        # Add current filter values
+        context['current_search'] = self.request.GET.get('search', '')
+        context['current_status'] = self.request.GET.get('status', '')
+        context['per_page'] = self.request.GET.get('per_page', '10')
+        
+        # Force pagination to be enabled if there are any results
+        if context.get('paginator') and context['paginator'].count > 0:
+            context['is_paginated'] = True
+        
         return context
 
 class StaffDetailView(DetailView):
@@ -276,7 +333,7 @@ def update_staff_roles(request, external_id):
 
 
 def toggle_staff_role(request, external_id):
-    """AJAX endpoint for toggling a single staff role - only one role allowed at a time"""
+    """AJAX endpoint for toggling staff roles - supports multiple roles"""
     if request.method == 'POST':
         import json
         staff = get_object_or_404(Staff, external_id=external_id)
@@ -288,19 +345,30 @@ def toggle_staff_role(request, external_id):
             role = Role.objects.get(id=role_id)
             
             if action == 'add':
-                # Remove all existing roles first
-                staff.staffrole_set.all().delete()
-                # Add the new role
-                StaffRole.objects.create(staff=staff, role=role)
-                message = f'Role "{role.name}" assigned successfully'
+                # Check if role already exists
+                if not StaffRole.objects.filter(staff=staff, role=role).exists():
+                    StaffRole.objects.create(staff=staff, role=role)
+                    message = f'Role "{role.name}" assigned successfully'
+                else:
+                    message = f'Role "{role.name}" is already assigned'
             elif action == 'remove':
-                # Remove the current role
-                StaffRole.objects.filter(staff=staff, role=role).delete()
-                message = f'Role "{role.name}" removed successfully'
+                # Remove the specific role
+                deleted_count = StaffRole.objects.filter(staff=staff, role=role).delete()[0]
+                if deleted_count > 0:
+                    message = f'Role "{role.name}" removed successfully'
+                else:
+                    message = f'Role "{role.name}" was not assigned'
             else:
                 return JsonResponse({'success': False, 'message': 'Invalid action'})
             
-            return JsonResponse({'success': True, 'message': message})
+            # Get current roles for response
+            current_roles = list(staff.staffrole_set.all().values_list('role__name', flat=True))
+            
+            return JsonResponse({
+                'success': True, 
+                'message': message,
+                'current_roles': current_roles
+            })
         except Role.DoesNotExist:
             return JsonResponse({'success': False, 'message': 'Role not found'})
         except Exception as e:

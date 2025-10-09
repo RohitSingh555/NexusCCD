@@ -232,21 +232,37 @@ def enrollments(request):
         'client', 'program', 'program__department'
     ).order_by('-start_date')
     
-    # Calculate statistics
+    # Calculate statistics using date-based logic
+    from django.utils import timezone
+    today = timezone.now().date()
+    
     total_enrollments = enrollments.count()
-    active_enrollments = enrollments.filter(end_date__isnull=True).count()
-    completed_enrollments = enrollments.filter(end_date__isnull=False).count()
+    active_count = 0
+    completed_count = 0
+    pending_count = 0
+    
+    for enrollment in enrollments:
+        if today < enrollment.start_date:
+            pending_count += 1
+        elif enrollment.end_date:
+            if today > enrollment.end_date:
+                completed_count += 1
+            else:
+                active_count += 1
+        else:
+            active_count += 1
     
     # Calculate success rate
     success_rate = 0
     if total_enrollments > 0:
-        success_rate = round((completed_enrollments / total_enrollments) * 100, 1)
+        success_rate = round((completed_count / total_enrollments) * 100, 1)
     
     context = {
         'enrollments': enrollments,
         'total_enrollments': total_enrollments,
-        'active_enrollments': active_enrollments,
-        'completed_enrollments': completed_enrollments,
+        'active_enrollments': active_count,
+        'completed_enrollments': completed_count,
+        'pending_enrollments': pending_count,
         'success_rate': success_rate,
     }
     
@@ -290,11 +306,29 @@ class RestrictionListView(ProgramManagerAccessMixin, ListView):
         if scope_filter:
             queryset = queryset.filter(scope=scope_filter)
         
-        if status_filter:
+        if status_filter and status_filter != 'all':
             if status_filter == 'active':
-                queryset = queryset.filter(end_date__isnull=True) | queryset.filter(end_date__gt=timezone.now().date())
+                # Use the model's is_active method logic
+                today = timezone.now().date()
+                queryset = queryset.filter(
+                    is_archived=False,
+                    start_date__lte=today
+                ).filter(
+                    models.Q(is_indefinite=True) | 
+                    models.Q(end_date__isnull=True) | 
+                    models.Q(end_date__gte=today)
+                )
             elif status_filter == 'expired':
-                queryset = queryset.filter(end_date__lt=timezone.now().date())
+                # Use the model's is_expired method logic
+                today = timezone.now().date()
+                queryset = queryset.filter(
+                    is_archived=False,
+                    is_indefinite=False,
+                    end_date__isnull=False,
+                    end_date__lt=today
+                )
+            elif status_filter == 'archived':
+                queryset = queryset.filter(is_archived=True)
         
         if search_query:
             queryset = queryset.filter(
@@ -323,6 +357,9 @@ class RestrictionListView(ProgramManagerAccessMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
+        # Get the total count of filtered restrictions (not just current page)
+        total_filtered_count = self.get_queryset().count()
+        
         # Get all restrictions for statistics (not paginated)
         all_restrictions = ServiceRestriction.objects.select_related(
             'client', 'program', 'program__department'
@@ -330,11 +367,26 @@ class RestrictionListView(ProgramManagerAccessMixin, ListView):
         
         # Calculate statistics
         context['total_restrictions'] = all_restrictions.count()
-        context['active_restrictions'] = all_restrictions.filter(
-            end_date__isnull=True
-        ).count()
+        
+        # Calculate active restrictions using the model's is_active method
+        active_count = 0
+        expired_count = 0
+        archived_count = 0
+        
+        for restriction in all_restrictions:
+            if restriction.is_archived:
+                archived_count += 1
+            elif restriction.is_expired():
+                expired_count += 1
+            elif restriction.is_active():
+                active_count += 1
+        
+        context['active_restrictions'] = active_count
+        context['expired_restrictions'] = expired_count
+        context['archived_restrictions'] = archived_count
         context['org_restrictions'] = all_restrictions.filter(scope='org').count()
         context['program_restrictions'] = all_restrictions.filter(scope='program').count()
+        context['total_filtered_count'] = total_filtered_count
         from django.utils import timezone as django_timezone
         context['today'] = django_timezone.now().date()
         
@@ -353,15 +405,16 @@ class RestrictionListView(ProgramManagerAccessMixin, ListView):
         ]
         
         context['status_choices'] = [
-            ('', 'All Statuses'),
+            ('all', 'All'),
             ('active', 'Active'),
             ('expired', 'Expired'),
+            ('archived', 'Archived'),
         ]
         
         # Add current filter values
         context['current_restriction_type'] = self.request.GET.get('restriction_type', '')
         context['current_scope'] = self.request.GET.get('scope', '')
-        context['current_status'] = self.request.GET.get('status', '')
+        context['current_status'] = self.request.GET.get('status', 'all')
         context['current_search'] = self.request.GET.get('search', '')
         context['per_page'] = self.request.GET.get('per_page', '10')
         
@@ -426,9 +479,6 @@ class AuditLogListView(ListView):
         
         # Add per_page to context for the template
         context['per_page'] = str(self.get_paginate_by(self.get_queryset()))
-        
-        # Ensure is_paginated is always available
-        context['is_paginated'] = True
         
         return context
 
@@ -576,14 +626,40 @@ class EnrollmentListView(ProgramManagerAccessMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         enrollments = self.get_queryset()
-        context['total_enrollments'] = enrollments.count()
-        context['active_enrollments'] = enrollments.filter(end_date__isnull=True).count()
-        context['completed_enrollments'] = enrollments.filter(end_date__isnull=False).count()
+        
+        # Get the total count of filtered enrollments (not just current page)
+        total_filtered_count = self.get_queryset().count()
+        
+        # Calculate statistics using date-based logic
+        from django.utils import timezone
+        today = timezone.now().date()
+        
+        total_enrollments = enrollments.count()
+        active_count = 0
+        completed_count = 0
+        pending_count = 0
+        
+        for enrollment in enrollments:
+            if today < enrollment.start_date:
+                pending_count += 1
+            elif enrollment.end_date:
+                if today > enrollment.end_date:
+                    completed_count += 1
+                else:
+                    active_count += 1
+            else:
+                active_count += 1
+        
+        context['total_enrollments'] = total_enrollments
+        context['active_enrollments'] = active_count
+        context['completed_enrollments'] = completed_count
+        context['pending_enrollments'] = pending_count
+        context['total_filtered_count'] = total_filtered_count
         
         # Calculate success rate
         success_rate = 0
-        if context['total_enrollments'] > 0:
-            success_rate = round((context['completed_enrollments'] / context['total_enrollments']) * 100, 1)
+        if total_enrollments > 0:
+            success_rate = round((completed_count / total_enrollments) * 100, 1)
         context['success_rate'] = success_rate
         
         # Add filter options to context
@@ -706,8 +782,24 @@ class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
                 else:
                     messages.error(self.request, f"{field}: {error}")
         
+        # Get context data without calling the problematic parent method
+        context = {
+            'form': form,
+            'view': self,
+        }
+        
+        # Add program manager context if needed
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                if staff.is_program_manager():
+                    context['assigned_programs'] = staff.get_assigned_programs()
+                    context['is_program_manager'] = True
+            except Exception:
+                pass
+        
         # Return the form with errors
-        return self.render_to_response(self.get_context_data(form=form))
+        return self.render_to_response(context)
 
 
 @method_decorator(jwt_required, name='dispatch')
@@ -1164,30 +1256,30 @@ class RestrictionDeleteView(ProgramManagerAccessMixin, DeleteView):
         return context
     
     def form_valid(self, form):
-        """Handle restriction deletion with audit logging"""
+        """Handle restriction archiving with audit logging"""
         print("RestrictionDeleteView.form_valid called")
         
         # Get the restriction object first
         restriction = self.get_object()
-        print(f"Restriction to delete: {restriction}")
+        print(f"Restriction to archive: {restriction}")
         
         # Check confirmation text
         confirmation = self.request.POST.get('confirmation_text', '').strip().upper()
-        if confirmation != 'DELETE':
-            messages.error(self.request, 'Please type "DELETE" to confirm deletion.')
+        if confirmation != 'ARCHIVE':
+            messages.error(self.request, 'Please type "ARCHIVE" to confirm archiving.')
             return redirect('core:restrictions_detail', external_id=restriction.external_id)
         
         client_name = f"{restriction.client.first_name} {restriction.client.last_name}"
         restriction_type = restriction.get_restriction_type_display()
         
-        # Create audit log entry before deletion
-        print("Creating audit log for restriction deletion...")
+        # Create audit log entry before archiving
+        print("Creating audit log for restriction archiving...")
         try:
             from .models import create_audit_log
             create_audit_log(
                 entity_name='Restriction',
                 entity_id=restriction.external_id,
-                action='delete',
+                action='archive',
                 changed_by=self.request.user,
                 diff_data={
                     'client': str(restriction.client),
@@ -1199,26 +1291,29 @@ class RestrictionDeleteView(ProgramManagerAccessMixin, DeleteView):
                     'is_indefinite': restriction.is_indefinite,
                     'behaviors': restriction.behaviors,
                     'notes': restriction.notes or '',
-                    'deleted_by': f"{self.request.user.first_name} {self.request.user.last_name}".strip() or self.request.user.username
+                    'is_archived': f"{restriction.is_archived} → True",
+                    'archived_by': f"{self.request.user.first_name} {self.request.user.last_name}".strip() or self.request.user.username
                 }
             )
-            print("Audit log created for restriction deletion")
+            print("Audit log created for restriction archiving")
         except Exception as e:
-            print(f"Error creating audit log for restriction deletion: {e}")
+            print(f"Error creating audit log for restriction archiving: {e}")
         
-        # Delete the restriction
-        print("Deleting restriction...")
-        restriction.delete()
-        print("Restriction deleted successfully")
+        # Archive the restriction instead of deleting
+        print("Archiving restriction...")
+        restriction.is_archived = True
+        restriction.updated_by = f"{self.request.user.first_name} {self.request.user.last_name}".strip() or self.request.user.username
+        restriction.save()
+        print("Restriction archived successfully")
         
-        delete_success(self.request, 'Service restriction', client_name)
+        messages.success(self.request, f'Service restriction for {client_name} has been archived successfully.')
         return redirect(self.success_url)
 
 
 @csrf_exempt
 @require_http_methods(["POST"])
 def bulk_delete_restrictions(request):
-    """Bulk delete service restrictions"""
+    """Bulk archive service restrictions"""
     # Check if user is authenticated
     if not request.user.is_authenticated:
         return JsonResponse({
@@ -1233,26 +1328,27 @@ def bulk_delete_restrictions(request):
         if not restriction_ids:
             return JsonResponse({
                 'success': False,
-                'error': 'No restrictions selected for deletion'
+                'error': 'No restrictions selected for archiving'
             }, status=400)
         
-        # Get the restrictions to delete
-        restrictions_to_delete = ServiceRestriction.objects.filter(id__in=restriction_ids)
-        deleted_count = restrictions_to_delete.count()
+        # Get the restrictions to archive
+        restrictions_to_archive = ServiceRestriction.objects.filter(id__in=restriction_ids)
+        archived_count = restrictions_to_archive.count()
         
-        if deleted_count == 0:
+        if archived_count == 0:
             return JsonResponse({
                 'success': False,
                 'error': 'No restrictions found with the provided IDs'
             }, status=404)
         
-        # Delete the restrictions
-        restrictions_to_delete.delete()
+        # Archive the restrictions instead of deleting
+        updated_by = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+        restrictions_to_archive.update(is_archived=True, updated_by=updated_by)
         
         return JsonResponse({
             'success': True,
-            'deleted_count': deleted_count,
-            'message': f'Successfully deleted {deleted_count} restriction(s)'
+            'archived_count': archived_count,
+            'message': f'Successfully archived {archived_count} restriction(s)'
         })
         
     except json.JSONDecodeError:
@@ -1263,7 +1359,7 @@ def bulk_delete_restrictions(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Error deleting restrictions: {str(e)}'
+            'error': f'Error archiving restrictions: {str(e)}'
         }, status=500)
 
 
@@ -1702,7 +1798,21 @@ class EnrollmentCSVExportView(ProgramManagerAccessMixin, ListView):
         enrollments = self.get_queryset()
         
         # Write data rows
+        from django.utils import timezone
+        today = timezone.now().date()
+        
         for enrollment in enrollments:
+            # Calculate status based on current date
+            if today < enrollment.start_date:
+                status = "Pending"
+            elif enrollment.end_date:
+                if today > enrollment.end_date:
+                    status = "Completed"
+                else:
+                    status = "Active"
+            else:
+                status = "Active"
+            
             writer.writerow([
                 f"{enrollment.client.first_name} {enrollment.client.last_name}",
                 enrollment.client.client_id,
@@ -1710,7 +1820,7 @@ class EnrollmentCSVExportView(ProgramManagerAccessMixin, ListView):
                 enrollment.program.department.name,
                 enrollment.start_date.strftime('%Y-%m-%d') if enrollment.start_date else '',
                 enrollment.end_date.strftime('%Y-%m-%d') if enrollment.end_date else '',
-                enrollment.get_status_display(),
+                status,
                 enrollment.notes or '',
                 enrollment.created_by or '',
                 enrollment.created_at.strftime('%Y-%m-%d %H:%M:%S') if enrollment.created_at else '',

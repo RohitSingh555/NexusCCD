@@ -7,35 +7,10 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="flex justify-between items-center mb-8">
+    <div class="mb-8">
         <div>
             <h1 class="text-3xl font-bold text-neutral-800 font-header">Audit Log</h1>
             <p class="text-neutral-600 mt-2 font-body">Track all system changes and user activities</p>
-        </div>
-        <div class="flex space-x-3">
-            <!-- Rows per page selector -->
-            <div class="flex items-center space-x-2">
-                <label for="per_page" class="text-sm font-bold text-neutral-600 font-subheader">Rows per page:</label>
-                <select id="per_page" name="per_page" onchange="changeRowsPerPage(this.value)" class="px-3 py-2 border border-neutral-300 rounded-lg text-sm font-bold text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-brand-sky transition-all duration-200">
-                    <option value="5" {% if per_page == '5' %}selected{% endif %}>5</option>
-                    <option value="10" {% if per_page == '10' %}selected{% endif %}>10</option>
-                    <option value="20" {% if per_page == '20' %}selected{% endif %}>20</option>
-                    <option value="50" {% if per_page == '50' %}selected{% endif %}>50</option>
-                    <option value="100" {% if per_page == '100' %}selected{% endif %}>100</option>
-                </select>
-            </div>
-            <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
-                </svg>
-                Filter
-            </button>
-            <button class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                </svg>
-                Export
-            </button>
         </div>
     </div>
 

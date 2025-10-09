@@ -165,7 +165,7 @@
                 <!-- Results Count -->
                 {% if search_query or current_department or current_status or current_capacity %}
                 <div class="text-sm text-neutral-600 font-body">
-                    <span class="font-bold">{{ programs|length }}</span> program(s) found
+                    <span class="font-bold">{{ total_filtered_count }}</span> program(s) found
                 </div>
                 {% endif %}
             </div>

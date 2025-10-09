@@ -13,20 +13,6 @@
             <h1 class="text-3xl font-bold text-neutral-800 font-header">Reports & Analytics</h1>
             <p class="text-neutral-600 mt-2 font-body">Generate insights and track organizational performance</p>
         </div>
-        <div class="flex space-x-3">
-            <button class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path>
-                </svg>
-                Filter Reports
-            </button>
-            <button class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                </svg>
-                Create Custom Report
-            </button>
-        </div>
     </div>
 
     <!-- Quick Stats Cards -->
@@ -238,97 +224,10 @@
                         </div>
                     </a>
 
-                    <a href="{% url 'reports:vacancy_tracker' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
-                        <div class="flex-shrink-0">
-                            <div class="w-10 h-10 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-bold text-neutral-900 font-body">Vacancy Tracker</p>
-                            <p class="text-xs text-neutral-500 font-body">Program capacity and enrollment tracking</p>
-                        </div>
-                    </a>
-
-                    <a href="{% url 'reports:department_summary' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
-                        <div class="flex-shrink-0">
-                            <div class="w-10 h-10 bg-gradient-to-br from-accent-400 to-accent-600 rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
-                                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="ml-4">
-                            <p class="text-sm font-bold text-neutral-900 font-body">Department Summary</p>
-                            <p class="text-xs text-neutral-500 font-body">Department-wide statistics and insights</p>
-                        </div>
-                    </a>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Recent Reports -->
-    <div class="bg-white rounded-xl shadow-sm border border-neutral-200">
-        <div class="px-6 py-4 border-b border-neutral-200">
-            <h3 class="text-lg font-bold text-neutral-900 font-subheader">Recent Reports</h3>
-            <p class="text-sm text-neutral-600 font-body">Your recently generated reports</p>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-neutral-200">
-                <thead class="bg-neutral-50">
-                    <tr>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Report Name</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Type</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Generated By</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Date</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Actions</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-neutral-200">
-                    {% for report in recent_reports %}
-                    <tr class="hover:bg-neutral-50">
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="flex items-center">
-                                <div class="w-8 h-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm">
-                                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                                    </svg>
-                                </div>
-                                <div class="ml-3">
-                                    <div class="text-sm font-bold text-neutral-900 font-body">{{ report.name }}</div>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral-100 text-neutral-800">
-                                {{ report.type }}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
-                            {{ report.generated_by.first_name }} {{ report.generated_by.last_name }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
-                            {{ report.created_at|date:"M d, Y H:i" }}
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-bold">
-                            <a href="{% url 'reports:view' report.id %}" class="text-brand-sky hover:text-brand-darkBlue mr-3 font-body">View</a>
-                            <a href="{% url 'reports:download' report.id %}" class="text-neutral-600 hover:text-neutral-900 mr-3 font-body">Download</a>
-                            <a href="{% url 'reports:delete' report.id %}" class="text-accent-500 hover:text-accent-600 font-body">Delete</a>
-                        </td>
-                    </tr>
-                    {% empty %}
-                    <tr>
-                        <td colspan="5" class="px-6 py-4 text-center text-neutral-500 font-body">
-                            No recent reports found. <a href="#" class="text-brand-sky hover:text-brand-darkBlue font-bold">Generate your first report</a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
 </div>
 {% endblock %}

@@ -55,22 +55,72 @@ class ProgramStaffAdmin(admin.ModelAdmin):
 
 @admin.register(Client)
 class ClientAdmin(admin.ModelAdmin):
-    list_display = ['first_name', 'last_name', 'preferred_name', 'dob', 'gender', 'created_at']
-    search_fields = ['first_name', 'last_name', 'preferred_name', 'alias', 'country_of_birth']
-    list_filter = ['gender', 'citizenship_status', 'indigenous_status', 'country_of_birth', 'created_at']
-    readonly_fields = ['external_id', 'created_at', 'updated_at']
+    list_display = ['client_id', 'first_name', 'last_name', 'preferred_name', 'dob', 'age', 'gender', 'program_status', 'created_at']
+    search_fields = [
+        'client_id', 'first_name', 'last_name', 'middle_name', 'preferred_name', 'alias', 
+        'chart_number', 'health_card_number', 'phone', 'email', 'city', 'province', 
+        'program', 'referral_source'
+    ]
+    list_filter = [
+        'gender', 'gender_identity', 'citizenship_status', 'indigenous_status', 'aboriginal_status',
+        'lgbtq_status', 'marital_status', 'program_status', 'client_type', 'level_of_support',
+        'receiving_services', 'permission_to_phone', 'permission_to_email', 'children_home',
+        'language_interpreter_required', 'province', 'city', 'lhin', 'created_at'
+    ]
+    readonly_fields = ['external_id', 'created_at', 'updated_at', 'age', 'calculated_age']
     fieldsets = (
-        ('Basic Information', {
-            'fields': ('first_name', 'last_name', 'preferred_name', 'alias', 'dob')
+        ('🧍 Client Personal Details', {
+            'fields': (
+                'client_id', 'last_name', 'first_name', 'middle_name', 'preferred_name', 'alias',
+                'dob', 'age', 'calculated_age', 'gender', 'gender_identity', 'pronoun', 'marital_status',
+                'citizenship_status', 'location_county', 'province', 'city', 'postal_code',
+                'address', 'address_2'
+            )
         }),
-        ('Demographics', {
-            'fields': ('gender', 'sexual_orientation', 'ethnicity', 'citizenship_status', 'indigenous_status', 'country_of_birth', 'languages_spoken')
+        ('🌍 Cultural & Demographic Info', {
+            'fields': (
+                'language', 'preferred_language', 'mother_tongue', 'official_language',
+                'language_interpreter_required', 'self_identification_race_ethnicity', 'ethnicity',
+                'aboriginal_status', 'lgbtq_status', 'highest_level_education', 'children_home',
+                'children_number', 'lhin'
+            )
         }),
-        ('Contact Information', {
-            'fields': ('contact_information', 'addresses', 'image')
+        ('💊 Medical & Health Information', {
+            'fields': (
+                'medical_conditions', 'primary_diagnosis', 'family_doctor', 'health_card_number',
+                'health_card_version', 'health_card_exp_date', 'health_card_issuing_province',
+                'no_health_card_reason'
+            )
         }),
-        ('System Information', {
-            'fields': ('uid_external', 'external_id', 'created_at', 'updated_at')
+        ('👥 Contact & Permissions', {
+            'fields': (
+                'permission_to_phone', 'permission_to_email', 'phone', 'phone_work', 'phone_alt',
+                'email', 'next_of_kin', 'emergency_contact', 'comments'
+            )
+        }),
+        ('🧑‍💼 Program / Enrollment Details', {
+            'fields': (
+                'program', 'sub_program', 'support_workers', 'level_of_support', 'client_type',
+                'admission_date', 'discharge_date', 'days_elapsed', 'program_status',
+                'reason_discharge', 'receiving_services', 'referral_source'
+            )
+        }),
+        ('🧾 Administrative / System Fields', {
+            'fields': ('chart_number',)
+        }),
+        ('📸 Images & Media', {
+            'fields': ('image', 'profile_picture')
+        }),
+        ('🔧 Legacy Fields', {
+            'fields': (
+                'contact_information', 'addresses', 'languages_spoken', 'indigenous_status',
+                'country_of_birth', 'sexual_orientation'
+            ),
+            'classes': ('collapse',)
+        }),
+        ('📊 System Information', {
+            'fields': ('uid_external', 'external_id', 'created_at', 'updated_at', 'updated_by'),
+            'classes': ('collapse',)
         })
     )
 

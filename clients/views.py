@@ -172,7 +172,7 @@ class ClientDetailView(DetailView):
 class ClientCreateView(CreateView):
     model = Client
     form_class = ClientForm
-    template_name = 'clients/client_form.html'
+    template_name = 'clients/client_form_tailwind.html'
     success_url = reverse_lazy('clients:list')
     
     def form_valid(self, form):
@@ -279,7 +279,7 @@ class ClientCreateView(CreateView):
 class ClientUpdateView(UpdateView):
     model = Client
     form_class = ClientForm
-    template_name = 'clients/client_form.html'
+    template_name = 'clients/client_form_tailwind.html'
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('clients:list')
