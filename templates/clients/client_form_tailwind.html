@@ -223,6 +223,384 @@
             </div>
         </div>
 
+        <!-- 🌍 CULTURAL & DEMOGRAPHIC INFO -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-purple-400 to-purple-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">🌍 Cultural & Demographic Info</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Language -->
+                <div>
+                    <label for="{{ form.language.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Language</label>
+                    <select name="{{ form.language.name }}" id="{{ form.language.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Language</option>
+                        <option value="English" {% if form.language.value == 'English' %}selected{% endif %}>English</option>
+                        <option value="Spanish" {% if form.language.value == 'Spanish' %}selected{% endif %}>Spanish</option>
+                        <option value="Chinese (Mandarin)" {% if form.language.value == 'Chinese (Mandarin)' %}selected{% endif %}>Chinese (Mandarin)</option>
+                        <option value="Chinese (Cantonese)" {% if form.language.value == 'Chinese (Cantonese)' %}selected{% endif %}>Chinese (Cantonese)</option>
+                        <option value="Tagalog" {% if form.language.value == 'Tagalog' %}selected{% endif %}>Tagalog</option>
+                        <option value="Vietnamese" {% if form.language.value == 'Vietnamese' %}selected{% endif %}>Vietnamese</option>
+                        <option value="Arabic" {% if form.language.value == 'Arabic' %}selected{% endif %}>Arabic</option>
+                        <option value="French" {% if form.language.value == 'French' %}selected{% endif %}>French</option>
+                        <option value="Korean" {% if form.language.value == 'Korean' %}selected{% endif %}>Korean</option>
+                        <option value="Russian" {% if form.language.value == 'Russian' %}selected{% endif %}>Russian</option>
+                        <option value="Portuguese" {% if form.language.value == 'Portuguese' %}selected{% endif %}>Portuguese</option>
+                        <option value="Hindi" {% if form.language.value == 'Hindi' %}selected{% endif %}>Hindi</option>
+                        <option value="Urdu" {% if form.language.value == 'Urdu' %}selected{% endif %}>Urdu</option>
+                        <option value="Bengali" {% if form.language.value == 'Bengali' %}selected{% endif %}>Bengali</option>
+                        <option value="Punjabi" {% if form.language.value == 'Punjabi' %}selected{% endif %}>Punjabi</option>
+                        <option value="Gujarati" {% if form.language.value == 'Gujarati' %}selected{% endif %}>Gujarati</option>
+                        <option value="Tamil" {% if form.language.value == 'Tamil' %}selected{% endif %}>Tamil</option>
+                        <option value="Telugu" {% if form.language.value == 'Telugu' %}selected{% endif %}>Telugu</option>
+                        <option value="Marathi" {% if form.language.value == 'Marathi' %}selected{% endif %}>Marathi</option>
+                        <option value="Haitian Creole" {% if form.language.value == 'Haitian Creole' %}selected{% endif %}>Haitian Creole</option>
+                        <option value="Amharic" {% if form.language.value == 'Amharic' %}selected{% endif %}>Amharic</option>
+                        <option value="Somali" {% if form.language.value == 'Somali' %}selected{% endif %}>Somali</option>
+                        <option value="Swahili" {% if form.language.value == 'Swahili' %}selected{% endif %}>Swahili</option>
+                        <option value="Yoruba" {% if form.language.value == 'Yoruba' %}selected{% endif %}>Yoruba</option>
+                        <option value="Igbo" {% if form.language.value == 'Igbo' %}selected{% endif %}>Igbo</option>
+                        <option value="Farsi/Persian" {% if form.language.value == 'Farsi/Persian' %}selected{% endif %}>Farsi/Persian</option>
+                        <option value="Turkish" {% if form.language.value == 'Turkish' %}selected{% endif %}>Turkish</option>
+                        <option value="Polish" {% if form.language.value == 'Polish' %}selected{% endif %}>Polish</option>
+                        <option value="Italian" {% if form.language.value == 'Italian' %}selected{% endif %}>Italian</option>
+                        <option value="German" {% if form.language.value == 'German' %}selected{% endif %}>German</option>
+                        <option value="Japanese" {% if form.language.value == 'Japanese' %}selected{% endif %}>Japanese</option>
+                        <option value="Thai" {% if form.language.value == 'Thai' %}selected{% endif %}>Thai</option>
+                        <option value="Burmese" {% if form.language.value == 'Burmese' %}selected{% endif %}>Burmese</option>
+                        <option value="Nepali" {% if form.language.value == 'Nepali' %}selected{% endif %}>Nepali</option>
+                        <option value="Sinhala" {% if form.language.value == 'Sinhala' %}selected{% endif %}>Sinhala</option>
+                        <option value="Khmer" {% if form.language.value == 'Khmer' %}selected{% endif %}>Khmer</option>
+                        <option value="Lao" {% if form.language.value == 'Lao' %}selected{% endif %}>Lao</option>
+                        <option value="Hmong" {% if form.language.value == 'Hmong' %}selected{% endif %}>Hmong</option>
+                        <option value="Other" {% if form.language.value == 'Other' %}selected{% endif %}>Other</option>
+                    </select>
+                    {% if form.language.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.language.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Preferred Language -->
+                <div>
+                    <label for="{{ form.preferred_language.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Preferred Language</label>
+                    <select name="{{ form.preferred_language.name }}" id="{{ form.preferred_language.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Language</option>
+                        <option value="English" {% if form.preferred_language.value == 'English' %}selected{% endif %}>English</option>
+                        <option value="Spanish" {% if form.preferred_language.value == 'Spanish' %}selected{% endif %}>Spanish</option>
+                        <option value="Chinese (Mandarin)" {% if form.preferred_language.value == 'Chinese (Mandarin)' %}selected{% endif %}>Chinese (Mandarin)</option>
+                        <option value="Chinese (Cantonese)" {% if form.preferred_language.value == 'Chinese (Cantonese)' %}selected{% endif %}>Chinese (Cantonese)</option>
+                        <option value="Tagalog" {% if form.preferred_language.value == 'Tagalog' %}selected{% endif %}>Tagalog</option>
+                        <option value="Vietnamese" {% if form.preferred_language.value == 'Vietnamese' %}selected{% endif %}>Vietnamese</option>
+                        <option value="Arabic" {% if form.preferred_language.value == 'Arabic' %}selected{% endif %}>Arabic</option>
+                        <option value="French" {% if form.preferred_language.value == 'French' %}selected{% endif %}>French</option>
+                        <option value="Korean" {% if form.preferred_language.value == 'Korean' %}selected{% endif %}>Korean</option>
+                        <option value="Russian" {% if form.preferred_language.value == 'Russian' %}selected{% endif %}>Russian</option>
+                        <option value="Portuguese" {% if form.preferred_language.value == 'Portuguese' %}selected{% endif %}>Portuguese</option>
+                        <option value="Hindi" {% if form.preferred_language.value == 'Hindi' %}selected{% endif %}>Hindi</option>
+                        <option value="Urdu" {% if form.preferred_language.value == 'Urdu' %}selected{% endif %}>Urdu</option>
+                        <option value="Bengali" {% if form.preferred_language.value == 'Bengali' %}selected{% endif %}>Bengali</option>
+                        <option value="Punjabi" {% if form.preferred_language.value == 'Punjabi' %}selected{% endif %}>Punjabi</option>
+                        <option value="Gujarati" {% if form.preferred_language.value == 'Gujarati' %}selected{% endif %}>Gujarati</option>
+                        <option value="Tamil" {% if form.preferred_language.value == 'Tamil' %}selected{% endif %}>Tamil</option>
+                        <option value="Telugu" {% if form.preferred_language.value == 'Telugu' %}selected{% endif %}>Telugu</option>
+                        <option value="Marathi" {% if form.preferred_language.value == 'Marathi' %}selected{% endif %}>Marathi</option>
+                        <option value="Haitian Creole" {% if form.preferred_language.value == 'Haitian Creole' %}selected{% endif %}>Haitian Creole</option>
+                        <option value="Amharic" {% if form.preferred_language.value == 'Amharic' %}selected{% endif %}>Amharic</option>
+                        <option value="Somali" {% if form.preferred_language.value == 'Somali' %}selected{% endif %}>Somali</option>
+                        <option value="Swahili" {% if form.preferred_language.value == 'Swahili' %}selected{% endif %}>Swahili</option>
+                        <option value="Yoruba" {% if form.preferred_language.value == 'Yoruba' %}selected{% endif %}>Yoruba</option>
+                        <option value="Igbo" {% if form.preferred_language.value == 'Igbo' %}selected{% endif %}>Igbo</option>
+                        <option value="Farsi/Persian" {% if form.preferred_language.value == 'Farsi/Persian' %}selected{% endif %}>Farsi/Persian</option>
+                        <option value="Turkish" {% if form.preferred_language.value == 'Turkish' %}selected{% endif %}>Turkish</option>
+                        <option value="Polish" {% if form.preferred_language.value == 'Polish' %}selected{% endif %}>Polish</option>
+                        <option value="Italian" {% if form.preferred_language.value == 'Italian' %}selected{% endif %}>Italian</option>
+                        <option value="German" {% if form.preferred_language.value == 'German' %}selected{% endif %}>German</option>
+                        <option value="Japanese" {% if form.preferred_language.value == 'Japanese' %}selected{% endif %}>Japanese</option>
+                        <option value="Thai" {% if form.preferred_language.value == 'Thai' %}selected{% endif %}>Thai</option>
+                        <option value="Burmese" {% if form.preferred_language.value == 'Burmese' %}selected{% endif %}>Burmese</option>
+                        <option value="Nepali" {% if form.preferred_language.value == 'Nepali' %}selected{% endif %}>Nepali</option>
+                        <option value="Sinhala" {% if form.preferred_language.value == 'Sinhala' %}selected{% endif %}>Sinhala</option>
+                        <option value="Khmer" {% if form.language.value == 'Khmer' %}selected{% endif %}>Khmer</option>
+                        <option value="Lao" {% if form.preferred_language.value == 'Lao' %}selected{% endif %}>Lao</option>
+                        <option value="Hmong" {% if form.preferred_language.value == 'Hmong' %}selected{% endif %}>Hmong</option>
+                        <option value="Other" {% if form.preferred_language.value == 'Other' %}selected{% endif %}>Other</option>
+                    </select>
+                    {% if form.preferred_language.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.preferred_language.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Mother Tongue -->
+                <div>
+                    <label for="{{ form.mother_tongue.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Mother Tongue</label>
+                    <select name="{{ form.mother_tongue.name }}" id="{{ form.mother_tongue.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Language</option>
+                        <option value="English" {% if form.mother_tongue.value == 'English' %}selected{% endif %}>English</option>
+                        <option value="Spanish" {% if form.mother_tongue.value == 'Spanish' %}selected{% endif %}>Spanish</option>
+                        <option value="Chinese (Mandarin)" {% if form.mother_tongue.value == 'Chinese (Mandarin)' %}selected{% endif %}>Chinese (Mandarin)</option>
+                        <option value="Chinese (Cantonese)" {% if form.mother_tongue.value == 'Chinese (Cantonese)' %}selected{% endif %}>Chinese (Cantonese)</option>
+                        <option value="Tagalog" {% if form.mother_tongue.value == 'Tagalog' %}selected{% endif %}>Tagalog</option>
+                        <option value="Vietnamese" {% if form.mother_tongue.value == 'Vietnamese' %}selected{% endif %}>Vietnamese</option>
+                        <option value="Arabic" {% if form.mother_tongue.value == 'Arabic' %}selected{% endif %}>Arabic</option>
+                        <option value="French" {% if form.mother_tongue.value == 'French' %}selected{% endif %}>French</option>
+                        <option value="Korean" {% if form.mother_tongue.value == 'Korean' %}selected{% endif %}>Korean</option>
+                        <option value="Russian" {% if form.mother_tongue.value == 'Russian' %}selected{% endif %}>Russian</option>
+                        <option value="Portuguese" {% if form.mother_tongue.value == 'Portuguese' %}selected{% endif %}>Portuguese</option>
+                        <option value="Hindi" {% if form.mother_tongue.value == 'Hindi' %}selected{% endif %}>Hindi</option>
+                        <option value="Urdu" {% if form.mother_tongue.value == 'Urdu' %}selected{% endif %}>Urdu</option>
+                        <option value="Bengali" {% if form.mother_tongue.value == 'Bengali' %}selected{% endif %}>Bengali</option>
+                        <option value="Punjabi" {% if form.mother_tongue.value == 'Punjabi' %}selected{% endif %}>Punjabi</option>
+                        <option value="Gujarati" {% if form.mother_tongue.value == 'Gujarati' %}selected{% endif %}>Gujarati</option>
+                        <option value="Tamil" {% if form.mother_tongue.value == 'Tamil' %}selected{% endif %}>Tamil</option>
+                        <option value="Telugu" {% if form.mother_tongue.value == 'Telugu' %}selected{% endif %}>Telugu</option>
+                        <option value="Marathi" {% if form.mother_tongue.value == 'Marathi' %}selected{% endif %}>Marathi</option>
+                        <option value="Haitian Creole" {% if form.mother_tongue.value == 'Haitian Creole' %}selected{% endif %}>Haitian Creole</option>
+                        <option value="Amharic" {% if form.mother_tongue.value == 'Amharic' %}selected{% endif %}>Amharic</option>
+                        <option value="Somali" {% if form.mother_tongue.value == 'Somali' %}selected{% endif %}>Somali</option>
+                        <option value="Swahili" {% if form.mother_tongue.value == 'Swahili' %}selected{% endif %}>Swahili</option>
+                        <option value="Yoruba" {% if form.mother_tongue.value == 'Yoruba' %}selected{% endif %}>Yoruba</option>
+                        <option value="Igbo" {% if form.mother_tongue.value == 'Igbo' %}selected{% endif %}>Igbo</option>
+                        <option value="Farsi/Persian" {% if form.mother_tongue.value == 'Farsi/Persian' %}selected{% endif %}>Farsi/Persian</option>
+                        <option value="Turkish" {% if form.mother_tongue.value == 'Turkish' %}selected{% endif %}>Turkish</option>
+                        <option value="Polish" {% if form.mother_tongue.value == 'Polish' %}selected{% endif %}>Polish</option>
+                        <option value="Italian" {% if form.mother_tongue.value == 'Italian' %}selected{% endif %}>Italian</option>
+                        <option value="German" {% if form.mother_tongue.value == 'German' %}selected{% endif %}>German</option>
+                        <option value="Japanese" {% if form.mother_tongue.value == 'Japanese' %}selected{% endif %}>Japanese</option>
+                        <option value="Thai" {% if form.mother_tongue.value == 'Thai' %}selected{% endif %}>Thai</option>
+                        <option value="Burmese" {% if form.mother_tongue.value == 'Burmese' %}selected{% endif %}>Burmese</option>
+                        <option value="Nepali" {% if form.mother_tongue.value == 'Nepali' %}selected{% endif %}>Nepali</option>
+                        <option value="Sinhala" {% if form.mother_tongue.value == 'Sinhala' %}selected{% endif %}>Sinhala</option>
+                        <option value="Khmer" {% if form.mother_tongue.value == 'Khmer' %}selected{% endif %}>Khmer</option>
+                        <option value="Lao" {% if form.mother_tongue.value == 'Lao' %}selected{% endif %}>Lao</option>
+                        <option value="Hmong" {% if form.mother_tongue.value == 'Hmong' %}selected{% endif %}>Hmong</option>
+                        <option value="Other" {% if form.mother_tongue.value == 'Other' %}selected{% endif %}>Other</option>
+                    </select>
+                    {% if form.mother_tongue.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.mother_tongue.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Official Language -->
+                <div>
+                    <label for="{{ form.official_language.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Official Language</label>
+                    <select name="{{ form.official_language.name }}" id="{{ form.official_language.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Language</option>
+                        <option value="English" {% if form.official_language.value == 'English' %}selected{% endif %}>English</option>
+                        <option value="Spanish" {% if form.official_language.value == 'Spanish' %}selected{% endif %}>Spanish</option>
+                        <option value="Chinese (Mandarin)" {% if form.official_language.value == 'Chinese (Mandarin)' %}selected{% endif %}>Chinese (Mandarin)</option>
+                        <option value="Chinese (Cantonese)" {% if form.official_language.value == 'Chinese (Cantonese)' %}selected{% endif %}>Chinese (Cantonese)</option>
+                        <option value="Tagalog" {% if form.official_language.value == 'Tagalog' %}selected{% endif %}>Tagalog</option>
+                        <option value="Vietnamese" {% if form.official_language.value == 'Vietnamese' %}selected{% endif %}>Vietnamese</option>
+                        <option value="Arabic" {% if form.official_language.value == 'Arabic' %}selected{% endif %}>Arabic</option>
+                        <option value="French" {% if form.official_language.value == 'French' %}selected{% endif %}>French</option>
+                        <option value="Korean" {% if form.official_language.value == 'Korean' %}selected{% endif %}>Korean</option>
+                        <option value="Russian" {% if form.official_language.value == 'Russian' %}selected{% endif %}>Russian</option>
+                        <option value="Portuguese" {% if form.official_language.value == 'Portuguese' %}selected{% endif %}>Portuguese</option>
+                        <option value="Hindi" {% if form.official_language.value == 'Hindi' %}selected{% endif %}>Hindi</option>
+                        <option value="Urdu" {% if form.official_language.value == 'Urdu' %}selected{% endif %}>Urdu</option>
+                        <option value="Bengali" {% if form.official_language.value == 'Bengali' %}selected{% endif %}>Bengali</option>
+                        <option value="Punjabi" {% if form.official_language.value == 'Punjabi' %}selected{% endif %}>Punjabi</option>
+                        <option value="Gujarati" {% if form.official_language.value == 'Gujarati' %}selected{% endif %}>Gujarati</option>
+                        <option value="Tamil" {% if form.official_language.value == 'Tamil' %}selected{% endif %}>Tamil</option>
+                        <option value="Telugu" {% if form.official_language.value == 'Telugu' %}selected{% endif %}>Telugu</option>
+                        <option value="Marathi" {% if form.official_language.value == 'Marathi' %}selected{% endif %}>Marathi</option>
+                        <option value="Haitian Creole" {% if form.official_language.value == 'Haitian Creole' %}selected{% endif %}>Haitian Creole</option>
+                        <option value="Amharic" {% if form.official_language.value == 'Amharic' %}selected{% endif %}>Amharic</option>
+                        <option value="Somali" {% if form.official_language.value == 'Somali' %}selected{% endif %}>Somali</option>
+                        <option value="Swahili" {% if form.official_language.value == 'Swahili' %}selected{% endif %}>Swahili</option>
+                        <option value="Yoruba" {% if form.official_language.value == 'Yoruba' %}selected{% endif %}>Yoruba</option>
+                        <option value="Igbo" {% if form.official_language.value == 'Igbo' %}selected{% endif %}>Igbo</option>
+                        <option value="Farsi/Persian" {% if form.official_language.value == 'Farsi/Persian' %}selected{% endif %}>Farsi/Persian</option>
+                        <option value="Turkish" {% if form.official_language.value == 'Turkish' %}selected{% endif %}>Turkish</option>
+                        <option value="Polish" {% if form.official_language.value == 'Polish' %}selected{% endif %}>Polish</option>
+                        <option value="Italian" {% if form.official_language.value == 'Italian' %}selected{% endif %}>Italian</option>
+                        <option value="German" {% if form.official_language.value == 'German' %}selected{% endif %}>German</option>
+                        <option value="Japanese" {% if form.official_language.value == 'Japanese' %}selected{% endif %}>Japanese</option>
+                        <option value="Thai" {% if form.official_language.value == 'Thai' %}selected{% endif %}>Thai</option>
+                        <option value="Burmese" {% if form.official_language.value == 'Burmese' %}selected{% endif %}>Burmese</option>
+                        <option value="Nepali" {% if form.official_language.value == 'Nepali' %}selected{% endif %}>Nepali</option>
+                        <option value="Sinhala" {% if form.official_language.value == 'Sinhala' %}selected{% endif %}>Sinhala</option>
+                        <option value="Khmer" {% if form.official_language.value == 'Khmer' %}selected{% endif %}>Khmer</option>
+                        <option value="Lao" {% if form.official_language.value == 'Lao' %}selected{% endif %}>Lao</option>
+                        <option value="Hmong" {% if form.official_language.value == 'Hmong' %}selected{% endif %}>Hmong</option>
+                        <option value="Other" {% if form.official_language.value == 'Other' %}selected{% endif %}>Other</option>
+                    </select>
+                    {% if form.official_language.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.official_language.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Language Interpreter Required -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Language Interpreter Required</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.language_interpreter_required.name }}" id="{{ form.language_interpreter_required.id_for_label }}" {% if form.language_interpreter_required.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.language_interpreter_required.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.language_interpreter_required.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.language_interpreter_required.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Self-Identification as Race/Ethnicity -->
+                <div>
+                    <label for="{{ form.self_identification_race_ethnicity.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Self-Identification as Race/Ethnicity</label>
+                    <input type="text" name="{{ form.self_identification_race_ethnicity.name }}" id="{{ form.self_identification_race_ethnicity.id_for_label }}" value="{{ form.self_identification_race_ethnicity.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.self_identification_race_ethnicity.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.self_identification_race_ethnicity.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Aboriginal Status -->
+                <div>
+                    <label for="{{ form.aboriginal_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Aboriginal Status</label>
+                    <input type="text" name="{{ form.aboriginal_status.name }}" id="{{ form.aboriginal_status.id_for_label }}" value="{{ form.aboriginal_status.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.aboriginal_status.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.aboriginal_status.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- LGBTQ+ Status -->
+                <div>
+                    <label for="{{ form.lgbtq_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">LGBTQ+?</label>
+                    <input type="text" name="{{ form.lgbtq_status.name }}" id="{{ form.lgbtq_status.id_for_label }}" value="{{ form.lgbtq_status.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.lgbtq_status.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.lgbtq_status.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Highest Level of Education -->
+                <div>
+                    <label for="{{ form.highest_level_education.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Highest Level of Education</label>
+                    <input type="text" name="{{ form.highest_level_education.name }}" id="{{ form.highest_level_education.id_for_label }}" value="{{ form.highest_level_education.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.highest_level_education.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.highest_level_education.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Children Home -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Children Home</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.children_home.name }}" id="{{ form.children_home.id_for_label }}" {% if form.children_home.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.children_home.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.children_home.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.children_home.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Children Number -->
+                <div>
+                    <label for="{{ form.children_number.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Children Number</label>
+                    <input type="number" name="{{ form.children_number.name }}" id="{{ form.children_number.id_for_label }}" value="{{ form.children_number.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.children_number.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.children_number.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- LHIN -->
+                <div>
+                    <label for="{{ form.lhin.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">LHIN (Local Health Integration Network)</label>
+                    <input type="text" name="{{ form.lhin.name }}" id="{{ form.lhin.id_for_label }}" value="{{ form.lhin.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.lhin.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.lhin.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 💊 MEDICAL & HEALTH INFORMATION -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-red-400 to-red-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">💊 Medical & Health Information</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Medical Conditions -->
+                <div class="md:col-span-2">
+                    <label for="{{ form.medical_conditions.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Medical Conditions</label>
+                    <textarea name="{{ form.medical_conditions.name }}" id="{{ form.medical_conditions.id_for_label }}" rows="3" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.medical_conditions.value|default:'' }}</textarea>
+                    {% if form.medical_conditions.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.medical_conditions.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Primary Diagnosis -->
+                <div>
+                    <label for="{{ form.primary_diagnosis.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Primary Diagnosis</label>
+                    <input type="text" name="{{ form.primary_diagnosis.name }}" id="{{ form.primary_diagnosis.id_for_label }}" value="{{ form.primary_diagnosis.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.primary_diagnosis.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.primary_diagnosis.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Family Doctor -->
+                <div>
+                    <label for="{{ form.family_doctor.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Family Doctor</label>
+                    <input type="text" name="{{ form.family_doctor.name }}" id="{{ form.family_doctor.id_for_label }}" value="{{ form.family_doctor.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.family_doctor.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.family_doctor.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Health Card Number -->
+                <div>
+                    <label for="{{ form.health_card_number.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">HC# (Health Card Number)</label>
+                    <input type="text" name="{{ form.health_card_number.name }}" id="{{ form.health_card_number.id_for_label }}" value="{{ form.health_card_number.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.health_card_number.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.health_card_number.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Health Card Version -->
+                <div>
+                    <label for="{{ form.health_card_version.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">HC Version</label>
+                    <input type="text" name="{{ form.health_card_version.name }}" id="{{ form.health_card_version.id_for_label }}" value="{{ form.health_card_version.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.health_card_version.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.health_card_version.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Health Card Exp Date -->
+                <div>
+                    <label for="{{ form.health_card_exp_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">HC Exp Date</label>
+                    <input type="date" name="{{ form.health_card_exp_date.name }}" id="{{ form.health_card_exp_date.id_for_label }}" value="{% if form.health_card_exp_date.value %}{{ form.health_card_exp_date.value|date:'Y-m-d' }}{% endif %}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.health_card_exp_date.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.health_card_exp_date.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Health Card Issuing Province -->
+                <div>
+                    <label for="{{ form.health_card_issuing_province.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">HC Issuing Province</label>
+                    <input type="text" name="{{ form.health_card_issuing_province.name }}" id="{{ form.health_card_issuing_province.id_for_label }}" value="{{ form.health_card_issuing_province.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.health_card_issuing_province.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.health_card_issuing_province.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- No Health Card Reason -->
+                <div class="md:col-span-2">
+                    <label for="{{ form.no_health_card_reason.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">No HC Reason</label>
+                    <textarea name="{{ form.no_health_card_reason.name }}" id="{{ form.no_health_card_reason.id_for_label }}" rows="2" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.no_health_card_reason.value|default:'' }}</textarea>
+                    {% if form.no_health_card_reason.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.no_health_card_reason.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
         <!-- 👥 CONTACT & PERMISSIONS -->
         <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
             <div class="flex items-center mb-6">
@@ -295,6 +673,24 @@
                     {% endif %}
                 </div>
 
+                <!-- Next of Kin -->
+                <div>
+                    <label for="next_of_kin_name" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Next of Kin</label>
+                    <input type="text" id="next_of_kin_name" placeholder="Name" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body mb-2">
+                    <input type="text" id="next_of_kin_phone" placeholder="Phone" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body mb-2">
+                    <input type="text" id="next_of_kin_relationship" placeholder="Relationship" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    <input type="hidden" name="{{ form.next_of_kin.name }}" id="{{ form.next_of_kin.id_for_label }}" value="{{ form.next_of_kin.value|default:'{}' }}">
+                </div>
+
+                <!-- Emergency Contact -->
+                <div>
+                    <label for="emergency_contact_name" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Emergency Contact</label>
+                    <input type="text" id="emergency_contact_name" placeholder="Name" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body mb-2">
+                    <input type="text" id="emergency_contact_phone" placeholder="Phone" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body mb-2">
+                    <input type="text" id="emergency_contact_relationship" placeholder="Relationship" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    <input type="hidden" name="{{ form.emergency_contact.name }}" id="{{ form.emergency_contact.id_for_label }}" value="{{ form.emergency_contact.value|default:'{}' }}">
+                </div>
+
                 <!-- Comments -->
                 <div class="md:col-span-2">
                     <label for="{{ form.comments.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Comments</label>
@@ -306,120 +702,34 @@
             </div>
         </div>
 
-        <!-- 🧑‍💼 PROGRAM / ENROLLMENT DETAILS -->
+        <!-- PROGRAM / ENROLLMENT DETAILS -->
         <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
             <div class="flex items-center mb-6">
-                <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
                     <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                     </svg>
                 </div>
-                <h2 class="text-xl font-bold text-neutral-800 font-header">🧑‍💼 Program / Enrollment Details</h2>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">Program / Enrollment Details</h2>
             </div>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Program -->
-                <div>
-                    <label for="{{ form.program.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Program</label>
-                    <input type="text" name="{{ form.program.name }}" id="{{ form.program.id_for_label }}" value="{{ form.program.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.program.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.program.errors.0 }}</div>
-                    {% endif %}
+            <!-- Program Enrollments Section -->
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-semibold text-neutral-800">Program Enrollments</h3>
+                    <button type="button" id="add-program-btn" onclick="document.getElementById('program-modal').classList.remove('hidden')" class="inline-flex items-center px-4 py-2 bg-brand-sky text-white text-sm font-medium rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Add Program
+                    </button>
                 </div>
-
-                <!-- Sub-program -->
-                <div>
-                    <label for="{{ form.sub_program.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Sub-program</label>
-                    <input type="text" name="{{ form.sub_program.name }}" id="{{ form.sub_program.id_for_label }}" value="{{ form.sub_program.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.sub_program.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.sub_program.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Level of Support -->
-                <div>
-                    <label for="{{ form.level_of_support.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Level of Support</label>
-                    <input type="text" name="{{ form.level_of_support.name }}" id="{{ form.level_of_support.id_for_label }}" value="{{ form.level_of_support.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.level_of_support.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.level_of_support.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Client Type -->
-                <div>
-                    <label for="{{ form.client_type.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Client Type</label>
-                    <input type="text" name="{{ form.client_type.name }}" id="{{ form.client_type.id_for_label }}" value="{{ form.client_type.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.client_type.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.client_type.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Admission Date -->
-                <div>
-                    <label for="{{ form.admission_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Admission Date</label>
-                    <input type="date" name="{{ form.admission_date.name }}" id="{{ form.admission_date.id_for_label }}" value="{% if form.admission_date.value %}{{ form.admission_date.value|date:'Y-m-d' }}{% endif %}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.admission_date.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.admission_date.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Discharge Date -->
-                <div>
-                    <label for="{{ form.discharge_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Discharge Date</label>
-                    <input type="date" name="{{ form.discharge_date.name }}" id="{{ form.discharge_date.id_for_label }}" value="{% if form.discharge_date.value %}{{ form.discharge_date.value|date:'Y-m-d' }}{% endif %}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.discharge_date.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.discharge_date.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Days Elapsed -->
-                <div>
-                    <label for="{{ form.days_elapsed.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Days Elapsed</label>
-                    <input type="number" name="{{ form.days_elapsed.name }}" id="{{ form.days_elapsed.id_for_label }}" value="{{ form.days_elapsed.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.days_elapsed.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.days_elapsed.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Program Status -->
-                <div>
-                    <label for="{{ form.program_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Program Status</label>
-                    <input type="text" name="{{ form.program_status.name }}" id="{{ form.program_status.id_for_label }}" value="{{ form.program_status.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.program_status.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.program_status.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Receiving Services -->
-                <div>
-                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Receiving Services</label>
-                    <div class="flex items-center">
-                        <input type="checkbox" name="{{ form.receiving_services.name }}" id="{{ form.receiving_services.id_for_label }}" {% if form.receiving_services.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
-                        <label for="{{ form.receiving_services.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
-                    </div>
-                    {% if form.receiving_services.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.receiving_services.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Referral Source -->
-                <div>
-                    <label for="{{ form.referral_source.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Referral Source</label>
-                    <input type="text" name="{{ form.referral_source.name }}" id="{{ form.referral_source.id_for_label }}" value="{{ form.referral_source.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.referral_source.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.referral_source.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Reason for Discharge -->
-                <div class="md:col-span-2">
-                    <label for="{{ form.reason_discharge.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Reason (for Discharge/Program Status)</label>
-                    <textarea name="{{ form.reason_discharge.name }}" id="{{ form.reason_discharge.id_for_label }}" rows="2" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.reason_discharge.value|default:'' }}</textarea>
-                    {% if form.reason_discharge.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.reason_discharge.errors.0 }}</div>
-                    {% endif %}
+                
+                <div id="program-enrollments-container" class="space-y-4">
+                    <!-- Programs will be displayed here -->
                 </div>
             </div>
+            
         </div>
 
         <!-- 🧾 ADMINISTRATIVE / SYSTEM FIELDS -->
@@ -465,4 +775,574 @@
         </div>
     </form>
 </div>
+
+<!-- Program Enrollment Modal -->
+<div id="program-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Add Program Enrollment</h3>
+                <button type="button" id="close-modal" onclick="document.getElementById('program-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- Modal Content -->
+            <div class="space-y-4">
+                <!-- Program Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Program *</label>
+                    <select id="modal-program-select" onchange="toggleSubprogramsSection()" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
+                        <option value="">Select Program</option>
+                    </select>
+                </div>
+                
+                <!-- Sub-programs Section -->
+                <div id="subprograms-section" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Sub-programs</label>
+                    <div id="subprograms-container" class="space-y-2">
+                        <!-- Sub-programs will be added here -->
+                    </div>
+                    <button type="button" id="add-subprogram-btn" onclick="addSubprogramRow()" class="mt-2 inline-flex items-center px-3 py-1 border border-gray-300 text-sm font-medium rounded text-gray-700 bg-white hover:bg-gray-50">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Add Sub-program
+                    </button>
+                </div>
+                
+                <!-- Program Details -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Level of Support</label>
+                        <input type="text" id="modal-level-of-support" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent" placeholder="Enter level of support">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Client Type</label>
+                        <input type="text" id="modal-client-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent" placeholder="Enter client type">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Referral Source</label>
+                        <input type="text" id="modal-referral-source" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent" placeholder="Enter referral source">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Worker / Support Worker(s)</label>
+                        <input type="text" id="modal-support-workers" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent" placeholder="Enter support workers (comma-separated)">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Receiving Services</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="modal-receiving-services" class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-gray-300 rounded">
+                        <label for="modal-receiving-services" class="ml-2 text-sm text-gray-700">Yes</label>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Reason (for Discharge/Program Status)</label>
+                    <textarea id="modal-reason-discharge" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent" placeholder="Enter reason for discharge or program status"></textarea>
+                </div>
+                
+                <!-- Enrollment Details -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Start Date *</label>
+                        <input type="date" id="modal-start-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+                        <input type="date" id="modal-end-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select id="modal-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
+                        <option value="pending">Pending</option>
+                        <option value="active">Active</option>
+                        <option value="completed">Completed</option>
+                        <option value="cancelled">Cancelled</option>
+                        <option value="suspended">Suspended</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Modal Footer -->
+            <div class="flex justify-end space-x-3 mt-6">
+                <button type="button" id="cancel-modal" onclick="document.getElementById('program-modal').classList.add('hidden')" class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                    Cancel
+                </button>
+                <button type="button" id="save-program" onclick="saveProgramFromModal()" class="px-4 py-2 bg-brand-sky text-white text-sm font-medium rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky">
+                    Save Program
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Global functions that need to be accessible from HTML onclick handlers
+function toggleSubprogramsSection() {
+    const programSelect = document.getElementById('modal-program-select');
+    const subprogramsSection = document.getElementById('subprograms-section');
+    
+    if (programSelect.value) {
+        subprogramsSection.classList.remove('hidden');
+        // Clear existing subprograms
+        document.getElementById('subprograms-container').innerHTML = '';
+    } else {
+        subprogramsSection.classList.add('hidden');
+    }
+}
+
+function addSubprogramRow() {
+    const subprogramRow = document.createElement('div');
+    subprogramRow.className = 'flex items-center space-x-2 p-2 border border-gray-200 rounded-lg bg-gray-50';
+    subprogramRow.innerHTML = `
+        <input type="text" name="subprograms[${Date.now()}]" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent" placeholder="Enter sub-program name">
+        <button type="button" class="remove-subprogram-btn text-red-600 hover:text-red-800" onclick="this.closest('.flex').remove()">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+        </button>
+    `;
+    
+    document.getElementById('subprograms-container').appendChild(subprogramRow);
+}
+
+function getStatusColor(status) {
+    const colors = {
+        'pending': 'bg-yellow-100 text-yellow-800',
+        'active': 'bg-green-100 text-green-800',
+        'completed': 'bg-blue-100 text-blue-800',
+        'cancelled': 'bg-red-100 text-red-800',
+        'suspended': 'bg-gray-100 text-gray-800'
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+}
+
+function addProgramDisplay(programId, programName, subprogramNames, startDate, endDate, status, programDetails) {
+    const programDisplay = document.createElement('div');
+    programDisplay.className = 'border border-gray-200 rounded-lg p-4 bg-white shadow-sm';
+    
+    const subprogramsHtml = subprogramNames.length > 0 ? `
+        <div class="ml-7 mb-2">
+            ${subprogramNames.map(name => `
+                <div class="flex items-center text-sm text-gray-600 mb-1">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                    </svg>
+                    ${name}
+                </div>
+            `).join('')}
+        </div>
+    ` : '';
+    
+    const detailsHtml = `
+        <div class="ml-7 text-sm text-gray-500 space-y-1">
+            <div><span class="font-medium">Start:</span> ${startDate} ${endDate ? `<span class="ml-4"><span class="font-medium">End:</span> ${endDate}</span>` : ''}</div>
+            ${programDetails.levelOfSupport ? `<div><span class="font-medium">Level of Support:</span> ${programDetails.levelOfSupport}</div>` : ''}
+            ${programDetails.clientType ? `<div><span class="font-medium">Client Type:</span> ${programDetails.clientType}</div>` : ''}
+            ${programDetails.referralSource ? `<div><span class="font-medium">Referral Source:</span> ${programDetails.referralSource}</div>` : ''}
+            ${programDetails.supportWorkers ? `<div><span class="font-medium">Support Workers:</span> ${programDetails.supportWorkers}</div>` : ''}
+            ${programDetails.receivingServices ? `<div><span class="font-medium">Receiving Services:</span> Yes</div>` : ''}
+            ${programDetails.reasonDischarge ? `<div><span class="font-medium">Reason:</span> ${programDetails.reasonDischarge}</div>` : ''}
+        </div>
+    `;
+    
+    // Get current enrollment index
+    const currentIndex = document.querySelectorAll('#program-enrollments-container .border').length;
+    
+    programDisplay.innerHTML = `
+        <div class="flex items-start justify-between">
+            <div class="flex-1">
+                <div class="flex items-center mb-2">
+                    <svg class="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                    </svg>
+                    <h4 class="font-semibold text-gray-900">${programName}</h4>
+                    <span class="ml-2 px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(status)}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>
+                </div>
+                ${subprogramsHtml}
+                ${detailsHtml}
+            </div>
+            <button type="button" class="remove-program-display-btn text-red-600 hover:text-red-800 ml-4" onclick="this.closest('.border').remove()">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+            </button>
+        </div>
+        <input type="hidden" name="program_enrollments[${currentIndex}][program]" value="${programId}">
+        <input type="hidden" name="program_enrollments[${currentIndex}][sub_programs]" value="${JSON.stringify(subprogramNames)}">
+        <input type="hidden" name="program_enrollments[${currentIndex}][start_date]" value="${startDate}">
+        <input type="hidden" name="program_enrollments[${currentIndex}][end_date]" value="${endDate || ''}">
+        <input type="hidden" name="program_enrollments[${currentIndex}][status]" value="${status}">
+        <input type="hidden" name="program_enrollments[${currentIndex}][level_of_support]" value="${programDetails.levelOfSupport || ''}">
+        <input type="hidden" name="program_enrollments[${currentIndex}][client_type]" value="${programDetails.clientType || ''}">
+        <input type="hidden" name="program_enrollments[${currentIndex}][referral_source]" value="${programDetails.referralSource || ''}">
+        <input type="hidden" name="program_enrollments[${currentIndex}][support_workers]" value="${programDetails.supportWorkers || ''}">
+        <input type="hidden" name="program_enrollments[${currentIndex}][receiving_services]" value="${programDetails.receivingServices ? 'true' : 'false'}">
+        <input type="hidden" name="program_enrollments[${currentIndex}][reason_discharge]" value="${programDetails.reasonDischarge || ''}">
+    `;
+    
+    document.getElementById('program-enrollments-container').appendChild(programDisplay);
+}
+
+function saveProgramFromModal() {
+    const programId = document.getElementById('modal-program-select').value;
+    const programName = document.getElementById('modal-program-select').options[document.getElementById('modal-program-select').selectedIndex].text;
+    const startDate = document.getElementById('modal-start-date').value;
+    const endDate = document.getElementById('modal-end-date').value;
+    const status = document.getElementById('modal-status').value;
+    
+    if (!programId || !startDate) {
+        alert('Please select a program and start date.');
+        return;
+    }
+    
+    // Get subprogram names from text inputs
+    const subprogramInputs = document.querySelectorAll('#subprograms-container input[type="text"]');
+    const subprogramNames = Array.from(subprogramInputs)
+        .map(input => input.value.trim())
+        .filter(name => name);
+    
+    // Get program details
+    const programDetails = {
+        levelOfSupport: document.getElementById('modal-level-of-support').value.trim(),
+        clientType: document.getElementById('modal-client-type').value.trim(),
+        referralSource: document.getElementById('modal-referral-source').value.trim(),
+        supportWorkers: document.getElementById('modal-support-workers').value.trim(),
+        receivingServices: document.getElementById('modal-receiving-services').checked,
+        reasonDischarge: document.getElementById('modal-reason-discharge').value.trim()
+    };
+    
+    // Add program enrollment
+    addProgramDisplay(programId, programName, subprogramNames, startDate, endDate, status, programDetails);
+    
+    // Close modal
+    document.getElementById('program-modal').classList.add('hidden');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle Next of Kin fields
+    const nextOfKinFields = {
+        name: document.getElementById('next_of_kin_name'),
+        phone: document.getElementById('next_of_kin_phone'),
+        relationship: document.getElementById('next_of_kin_relationship')
+    };
+    const nextOfKinHidden = document.getElementById('{{ form.next_of_kin.id_for_label }}');
+    
+    // Handle Emergency Contact fields
+    const emergencyContactFields = {
+        name: document.getElementById('emergency_contact_name'),
+        phone: document.getElementById('emergency_contact_phone'),
+        relationship: document.getElementById('emergency_contact_relationship')
+    };
+    const emergencyContactHidden = document.getElementById('{{ form.emergency_contact.id_for_label }}');
+    
+    // Handle Support Workers field - this is handled in the modal, no separate input needed
+    const supportWorkersHidden = document.getElementById('{{ form.support_workers.id_for_label }}');
+    
+    // Program Enrollments Management
+    const addProgramBtn = document.getElementById('add-program-btn');
+    const programEnrollmentsContainer = document.getElementById('program-enrollments-container');
+    const programModal = document.getElementById('program-modal');
+    const closeModalBtn = document.getElementById('close-modal');
+    const cancelModalBtn = document.getElementById('cancel-modal');
+    const saveProgramBtn = document.getElementById('save-program');
+    
+    // Modal elements
+    const modalProgramSelect = document.getElementById('modal-program-select');
+    const subprogramsSection = document.getElementById('subprograms-section');
+    const subprogramsContainer = document.getElementById('subprograms-container');
+    const addSubprogramBtn = document.getElementById('add-subprogram-btn');
+    const modalStartDate = document.getElementById('modal-start-date');
+    const modalEndDate = document.getElementById('modal-end-date');
+    const modalStatus = document.getElementById('modal-status');
+    
+    // Debug: Check if elements exist
+    console.log('Modal elements check:');
+    console.log('addProgramBtn:', addProgramBtn);
+    console.log('programModal:', programModal);
+    console.log('modalProgramSelect:', modalProgramSelect);
+    
+    // Check if all required elements exist
+    if (!addProgramBtn) {
+        console.error('Add Program button not found!');
+    }
+    if (!programModal) {
+        console.error('Program modal not found!');
+    }
+    
+    // Test button click
+    if (addProgramBtn) {
+        console.log('Add Program button found, testing click...');
+        addProgramBtn.addEventListener('click', function() {
+            console.log('Add Program button clicked!');
+            openModal();
+        });
+    }
+    
+    let programEnrollmentIndex = 0;
+    let currentSubprogramIndex = 0;
+    
+    // Load existing data if editing
+    {% if object %}
+        const nextOfKinData = {{ form.next_of_kin.value|default:'{}'|safe }};
+        if (nextOfKinData && typeof nextOfKinData === 'object') {
+            nextOfKinFields.name.value = nextOfKinData.name || '';
+            nextOfKinFields.phone.value = nextOfKinData.phone || '';
+            nextOfKinFields.relationship.value = nextOfKinData.relationship || '';
+        }
+        
+        const emergencyContactData = {{ form.emergency_contact.value|default:'{}'|safe }};
+        if (emergencyContactData && typeof emergencyContactData === 'object') {
+            emergencyContactFields.name.value = emergencyContactData.name || '';
+            emergencyContactFields.phone.value = emergencyContactData.phone || '';
+            emergencyContactFields.relationship.value = emergencyContactData.relationship || '';
+        }
+        
+        const supportWorkersData = {{ form.support_workers.value|default:'[]'|safe }};
+        if (supportWorkersData && Array.isArray(supportWorkersData)) {
+            // Support workers are handled in program enrollments, no separate input needed
+        }
+    {% endif %}
+    
+    // Update hidden fields when inputs change
+    function updateNextOfKin() {
+        const data = {
+            name: nextOfKinFields.name.value,
+            phone: nextOfKinFields.phone.value,
+            relationship: nextOfKinFields.relationship.value
+        };
+        nextOfKinHidden.value = JSON.stringify(data);
+    }
+    
+    function updateEmergencyContact() {
+        const data = {
+            name: emergencyContactFields.name.value,
+            phone: emergencyContactFields.phone.value,
+            relationship: emergencyContactFields.relationship.value
+        };
+        emergencyContactHidden.value = JSON.stringify(data);
+    }
+    
+    // Support workers are handled in program enrollments modal
+    
+    // Available programs and subprograms
+    const programs = [
+        {% for program in programs %}
+            { 
+                id: {{ program.id }}, 
+                name: "{{ program.name|escapejs }}",
+                subprograms: [
+                    {% for subprogram in program.subprograms.all %}
+                        { id: {{ subprogram.id }}, name: "{{ subprogram.name|escapejs }}" },
+                    {% endfor %}
+                ]
+            },
+        {% endfor %}
+    ];
+    
+    // Modal Management
+    function openModal() {
+        console.log('openModal called');
+        console.log('programModal:', programModal);
+        if (programModal) {
+            programModal.classList.remove('hidden');
+            console.log('Modal should be visible now');
+            populateProgramSelect();
+            resetModal();
+        } else {
+            console.error('Cannot open modal - programModal element not found');
+        }
+    }
+    
+    
+    function closeModal() {
+        programModal.classList.add('hidden');
+        resetModal();
+    }
+    
+    function resetModal() {
+        modalProgramSelect.value = '';
+        modalStartDate.value = '';
+        modalEndDate.value = '';
+        modalStatus.value = 'pending';
+        subprogramsSection.classList.add('hidden');
+        subprogramsContainer.innerHTML = '';
+        currentSubprogramIndex = 0;
+        
+        // Reset program details
+        document.getElementById('modal-level-of-support').value = '';
+        document.getElementById('modal-client-type').value = '';
+        document.getElementById('modal-referral-source').value = '';
+        document.getElementById('modal-support-workers').value = '';
+        document.getElementById('modal-receiving-services').checked = false;
+        document.getElementById('modal-reason-discharge').value = '';
+    }
+    
+    function populateProgramSelect() {
+        modalProgramSelect.innerHTML = '<option value="">Select Program</option>';
+        programs.forEach(program => {
+            const option = document.createElement('option');
+            option.value = program.id;
+            option.textContent = program.name;
+            modalProgramSelect.appendChild(option);
+        });
+    }
+    
+    
+    // Add event listeners
+    Object.values(nextOfKinFields).forEach(field => {
+        field.addEventListener('input', updateNextOfKin);
+    });
+    
+    Object.values(emergencyContactFields).forEach(field => {
+        field.addEventListener('input', updateEmergencyContact);
+    });
+    
+    // Modal event listeners (duplicate removed - handled above)
+    
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', closeModal);
+    }
+    
+    if (cancelModalBtn) {
+        cancelModalBtn.addEventListener('click', closeModal);
+    }
+    
+    // Program selection change
+    if (modalProgramSelect) {
+        modalProgramSelect.addEventListener('change', function() {
+            if (this.value) {
+                subprogramsSection.classList.remove('hidden');
+                // Clear existing subprograms
+                subprogramsContainer.innerHTML = '';
+                currentSubprogramIndex = 0;
+            } else {
+                subprogramsSection.classList.add('hidden');
+            }
+        });
+    }
+    
+    // Add subprogram button
+    if (addSubprogramBtn) {
+        addSubprogramBtn.addEventListener('click', addSubprogramRow);
+    }
+    
+    // Remove subprogram
+    if (subprogramsContainer) {
+        subprogramsContainer.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-subprogram-btn')) {
+                e.target.closest('.flex').remove();
+            }
+        });
+    }
+    
+    // Save program
+    if (saveProgramBtn) {
+        saveProgramBtn.addEventListener('click', function() {
+        const programId = modalProgramSelect.value;
+        const programName = modalProgramSelect.options[modalProgramSelect.selectedIndex].text;
+        const startDate = modalStartDate.value;
+        const endDate = modalEndDate.value;
+        const status = modalStatus.value;
+        
+        if (!programId || !startDate) {
+            alert('Please select a program and start date.');
+            return;
+        }
+        
+        // Get subprogram names from text inputs
+        const subprogramInputs = subprogramsContainer.querySelectorAll('input[type="text"]');
+        const subprogramNames = Array.from(subprogramInputs)
+            .map(input => input.value.trim())
+            .filter(name => name);
+        
+        // Get program details
+        const programDetails = {
+            levelOfSupport: document.getElementById('modal-level-of-support').value.trim(),
+            clientType: document.getElementById('modal-client-type').value.trim(),
+            referralSource: document.getElementById('modal-referral-source').value.trim(),
+            supportWorkers: document.getElementById('modal-support-workers').value.trim(),
+            receivingServices: document.getElementById('modal-receiving-services').checked,
+            reasonDischarge: document.getElementById('modal-reason-discharge').value.trim()
+        };
+        
+        // Add program enrollment
+        addProgramDisplay(programId, programName, subprogramNames, startDate, endDate, status, programDetails);
+        
+        closeModal();
+        });
+    }
+    
+    // Remove program display
+    if (programEnrollmentsContainer) {
+        programEnrollmentsContainer.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-program-display-btn')) {
+                e.target.closest('.border').remove();
+            }
+        });
+    }
+    
+    // Initialize hidden fields
+    updateNextOfKin();
+    updateEmergencyContact();
+    
+    // Handle form submission to prevent page reload and preserve data
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault(); // Prevent default form submission
+            
+            // Update all hidden fields before submission
+            updateNextOfKin();
+            updateEmergencyContact();
+            
+            // Show loading state
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = 'Saving...';
+            submitBtn.disabled = true;
+            
+            // Create FormData object
+            const formData = new FormData(form);
+            
+            // Submit form via fetch
+            const formAction = form.action || window.location.href;
+            fetch(formAction, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    // If successful, redirect to client list
+                    window.location.href = "{% url 'clients:list' %}";
+                } else {
+                    // If there are validation errors, reload the page to show them
+                    window.location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // Restore button state
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+                alert('An error occurred while saving. Please try again.');
+            });
+        });
+    }
+});
+</script>
 {% endblock %}

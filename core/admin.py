@@ -1,6 +1,6 @@
 from django.contrib import admin
 from .models import (
-    Department, Role, Staff, StaffRole, Program, ProgramStaff,
+    Department, Role, Staff, StaffRole, Program, SubProgram, ProgramStaff,
     Client, ClientProgramEnrollment, Intake, Discharge, ServiceRestriction,
     AuditLog
 )
@@ -42,6 +42,14 @@ class ProgramAdmin(admin.ModelAdmin):
     list_display = ['name', 'department', 'location', 'capacity_current', 'created_at']
     search_fields = ['name', 'department__name', 'location']
     list_filter = ['department', 'created_at']
+    readonly_fields = ['external_id', 'created_at', 'updated_at']
+
+
+@admin.register(SubProgram)
+class SubProgramAdmin(admin.ModelAdmin):
+    list_display = ['name', 'program', 'is_active', 'created_at']
+    search_fields = ['name', 'program__name']
+    list_filter = ['program', 'is_active', 'created_at']
     readonly_fields = ['external_id', 'created_at', 'updated_at']
 
 

@@ -175,6 +175,11 @@ class ClientCreateView(CreateView):
     template_name = 'clients/client_form_tailwind.html'
     success_url = reverse_lazy('clients:list')
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['programs'] = Program.objects.filter(status='active').prefetch_related('subprograms').order_by('name')
+        return context
+    
     def form_valid(self, form):
         client = form.save(commit=False)
         
@@ -194,6 +199,9 @@ class ClientCreateView(CreateView):
         
         # Save the client first before checking for duplicates
         client.save()
+        
+        # Handle program enrollments
+        self.handle_program_enrollments(client)
         
         # Only check for duplicates if no unique identifiers (email/phone)
         if not client.email and not client.phone:
@@ -275,6 +283,79 @@ class ClientCreateView(CreateView):
             logger.error(f"Error creating audit log for client: {e}")
         
         return super().form_valid(form)
+    
+    def handle_program_enrollments(self, client):
+        """Handle multiple program enrollments from form data"""
+        program_enrollments_data = {}
+        
+        # Extract program enrollment data from POST
+        for key, value in self.request.POST.items():
+            if key.startswith('program_enrollments['):
+                # Parse key like "program_enrollments[0][program]"
+                import re
+                match = re.match(r'program_enrollments\[(\d+)\]\[(\w+)\]', key)
+                if match:
+                    index = match.group(1)
+                    field = match.group(2)
+                    
+                    if index not in program_enrollments_data:
+                        program_enrollments_data[index] = {}
+                    program_enrollments_data[index][field] = value
+        
+        # Create program enrollments
+        for index, enrollment_data in program_enrollments_data.items():
+            program_id = enrollment_data.get('program')
+            sub_programs_json = enrollment_data.get('sub_programs', '[]')
+            start_date = enrollment_data.get('start_date')
+            end_date = enrollment_data.get('end_date')
+            status = enrollment_data.get('status', 'pending')
+            level_of_support = enrollment_data.get('level_of_support', '')
+            client_type = enrollment_data.get('client_type', '')
+            referral_source = enrollment_data.get('referral_source', '')
+            support_workers = enrollment_data.get('support_workers', '')
+            receiving_services = enrollment_data.get('receiving_services', 'false') == 'true'
+            reason_discharge = enrollment_data.get('reason_discharge', '')
+            
+            # Only create enrollment if program is selected
+            if program_id and start_date:
+                try:
+                    program = Program.objects.get(id=program_id)
+                    
+                    # Parse sub-programs from JSON
+                    import json
+                    sub_program_names = json.loads(sub_programs_json) if sub_programs_json else []
+                    
+                    # Create notes with all the details
+                    notes_parts = []
+                    if sub_program_names:
+                        notes_parts.append(f"Sub-programs: {', '.join(sub_program_names)}")
+                    if level_of_support:
+                        notes_parts.append(f"Level of Support: {level_of_support}")
+                    if client_type:
+                        notes_parts.append(f"Client Type: {client_type}")
+                    if referral_source:
+                        notes_parts.append(f"Referral Source: {referral_source}")
+                    if support_workers:
+                        notes_parts.append(f"Support Workers: {support_workers}")
+                    if receiving_services:
+                        notes_parts.append("Receiving Services: Yes")
+                    if reason_discharge:
+                        notes_parts.append(f"Reason: {reason_discharge}")
+                    
+                    notes = " | ".join(notes_parts) if notes_parts else "Enrollment created from client form"
+                    
+                    ClientProgramEnrollment.objects.create(
+                        client=client,
+                        program=program,
+                        start_date=start_date,
+                        end_date=end_date if end_date else None,
+                        status=status,
+                        notes=notes
+                    )
+                except Program.DoesNotExist:
+                    logger.warning(f"Program with ID {program_id} not found")
+                except Exception as e:
+                    logger.error(f"Error creating program enrollment: {e}")
 
 class ClientUpdateView(UpdateView):
     model = Client
@@ -283,6 +364,12 @@ class ClientUpdateView(UpdateView):
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('clients:list')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['programs'] = Program.objects.filter(status='active').prefetch_related('subprograms').order_by('name')
+        context['existing_enrollments'] = ClientProgramEnrollment.objects.filter(client=self.object).select_related('program', 'sub_program')
+        return context
     
     def form_valid(self, form):
         client = form.save(commit=False)
@@ -372,6 +459,9 @@ class ClientUpdateView(UpdateView):
         
         client.save()
         
+        # Handle program enrollments
+        self.handle_program_enrollments(client)
+        
         # Create audit log entry if there were changes
         if changes:
             try:
@@ -388,6 +478,82 @@ class ClientUpdateView(UpdateView):
         
         update_success(self.request, 'Client')
         return super().form_valid(form)
+    
+    def handle_program_enrollments(self, client):
+        """Handle multiple program enrollments from form data"""
+        program_enrollments_data = {}
+        
+        # Extract program enrollment data from POST
+        for key, value in self.request.POST.items():
+            if key.startswith('program_enrollments['):
+                # Parse key like "program_enrollments[0][program]"
+                import re
+                match = re.match(r'program_enrollments\[(\d+)\]\[(\w+)\]', key)
+                if match:
+                    index = match.group(1)
+                    field = match.group(2)
+                    
+                    if index not in program_enrollments_data:
+                        program_enrollments_data[index] = {}
+                    program_enrollments_data[index][field] = value
+        
+        # Clear existing enrollments for this client (optional - you might want to keep them)
+        # ClientProgramEnrollment.objects.filter(client=client).delete()
+        
+        # Create/update program enrollments
+        for index, enrollment_data in program_enrollments_data.items():
+            program_id = enrollment_data.get('program')
+            sub_programs_json = enrollment_data.get('sub_programs', '[]')
+            start_date = enrollment_data.get('start_date')
+            end_date = enrollment_data.get('end_date')
+            status = enrollment_data.get('status', 'pending')
+            level_of_support = enrollment_data.get('level_of_support', '')
+            client_type = enrollment_data.get('client_type', '')
+            referral_source = enrollment_data.get('referral_source', '')
+            support_workers = enrollment_data.get('support_workers', '')
+            receiving_services = enrollment_data.get('receiving_services', 'false') == 'true'
+            reason_discharge = enrollment_data.get('reason_discharge', '')
+            
+            # Only create enrollment if program is selected
+            if program_id and start_date:
+                try:
+                    program = Program.objects.get(id=program_id)
+                    
+                    # Parse sub-programs from JSON
+                    import json
+                    sub_program_names = json.loads(sub_programs_json) if sub_programs_json else []
+                    
+                    # Create notes with all the details
+                    notes_parts = []
+                    if sub_program_names:
+                        notes_parts.append(f"Sub-programs: {', '.join(sub_program_names)}")
+                    if level_of_support:
+                        notes_parts.append(f"Level of Support: {level_of_support}")
+                    if client_type:
+                        notes_parts.append(f"Client Type: {client_type}")
+                    if referral_source:
+                        notes_parts.append(f"Referral Source: {referral_source}")
+                    if support_workers:
+                        notes_parts.append(f"Support Workers: {support_workers}")
+                    if receiving_services:
+                        notes_parts.append("Receiving Services: Yes")
+                    if reason_discharge:
+                        notes_parts.append(f"Reason: {reason_discharge}")
+                    
+                    notes = " | ".join(notes_parts) if notes_parts else "Enrollment updated from client form"
+                    
+                    ClientProgramEnrollment.objects.create(
+                        client=client,
+                        program=program,
+                        start_date=start_date,
+                        end_date=end_date if end_date else None,
+                        status=status,
+                        notes=notes
+                    )
+                except Program.DoesNotExist:
+                    logger.warning(f"Program with ID {program_id} not found")
+                except Exception as e:
+                    logger.error(f"Error creating program enrollment: {e}")
 
 class ClientDeleteView(DeleteView):
     model = Client

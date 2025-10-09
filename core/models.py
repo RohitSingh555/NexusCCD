@@ -351,6 +351,20 @@ class Program(BaseModel):
         return True, "No restrictions found."
 
 
+class SubProgram(BaseModel):
+    name = models.CharField(max_length=255, db_index=True)
+    program = models.ForeignKey(Program, on_delete=models.CASCADE, related_name='subprograms', db_index=True)
+    description = models.TextField(null=True, blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    
+    class Meta:
+        db_table = 'subprograms'
+        unique_together = ['name', 'program']
+    
+    def __str__(self):
+        return f"{self.name} - {self.program.name}"
+
+
 class ProgramStaff(BaseModel):
     program = models.ForeignKey(Program, on_delete=models.CASCADE, db_index=True)
     staff = models.ForeignKey(Staff, on_delete=models.CASCADE, db_index=True)
@@ -545,6 +559,7 @@ class ClientProgramEnrollment(BaseModel):
     
     client = models.ForeignKey(Client, on_delete=models.CASCADE, db_index=True)
     program = models.ForeignKey(Program, on_delete=models.CASCADE, db_index=True)
+    sub_program = models.ForeignKey(SubProgram, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
     start_date = models.DateField(db_index=True)
     end_date = models.DateField(null=True, blank=True, db_index=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)

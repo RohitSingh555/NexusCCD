@@ -2,6 +2,50 @@ from django import forms
 from core.models import Client
 import json
 
+# Common languages used by US migrants
+LANGUAGE_CHOICES = [
+    ('', 'Select Language'),
+    ('English', 'English'),
+    ('Spanish', 'Spanish'),
+    ('Chinese (Mandarin)', 'Chinese (Mandarin)'),
+    ('Chinese (Cantonese)', 'Chinese (Cantonese)'),
+    ('Tagalog', 'Tagalog'),
+    ('Vietnamese', 'Vietnamese'),
+    ('Arabic', 'Arabic'),
+    ('French', 'French'),
+    ('Korean', 'Korean'),
+    ('Russian', 'Russian'),
+    ('Portuguese', 'Portuguese'),
+    ('Hindi', 'Hindi'),
+    ('Urdu', 'Urdu'),
+    ('Bengali', 'Bengali'),
+    ('Punjabi', 'Punjabi'),
+    ('Gujarati', 'Gujarati'),
+    ('Tamil', 'Tamil'),
+    ('Telugu', 'Telugu'),
+    ('Marathi', 'Marathi'),
+    ('Haitian Creole', 'Haitian Creole'),
+    ('Amharic', 'Amharic'),
+    ('Somali', 'Somali'),
+    ('Swahili', 'Swahili'),
+    ('Yoruba', 'Yoruba'),
+    ('Igbo', 'Igbo'),
+    ('Farsi/Persian', 'Farsi/Persian'),
+    ('Turkish', 'Turkish'),
+    ('Polish', 'Polish'),
+    ('Italian', 'Italian'),
+    ('German', 'German'),
+    ('Japanese', 'Japanese'),
+    ('Thai', 'Thai'),
+    ('Burmese', 'Burmese'),
+    ('Nepali', 'Nepali'),
+    ('Sinhala', 'Sinhala'),
+    ('Khmer', 'Khmer'),
+    ('Lao', 'Lao'),
+    ('Hmong', 'Hmong'),
+    ('Other', 'Other'),
+]
+
 
 class ClientForm(forms.ModelForm):
     class Meta:
@@ -46,6 +90,12 @@ class ClientForm(forms.ModelForm):
             'health_card_exp_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'admission_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'discharge_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            
+            # Language dropdowns
+            'language': forms.Select(attrs={'class': 'form-control'}, choices=LANGUAGE_CHOICES),
+            'preferred_language': forms.Select(attrs={'class': 'form-control'}, choices=LANGUAGE_CHOICES),
+            'mother_tongue': forms.Select(attrs={'class': 'form-control'}, choices=LANGUAGE_CHOICES),
+            'official_language': forms.Select(attrs={'class': 'form-control'}, choices=LANGUAGE_CHOICES),
             
             # Hidden fields for JSON data
             'languages_spoken': forms.HiddenInput(),
@@ -336,33 +386,6 @@ class ClientForm(forms.ModelForm):
                 raise forms.ValidationError("Health card number should contain only letters and numbers")
         return hc_number
     
-    def clean_phone(self):
-        """Validate phone number format"""
-        phone = self.cleaned_data.get('phone')
-        if phone:
-            # Remove common phone formatting characters
-            cleaned_phone = phone.replace('+', '').replace('-', '').replace('(', '').replace(')', '').replace(' ', '')
-            if not cleaned_phone.isdigit() or len(cleaned_phone) < 10:
-                raise forms.ValidationError("Please enter a valid phone number (at least 10 digits)")
-        return phone
-    
-    def clean_phone_work(self):
-        """Validate work phone number format"""
-        phone = self.cleaned_data.get('phone_work')
-        if phone:
-            cleaned_phone = phone.replace('+', '').replace('-', '').replace('(', '').replace(')', '').replace(' ', '')
-            if not cleaned_phone.isdigit() or len(cleaned_phone) < 10:
-                raise forms.ValidationError("Please enter a valid work phone number (at least 10 digits)")
-        return phone
-    
-    def clean_phone_alt(self):
-        """Validate alternative phone number format"""
-        phone = self.cleaned_data.get('phone_alt')
-        if phone:
-            cleaned_phone = phone.replace('+', '').replace('-', '').replace('(', '').replace(')', '').replace(' ', '')
-            if not cleaned_phone.isdigit() or len(cleaned_phone) < 10:
-                raise forms.ValidationError("Please enter a valid alternative phone number (at least 10 digits)")
-        return phone
     
     def clean_postal_code(self):
         """Validate postal code format"""
