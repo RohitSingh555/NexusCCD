@@ -1,0 +1,6 @@
+Client ID,First Name,Last Name,DOB,Gender,City,Address,Phone,Email,Program,Admission Date,Primary Diagnosis,Medical Conditions,Next of Kin,Emergency Contact,Comments
+C001,Richa,Jason,1990-03-12,Female,Toronto,45 King St,555-1012,,Mental Health Services,2024-11-10,Anxiety,,,John Taylor - Brother,
+C002,Rahul,Joshi,1988-07-09,Male,,23 MG Road,555-9829,raj.joshi@email.com,Mental Health Services,2025-02-15,,Diabetes,Neha Sharma - Wife,,
+C003,Lisa,Brown,1995-01-24,Female,Vancouver,,555-9821,lisa.b@email.com,Mental Health Services,2025-04-10,Depression,Hypertension,,,Follow-up needed
+C004,Ahmed,Khan,1982-10-11,Male,Calgary,87 River Rd,555-7631,ahmed.k@email.com,Mental Health Services,2024-09-05,PTSD,,Fatima Khan - Sister,,
+C005,Priya,Patel,1997-06-30,Female,,21 Rose Ave,,,Mental Health Services,2025-01-20,,Asthma,Mehul Patel - Father,,

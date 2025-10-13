@@ -5,15 +5,18 @@ from .models import ClientProgramEnrollment, ServiceRestriction
 from datetime import date
 from django.contrib.auth import get_user_model
 from .models import Staff
+import json
 
 
 class EnrollmentForm(forms.ModelForm):
     class Meta:
         model = ClientProgramEnrollment
-        fields = ['client', 'program', 'start_date', 'end_date', 'status', 'notes']
+        fields = ['client', 'program', 'start_date', 'end_date', 'status', 'days_elapsed', 'receiving_services_date', 'notes']
         widgets = {
             'start_date': forms.DateInput(attrs={'type': 'date'}),
             'end_date': forms.DateInput(attrs={'type': 'date'}),
+            'receiving_services_date': forms.DateInput(attrs={'type': 'date'}),
+            'days_elapsed': forms.NumberInput(attrs={'readonly': True, 'class': 'bg-gray-100'}),
             'notes': forms.Textarea(attrs={'rows': 3}),
         }
     
@@ -27,6 +30,10 @@ class EnrollmentForm(forms.ModelForm):
         
         if client_queryset is not None:
             self.fields['client'].queryset = client_queryset
+        
+        # Set up field styling and help text
+        self.fields['days_elapsed'].help_text = "Auto-calculated based on start date"
+        self.fields['receiving_services_date'].help_text = "Date when client actually started receiving services"
     
     def clean(self):
         cleaned_data = super().clean()
@@ -34,6 +41,17 @@ class EnrollmentForm(forms.ModelForm):
         client = cleaned_data.get('client')
         program = cleaned_data.get('program')
         start_date = cleaned_data.get('start_date')
+        receiving_services_date = cleaned_data.get('receiving_services_date')
+        
+        # Calculate days elapsed if start_date is provided
+        if start_date:
+            days_elapsed = self.calculate_days_elapsed(start_date)
+            cleaned_data['days_elapsed'] = days_elapsed
+        
+        # Validate receiving_services_date
+        if receiving_services_date and start_date:
+            if receiving_services_date < start_date:
+                raise ValidationError("Receiving services date cannot be before the enrollment start date.")
         
         if client and program and start_date:
             # Check for service restrictions
@@ -43,6 +61,14 @@ class EnrollmentForm(forms.ModelForm):
             self.check_program_capacity(client, program, start_date)
         
         return cleaned_data
+    
+    def calculate_days_elapsed(self, start_date):
+        """Calculate days elapsed since start date"""
+        if start_date:
+            today = date.today()
+            delta = today - start_date
+            return max(0, delta.days)
+        return 0
     
     def check_service_restrictions(self, client, program, start_date):
         """Check if client has service restrictions that would prevent enrollment"""
@@ -322,8 +348,9 @@ class ServiceRestrictionForm(forms.ModelForm):
     
     class Meta:
         model = ServiceRestriction
-        fields = ['client', 'scope', 'program', 'restriction_type', 'start_date', 'end_date', 'is_indefinite', 'behaviors', 'notes']
+        fields = ['client', 'scope', 'program', 'restriction_type', 'is_bill_168', 'is_no_trespass', 'start_date', 'end_date', 'is_indefinite', 'behaviors', 'notes']
         widgets = {
+            'restriction_type': forms.HiddenInput(),
             'start_date': forms.DateInput(attrs={'type': 'date', 'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent'}),
             'end_date': forms.DateInput(attrs={'type': 'date', 'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent'}),
             'behaviors': forms.CheckboxSelectMultiple(attrs={'class': 'space-y-2'}),
@@ -348,6 +375,12 @@ class ServiceRestrictionForm(forms.ModelForm):
         self.fields['restriction_type'].widget.attrs.update({
             'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent'
         })
+        self.fields['is_bill_168'].widget.attrs.update({
+            'class': 'w-4 h-4 text-brand-sky bg-neutral-100 border-neutral-300 rounded focus:ring-brand-sky focus:ring-2'
+        })
+        self.fields['is_no_trespass'].widget.attrs.update({
+            'class': 'w-4 h-4 text-brand-sky bg-neutral-100 border-neutral-300 rounded focus:ring-brand-sky focus:ring-2'
+        })
         
         # Filter programs if provided
         if program_queryset is not None:
@@ -362,6 +395,25 @@ class ServiceRestrictionForm(forms.ModelForm):
         if 'behaviors' in self.fields:
             self.fields['behaviors'].initial = []
             self.fields['behaviors'].required = False
+        
+        # Set initial value for restriction_type field
+        if 'restriction_type' in self.fields:
+            self.fields['restriction_type'].initial = []
+    
+    def clean_restriction_type(self):
+        restriction_type = self.cleaned_data.get('restriction_type')
+        if restriction_type:
+            try:
+                # If it's a JSON string, parse it
+                if isinstance(restriction_type, str):
+                    return json.loads(restriction_type)
+                # If it's already a list, return as is
+                elif isinstance(restriction_type, list):
+                    return restriction_type
+            except json.JSONDecodeError:
+                # If it's a single value, convert to list
+                return [restriction_type]
+        return []
     
     def clean(self):
         print("ServiceRestrictionForm.clean called")

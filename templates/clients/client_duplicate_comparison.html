@@ -223,7 +223,15 @@
                         <div class="space-y-2">
                             {% for restriction in primary_restrictions %}
                             <div class="bg-red-50 rounded-lg p-3">
-                                <div class="font-medium text-gray-900">{{ restriction.get_restriction_type_display }}</div>
+                                <div class="font-medium text-gray-900">
+                                    {% for behavior_value, behavior_display in restriction.get_behavior_tags %}
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 mr-1">
+                                            {{ behavior_display }}
+                                        </span>
+                                    {% empty %}
+                                        <span class="text-gray-500">No behaviors</span>
+                                    {% endfor %}
+                                </div>
                                 <div class="text-sm text-gray-600">{{ restriction.get_scope_display }}</div>
                                 <div class="text-sm text-gray-500">
                                     {{ restriction.start_date|date:"M d, Y" }} - 
@@ -349,7 +357,15 @@
                         <div class="space-y-2">
                             {% for restriction in duplicate_restrictions %}
                             <div class="bg-red-50 rounded-lg p-3">
-                                <div class="font-medium text-gray-900">{{ restriction.get_restriction_type_display }}</div>
+                                <div class="font-medium text-gray-900">
+                                    {% for behavior_value, behavior_display in restriction.get_behavior_tags %}
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 mr-1">
+                                            {{ behavior_display }}
+                                        </span>
+                                    {% empty %}
+                                        <span class="text-gray-500">No behaviors</span>
+                                    {% endfor %}
+                                </div>
                                 <div class="text-sm text-gray-600">{{ restriction.get_scope_display }}</div>
                                 <div class="text-sm text-gray-500">
                                     {{ restriction.start_date|date:"M d, Y" }} - 

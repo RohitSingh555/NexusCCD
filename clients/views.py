@@ -17,6 +17,7 @@ from django.db import IntegrityError
 from django.http import HttpResponse
 import csv
 from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate
+from core.views import ProgramManagerAccessMixin, jwt_required
 from core.fuzzy_matching import fuzzy_matcher
 from .forms import ClientForm
 import pandas as pd
@@ -29,7 +30,8 @@ from django.views.decorators.http import require_http_methods
 
 logger = logging.getLogger(__name__)
 
-class ClientListView(ListView):
+@method_decorator(jwt_required, name='dispatch')
+class ClientListView(ProgramManagerAccessMixin, ListView):
     model = Client
     template_name = 'clients/client_list.html'
     context_object_name = 'clients'
@@ -53,7 +55,24 @@ class ClientListView(ListView):
         from django.db.models import Q
         from datetime import date
         
-        queryset = Client.objects.all()
+        # Start with base queryset - don't use ProgramManagerAccessMixin's get_queryset
+        # because it tries to select_related('program') which doesn't exist on Client model
+        queryset = Client.objects.all().order_by('-created_at')
+        
+        # For program managers, we need to filter clients based on their program enrollments
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                if staff.is_program_manager():
+                    # Get assigned programs
+                    assigned_programs = staff.get_assigned_programs()
+                    # Filter clients who are enrolled in any of the assigned programs
+                    queryset = queryset.filter(
+                        clientprogramenrollment__program__in=assigned_programs
+                    ).distinct()
+            except Exception:
+                pass
+        
         search_query = self.request.GET.get('search', '').strip()
         program_filter = self.request.GET.get('program', '').strip()
         age_range = self.request.GET.get('age_range', '').strip()
@@ -124,14 +143,26 @@ class ClientListView(ListView):
         return queryset.order_by('-created_at')
     
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
+        # Don't use ProgramManagerAccessMixin's get_context_data to avoid conflicts
+        context = super(ProgramManagerAccessMixin, self).get_context_data(**kwargs)
         context['search_query'] = self.request.GET.get('search', '')
         context['program_filter'] = self.request.GET.get('program', '')
         context['age_range'] = self.request.GET.get('age_range', '')
         context['gender_filter'] = self.request.GET.get('gender', '')
         context['manager_filter'] = self.request.GET.get('manager', '')
         context['per_page'] = self.request.GET.get('per_page', '10')
-        context['programs'] = Program.objects.filter(status='active').order_by('name')
+        # Filter programs for program managers
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                if staff.is_program_manager():
+                    context['programs'] = staff.get_assigned_programs().filter(status='active').order_by('name')
+                else:
+                    context['programs'] = Program.objects.filter(status='active').order_by('name')
+            except Exception:
+                context['programs'] = Program.objects.filter(status='active').order_by('name')
+        else:
+            context['programs'] = Program.objects.filter(status='active').order_by('name')
         
         # Force pagination to be enabled if there are any results
         if context.get('paginator') and context['paginator'].count > 0:
@@ -185,6 +216,8 @@ class ClientCreateView(CreateView):
         print("DEBUG: Form is valid:", form.is_valid())
         print("DEBUG: Form errors:", form.errors)
         print("DEBUG: Form cleaned_data keys:", list(form.cleaned_data.keys()))
+        print("DEBUG: POST data keys:", list(self.request.POST.keys()))
+        print("DEBUG: Program enrollment POST data:", {k: v for k, v in self.request.POST.items() if k.startswith('program_enrollments')})
         
         client = form.save(commit=False)
         
@@ -294,6 +327,8 @@ class ClientCreateView(CreateView):
         print("DEBUG: Form is valid:", form.is_valid())
         print("DEBUG: Form errors:", form.errors)
         print("DEBUG: Form non_field_errors:", form.non_field_errors)
+        print("DEBUG: POST data keys:", list(self.request.POST.keys()))
+        print("DEBUG: Program enrollment POST data:", {k: v for k, v in self.request.POST.items() if k.startswith('program_enrollments')})
         return super().form_invalid(form)
     
     def handle_program_enrollments(self, client):
@@ -302,6 +337,7 @@ class ClientCreateView(CreateView):
         
         print("DEBUG: handle_program_enrollments called")
         print("DEBUG: POST data keys:", [key for key in self.request.POST.keys() if key.startswith('program_enrollments')])
+        print("DEBUG: All POST data:", dict(self.request.POST))
         
         # Extract program enrollment data from POST
         for key, value in self.request.POST.items():
@@ -332,6 +368,8 @@ class ClientCreateView(CreateView):
             referral_source = enrollment_data.get('referral_source', '')
             support_workers = enrollment_data.get('support_workers', '')
             receiving_services = enrollment_data.get('receiving_services', 'false') == 'true'
+            receiving_services_date = enrollment_data.get('receiving_services_date', '')
+            days_elapsed = enrollment_data.get('days_elapsed', '')
             reason_discharge = enrollment_data.get('reason_discharge', '')
             
             # Only create enrollment if program is selected
@@ -344,7 +382,18 @@ class ClientCreateView(CreateView):
                     
                     # Parse sub-programs from JSON
                     import json
-                    sub_program_names = json.loads(sub_programs_json) if sub_programs_json else []
+                    try:
+                        if sub_programs_json and sub_programs_json.strip():
+                            # Handle malformed JSON like just "["
+                            if sub_programs_json.strip() == '[':
+                                sub_program_names = []
+                            else:
+                                sub_program_names = json.loads(sub_programs_json)
+                        else:
+                            sub_program_names = []
+                    except json.JSONDecodeError as e:
+                        print(f"DEBUG: Invalid JSON for sub_programs: '{sub_programs_json}' - Error: {e}")
+                        sub_program_names = []
                     
                     # Create notes with all the details
                     notes_parts = []
@@ -360,6 +409,10 @@ class ClientCreateView(CreateView):
                         notes_parts.append(f"Support Workers: {support_workers}")
                     if receiving_services:
                         notes_parts.append("Receiving Services: Yes")
+                    if receiving_services_date:
+                        notes_parts.append(f"Receiving Services Date: {receiving_services_date}")
+                    if days_elapsed:
+                        notes_parts.append(f"Days Elapsed: {days_elapsed}")
                     if reason_discharge:
                         notes_parts.append(f"Reason: {reason_discharge}")
                     
@@ -377,10 +430,15 @@ class ClientCreateView(CreateView):
                         end_date=end_date if end_date else None,
                         status=status,
                         notes=notes,
+                        receiving_services_date=receiving_services_date if receiving_services_date else None,
+                        days_elapsed=int(days_elapsed) if days_elapsed else None,
                         created_by=created_by,
                         updated_by=created_by
                     )
                     print(f"DEBUG: Created enrollment: {enrollment}")
+                    print(f"DEBUG: Enrollment ID: {enrollment.id}")
+                    print(f"DEBUG: Client: {enrollment.client}")
+                    print(f"DEBUG: Program: {enrollment.program}")
                 except Program.DoesNotExist:
                     print(f"DEBUG: Program with ID {program_id} not found")
                     logger.warning(f"Program with ID {program_id} not found")
@@ -516,6 +574,9 @@ class ClientUpdateView(UpdateView):
         """Handle multiple program enrollments from form data"""
         program_enrollments_data = {}
         
+        print("DEBUG: ClientUpdateView.handle_program_enrollments called")
+        print("DEBUG: POST data keys:", [key for key in self.request.POST.keys() if key.startswith('program_enrollments')])
+        
         # Extract program enrollment data from POST
         for key, value in self.request.POST.items():
             if key.startswith('program_enrollments['):
@@ -529,6 +590,9 @@ class ClientUpdateView(UpdateView):
                     if index not in program_enrollments_data:
                         program_enrollments_data[index] = {}
                     program_enrollments_data[index][field] = value
+                    print(f"DEBUG: Found enrollment data - {key}: {value}")
+        
+        print("DEBUG: Parsed enrollment data:", program_enrollments_data)
         
         # Clear existing enrollments for this client (optional - you might want to keep them)
         # ClientProgramEnrollment.objects.filter(client=client).delete()
@@ -545,6 +609,8 @@ class ClientUpdateView(UpdateView):
             referral_source = enrollment_data.get('referral_source', '')
             support_workers = enrollment_data.get('support_workers', '')
             receiving_services = enrollment_data.get('receiving_services', 'false') == 'true'
+            receiving_services_date = enrollment_data.get('receiving_services_date', '')
+            days_elapsed = enrollment_data.get('days_elapsed', '')
             reason_discharge = enrollment_data.get('reason_discharge', '')
             
             # Only create enrollment if program is selected
@@ -554,7 +620,18 @@ class ClientUpdateView(UpdateView):
                     
                     # Parse sub-programs from JSON
                     import json
-                    sub_program_names = json.loads(sub_programs_json) if sub_programs_json else []
+                    try:
+                        if sub_programs_json and sub_programs_json.strip():
+                            # Handle malformed JSON like just "["
+                            if sub_programs_json.strip() == '[':
+                                sub_program_names = []
+                            else:
+                                sub_program_names = json.loads(sub_programs_json)
+                        else:
+                            sub_program_names = []
+                    except json.JSONDecodeError as e:
+                        print(f"DEBUG: Invalid JSON for sub_programs: '{sub_programs_json}' - Error: {e}")
+                        sub_program_names = []
                     
                     # Create notes with all the details
                     notes_parts = []
@@ -570,19 +647,27 @@ class ClientUpdateView(UpdateView):
                         notes_parts.append(f"Support Workers: {support_workers}")
                     if receiving_services:
                         notes_parts.append("Receiving Services: Yes")
+                    if receiving_services_date:
+                        notes_parts.append(f"Receiving Services Date: {receiving_services_date}")
+                    if days_elapsed:
+                        notes_parts.append(f"Days Elapsed: {days_elapsed}")
                     if reason_discharge:
                         notes_parts.append(f"Reason: {reason_discharge}")
                     
                     notes = " | ".join(notes_parts) if notes_parts else "Enrollment updated from client form"
                     
-                    ClientProgramEnrollment.objects.create(
+                    enrollment = ClientProgramEnrollment.objects.create(
                         client=client,
                         program=program,
                         start_date=start_date,
                         end_date=end_date if end_date else None,
                         status=status,
-                        notes=notes
+                        notes=notes,
+                        receiving_services_date=receiving_services_date if receiving_services_date else None,
+                        days_elapsed=int(days_elapsed) if days_elapsed else None
                     )
+                    print(f"DEBUG: Created enrollment: {enrollment}")
+                    print(f"DEBUG: Enrollment ID: {enrollment.id}")
                 except Program.DoesNotExist:
                     logger.warning(f"Program with ID {program_id} not found")
                 except Exception as e:
@@ -671,18 +756,192 @@ def upload_clients(request):
         except Exception as e:
             return JsonResponse({'success': False, 'error': f'Error reading file: {str(e)}'}, status=400)
         
-        # Validate required columns
-        required_columns = ['first_name', 'last_name', 'email', 'phone_number']
-        missing_columns = [col for col in required_columns if col not in df.columns]
+        # Create case-insensitive field mapping
+        def create_field_mapping(df_columns):
+            """Create a mapping from case-insensitive column names to standardized field names"""
+            field_mapping = {
+                # Required fields
+                'first_name': ['first_name', 'first name', 'firstname', 'fname', 'given name', 'First Name', 'FIRST NAME'],
+                'last_name': ['last_name', 'last name', 'lastname', 'lname', 'surname', 'family name', 'Last Name', 'LAST NAME'],
+                'email': ['email', 'e-mail', 'email address', 'e_mail'],
+                'phone_number': ['phone_number', 'phone number', 'phone', 'telephone', 'tel', 'mobile', 'cell', 'Phone', 'PHONE'],
+                'phone': ['phone_number', 'phone number', 'phone', 'telephone', 'tel', 'mobile', 'cell', 'Phone', 'PHONE'],
+                
+                # Basic information
+                'client_id': ['client_id', 'client id', 'clientid', 'id', 'client number', 'Client ID', 'CLIENT ID'],
+                'middle_name': ['middle name', 'middlename', 'mname'],
+                'preferred_name': ['preferred name', 'preferredname', 'nickname', 'nick name'],
+                'alias': ['alias', 'alias/last name at birth', 'last name at birth', 'maiden name'],
+                'dob': ['dob', 'date of birth', 'birthdate', 'birth date', 'dateofbirth', 'DOB', 'DOB'],
+                'age': ['age'],
+                'gender': ['gender', 'sex'],
+                'gender_identity': ['gender identity', 'genderidentity'],
+                'pronoun': ['pronoun', 'pronouns', 'preferred pronoun'],
+                'marital_status': ['marital status', 'maritalstatus', 'marriage status'],
+                'citizenship_status': ['citizenship status', 'citizenshipstatus', 'citizenship'],
+                'location_county': ['location/county', 'location', 'county', 'location county'],
+                'province': ['province', 'state'],
+                'city': ['city', 'town'],
+                'postal_code': ['postal code', 'postalcode', 'zip', 'zip code', 'zipcode'],
+                'address': ['address', 'street address', 'street'],
+                'address_2': ['address 2', 'address2', 'address line 2', 'apt', 'apartment', 'suite'],
+                
+                # Language fields
+                'language': ['language', 'languages'],
+                'preferred_language': ['preferred language', 'preferredlanguage'],
+                'mother_tongue': ['mother tongue', 'mothertongue', 'native language'],
+                'official_language': ['official language', 'officiallanguage'],
+                'language_interpreter_required': ['language interpreter required', 'interpreter required', 'interpreter'],
+                'self_identification_race_ethnicity': ['self-identification as race/ethnicity', 'race/ethnicity', 'race ethnicity', 'self identification'],
+                'ethnicity': ['ethnicity', 'ethnic background'],
+                'aboriginal_status': ['aboriginal status', 'aboriginalstatus', 'indigenous status', 'indigenous'],
+                'lgbtq_status': ['lgbtq+?', 'lgbtq', 'lgbtq+', 'sexual orientation'],
+                'highest_level_education': ['highest level of education', 'education level', 'education'],
+                'children_home': ['children home', 'childrenhome', 'has children'],
+                'children_number': ['children number', 'childrennumber', 'number of children'],
+                'lhin': ['lhin', 'local health integration network'],
+                
+                # Medical fields
+                'medical_conditions': ['medical conditions', 'medicalconditions', 'health conditions'],
+                'primary_diagnosis': ['primary diagnosis', 'primarydiagnosis', 'diagnosis'],
+                'family_doctor': ['family doctor', 'familydoctor', 'doctor', 'physician'],
+                'health_card_number': ['hc', 'health card', 'healthcard', 'health card number'],
+                'health_card_version': ['hc version', 'health card version', 'healthcardversion'],
+                'health_card_exp_date': ['hc exp date', 'health card exp date', 'health card expiry', 'healthcardexpdate'],
+                'health_card_issuing_province': ['hc issuing province', 'health card issuing province', 'healthcardissuingprovince'],
+                'no_health_card_reason': ['no hc reason', 'no health card reason', 'nohealthcardreason'],
+                
+                # Contact fields
+                'permission_to_phone': ['permission to phone', 'permissiontophone', 'phone permission'],
+                'permission_to_email': ['permission to email', 'permissiontoemail', 'email permission'],
+                'phone_work': ['phone (work)', 'phone work', 'work phone', 'workphone'],
+                'phone_alt': ['phone (alt)', 'phone alt', 'alternative phone', 'alt phone'],
+                'next_of_kin': ['next of kin', 'nextofkin', 'kin'],
+                'emergency_contact': ['emergency contact', 'emergencycontact', 'emergency'],
+                'comments': ['comments', 'notes', 'remarks'],
+                
+                # Program fields
+                'program_name': ['program', 'program name', 'programname'],
+                'sub_program': ['sub-program', 'subprogram', 'sub program'],
+                'support_workers': ['worker / support worker(s)', 'support workers', 'supportworkers', 'workers'],
+                'level_of_support': ['level of support', 'levelofsupport', 'support level'],
+                'client_type': ['client type', 'clienttype', 'type'],
+                'admission_date': ['admission date', 'admissiondate', 'start date', 'enrollment date'],
+                'discharge_date': ['discharge date', 'dischargedate', 'end date', 'exit date'],
+                'days_elapsed': ['days elapsed', 'dayselapsed', 'days since admission'],
+                'program_status': ['program status', 'programstatus', 'status'],
+                'reason_discharge': ['reason (for discharge/program status)', 'reason for discharge', 'discharge reason', 'reason'],
+                'receiving_services': ['receiving services', 'receivingservices', 'active'],
+                'referral_source': ['referral source', 'referralsource', 'source'],
+                
+                # Additional fields
+                'chart_number': ['chart number', 'chartnumber', 'chart'],
+            }
+            
+            # Create reverse mapping from column names to standardized names
+            column_mapping = {}
+            df_columns_lower = [col.lower().strip() for col in df_columns]
+            
+            for standard_name, variations in field_mapping.items():
+                for variation in variations:
+                    variation_lower = variation.lower().strip()
+                    if variation_lower in df_columns_lower:
+                        # Find the original column name (case-sensitive)
+                        original_col = df_columns[df_columns_lower.index(variation_lower)]
+                        column_mapping[original_col] = standard_name
+                        break
+            
+            return column_mapping
         
-        if missing_columns:
-            return JsonResponse({
-                'success': False, 
-                'error': f'Missing required columns: {", ".join(missing_columns)}'
-            }, status=400)
+        # Create field mapping
+        column_mapping = create_field_mapping(df.columns)
         
-        # Check for intake-related columns
-        has_intake_data = any(col in df.columns for col in ['program_name', 'source', 'intake_date'])
+        # Debug: Log the column mapping
+        print(f"DEBUG: Column mapping: {column_mapping}")
+        print(f"DEBUG: DataFrame columns: {list(df.columns)}")
+        
+        # Debug: Check if phone_number column is being mapped correctly
+        if 'phone_number' in df.columns:
+            print(f"DEBUG: phone_number column found in CSV")
+            print(f"DEBUG: phone_number column mapped to: '{column_mapping.get('phone_number', 'NOT_MAPPED')}'")
+        else:
+            print(f"DEBUG: phone_number column NOT found in CSV")
+            print(f"DEBUG: Available columns with 'phone' in name: {[col for col in df.columns if 'phone' in col.lower()]}")
+        
+        # Debug: Check if client_id column is being mapped correctly
+        if 'client_id' in df.columns:
+            print(f"DEBUG: client_id column found in CSV")
+            print(f"DEBUG: client_id column mapped to: '{column_mapping.get('client_id', 'NOT_MAPPED')}'")
+        else:
+            print(f"DEBUG: client_id column NOT found in CSV")
+            print(f"DEBUG: Available columns with 'client' in name: {[col for col in df.columns if 'client' in col.lower()]}")
+        
+        # Check for required fields using case-insensitive mapping
+        # Note: Required fields are only mandatory for NEW client creation, not for updates
+        required_fields = ['first_name', 'last_name', 'phone', 'dob']
+        missing_fields = []
+        
+        # Debug: Check if we have client_id column (indicates updates vs new clients)
+        has_client_id = 'client_id' in df.columns
+        print(f"DEBUG: Has client_id column: {has_client_id}")
+        if has_client_id:
+            print(f"DEBUG: This appears to be an UPDATE operation (has client_id column)")
+        else:
+            print(f"DEBUG: This appears to be a NEW client creation (no client_id column)")
+        
+        # Check if any row has a Client ID that exists in the database - if so, we'll allow updates with partial data
+        has_existing_client_ids = False
+        for col in df.columns:
+            if column_mapping.get(col) == 'client_id':
+                print(f"DEBUG: Found client_id column: '{col}'")
+                # Check if any of the client_ids in the CSV actually exist in the database
+                for index, row in df.iterrows():
+                    client_id_value = row[col]
+                    print(f"DEBUG: Row {index + 1}: Checking client_id value: '{client_id_value}'")
+                    if pd.notna(client_id_value) and str(client_id_value).strip():
+                        client_id_clean = str(client_id_value).strip()
+                        print(f"DEBUG: Row {index + 1}: Looking up client_id '{client_id_clean}' in database")
+                        existing_client = Client.objects.filter(client_id=client_id_clean).first()
+                        print(f"DEBUG: Row {index + 1}: Database lookup result: {existing_client}")
+                        if existing_client:
+                            has_existing_client_ids = True
+                            print(f"DEBUG: Found existing client with ID '{client_id_value}' - will allow updates")
+                            break
+                if has_existing_client_ids:
+                    break
+        
+        print(f"DEBUG: Final has_existing_client_ids: {has_existing_client_ids}")
+        
+        # Debug logging
+        debug_info = {
+            'column_mapping': column_mapping,
+            'has_existing_client_ids': has_existing_client_ids,
+            'df_columns': list(df.columns)
+        }
+        
+        # Only enforce required fields if no existing Client IDs are present (pure creation scenario)
+        if not has_existing_client_ids:
+            for required_field in required_fields:
+                found = False
+                for col in df.columns:
+                    if column_mapping.get(col) == required_field:
+                        found = True
+                        break
+                if not found:
+                    missing_fields.append(required_field)
+            
+            if missing_fields:
+                return JsonResponse({
+                    'success': False, 
+                    'error': f'Missing required columns for new client creation. Please include columns for: {", ".join(missing_fields)}. Note: If you have Client ID column, only the fields you want to update are required.'
+                }, status=400)
+        
+        # Check for intake-related columns using case-insensitive mapping
+        has_intake_data = False
+        for col in df.columns:
+            if column_mapping.get(col) in ['program_name', 'admission_date']:
+                has_intake_data = True
+                break
         
         # Process the data
         created_count = 0
@@ -769,16 +1028,59 @@ def upload_clients(request):
             # If we get here, the data is essentially the same
             return True
         
-        def process_intake_data(client, row, index):
+        def process_intake_data(client, row, index, column_mapping):
             """Process intake data for a client"""
             try:
-                program_name = str(row.get('program_name', '')).strip() if pd.notna(row.get('program_name', '')) else ''
-                program_department = str(row.get('program_department', '')).strip() if pd.notna(row.get('program_department', '')) else ''
-                source = str(row.get('source', '')).strip() if pd.notna(row.get('source', '')) else 'SMIS'
-                intake_date = pd.to_datetime(row.get('intake_date', datetime.now().date())).date() if pd.notna(row.get('intake_date', '')) else datetime.now().date()
-                intake_database = str(row.get('intake_database', '')).strip() if pd.notna(row.get('intake_database', '')) else 'CCD'
-                referral_source = str(row.get('referral_source', '')).strip() if pd.notna(row.get('referral_source', '')) else source
-                intake_housing_status = str(row.get('intake_housing_status', '')).strip() if pd.notna(row.get('intake_housing_status', '')) else 'unknown'
+                # Helper function to get data using field mapping
+                def get_field_data(field_name, default=''):
+                    """Get data from row using field mapping"""
+                    for col in df.columns:
+                        if column_mapping.get(col) == field_name:
+                            value = row[col]
+                            if pd.notna(value) and str(value).strip():
+                                return str(value).strip()
+                    return default
+                
+                # Helper function to parse boolean values safely
+                def parse_boolean(value, default=False):
+                    """Parse boolean value from string, handling empty values"""
+                    if not value or value.strip() == '':
+                        return default
+                    return str(value).lower().strip() in ['true', '1', 'yes', 'y']
+                
+                # Helper function to parse integer values safely
+                def parse_integer(value, default=None):
+                    """Parse integer value from string, handling empty values"""
+                    if not value or value.strip() == '':
+                        return default
+                    try:
+                        return int(str(value).strip())
+                    except (ValueError, TypeError):
+                        return default
+                
+                # Helper function to parse date values safely
+                def parse_date(value, default=None):
+                    """Parse date value from string, handling empty values"""
+                    if not value or value.strip() == '':
+                        return default
+                    try:
+                        return pd.to_datetime(value).date()
+                    except (ValueError, TypeError):
+                        return default
+                
+                program_name = get_field_data('program_name')
+                program_department = get_field_data('program_department')
+                source = get_field_data('source', 'SMIS')
+                
+                print(f"DEBUG: Program enrollment data - program_name: '{program_name}', source: '{source}'")
+                intake_date_value = get_field_data('admission_date')
+                if intake_date_value:
+                    intake_date = pd.to_datetime(intake_date_value).date()
+                else:
+                    intake_date = datetime.now().date()
+                intake_database = get_field_data('intake_database', 'CCD')
+                referral_source = get_field_data('referral_source', source)
+                intake_housing_status = get_field_data('intake_housing_status', 'unknown')
                 
                 if not program_name:
                     logger.warning(f"No program name provided for client {client.first_name} {client.last_name}")
@@ -837,19 +1139,55 @@ def upload_clients(request):
                 else:
                     logger.info(f"Intake record already exists for {client.first_name} {client.last_name} in {program_name}")
                 
-                # Create enrollment with pending status
+                # Get additional enrollment fields using field mapping
+                sub_program = get_field_data('sub_program')
+                support_workers = get_field_data('support_workers')
+                level_of_support = get_field_data('level_of_support')
+                client_type = get_field_data('client_type')
+                discharge_date_value = get_field_data('discharge_date')
+                days_elapsed_value = get_field_data('days_elapsed')
+                program_status = get_field_data('program_status', 'pending')
+                reason_discharge = get_field_data('reason_discharge')
+                receiving_services_value = get_field_data('receiving_services', 'false')
+                
+                # Parse dates
+                discharge_date = parse_date(discharge_date_value)
+                
+                # Parse days elapsed
+                days_elapsed = parse_integer(days_elapsed_value)
+                
+                # Parse receiving services
+                receiving_services = parse_boolean(receiving_services_value)
+                
+                # Create enrollment with only existing model fields
+                # Build notes with additional information
+                notes_parts = [f'Enrollment created from {source} intake']
+                if level_of_support:
+                    notes_parts.append(f'Level of Support: {level_of_support}')
+                if client_type:
+                    notes_parts.append(f'Client Type: {client_type}')
+                if referral_source:
+                    notes_parts.append(f'Referral Source: {referral_source}')
+                if support_workers:
+                    notes_parts.append(f'Support Workers: {support_workers}')
+                if reason_discharge:
+                    notes_parts.append(f'Reason for Discharge: {reason_discharge}')
+                
                 enrollment, created = ClientProgramEnrollment.objects.get_or_create(
                     client=client,
                     program=program,
                     defaults={
                         'start_date': intake_date,
-                        'status': 'pending',
-                        'notes': f'Enrollment created from {source} intake'
+                        'end_date': discharge_date,
+                        'status': program_status,
+                        'days_elapsed': days_elapsed,
+                        'notes': ' | '.join(notes_parts)
                     }
                 )
                 
                 if created:
                     logger.info(f"Created pending enrollment for {client.first_name} {client.last_name} in {program_name}")
+                    print(f"DEBUG: Successfully created enrollment for {client.first_name} {client.last_name} in {program_name}")
                     
                     # Create audit log entry for enrollment creation
                     try:
@@ -870,6 +1208,7 @@ def upload_clients(request):
                     except Exception as e:
                         logger.error(f"Error creating audit log for enrollment: {e}")
                 else:
+                    print(f"DEBUG: Enrollment already exists for {client.first_name} {client.last_name} in {program_name}")
                     logger.info(f"Enrollment already exists for {client.first_name} {client.last_name} in {program_name}")
                     
             except Exception as e:
@@ -946,40 +1285,157 @@ def upload_clients(request):
         
         for index, row in df.iterrows():
             try:
-                # Clean and prepare data
-                email = str(row['email']).strip() if pd.notna(row['email']) else ''
-                phone = str(row['phone_number']).strip() if pd.notna(row['phone_number']) else ''
+                # Helper function to get data using field mapping
+                def get_field_data(field_name, default=''):
+                    """Get data from row using field mapping"""
+                    for col in df.columns:
+                        if column_mapping.get(col) == field_name:
+                            value = row[col]
+                            if pd.notna(value) and str(value).strip():
+                                return str(value).strip()
+                    return default
                 
-                # Handle date of birth with default
+                # Helper function to parse boolean values safely
+                def parse_boolean(value, default=False):
+                    """Parse boolean value from string, handling empty values"""
+                    if not value or value.strip() == '':
+                        return default
+                    return str(value).lower().strip() in ['true', '1', 'yes', 'y']
+                
+                # Helper function to parse integer values safely
+                def parse_integer(value, default=None):
+                    """Parse integer value from string, handling empty values"""
+                    if not value or value.strip() == '':
+                        return default
+                    try:
+                        return int(str(value).strip())
+                    except (ValueError, TypeError):
+                        return default
+                
+                # Helper function to parse date values safely
+                def parse_date(value, default=None):
+                    """Parse date value from string, handling empty values"""
+                    if not value or value.strip() == '':
+                        return default
+                    try:
+                        return pd.to_datetime(value).date()
+                    except (ValueError, TypeError):
+                        return default
+                
+                # Clean and prepare data using field mapping
+                email = get_field_data('email')  # Now optional
+                phone = get_field_data('phone')
+                client_id = get_field_data('client_id')
+                
+                # Debug: Log what we're getting for phone and client_id
+                print(f"Row {index + 1}: phone value from get_field_data('phone'): '{phone}'")
+                print(f"Row {index + 1}: client_id value from get_field_data('client_id'): '{client_id}'")
+                
+                # Debug: Log the actual row data for phone_number and client_id columns
+                print(f"Row {index + 1}: Raw row data for phone_number column: '{row.get('phone_number', 'NOT_FOUND')}'")
+                print(f"Row {index + 1}: Raw row data for client_id column: '{row.get('client_id', 'NOT_FOUND')}'")
+                
+                # Debug: Log the column mapping for phone-related fields
+                print(f"Row {index + 1}: Column mapping for phone fields:")
+                for col in df.columns:
+                    if 'phone' in col.lower() or column_mapping.get(col) == 'phone':
+                        print(f"  Column '{col}' -> Field '{column_mapping.get(col)}'")
+                
+                # Debug: Test get_field_data function directly
+                print(f"Row {index + 1}: Testing get_field_data function:")
+                for col in df.columns:
+                    if column_mapping.get(col) == 'phone':
+                        value = row[col]
+                        print(f"  Found column '{col}' mapped to 'phone', value: '{value}', type: {type(value)}")
+                        print(f"  pd.notna(value): {pd.notna(value)}")
+                        print(f"  str(value).strip(): '{str(value).strip()}'")
+                        if pd.notna(value) and str(value).strip():
+                            print(f"  -> Would return: '{str(value).strip()}'")
+                        else:
+                            print(f"  -> Would return default: ''")
+                
+                # Debug: Log phone and client ID extraction
+                debug_phone_info = f"Row {index + 1}: phone extracted = '{phone}'"
+                debug_client_id_info = f"Row {index + 1}: client_id extracted = '{client_id}'"
+                print(debug_phone_info)
+                print(debug_client_id_info)
+                
+                # Debug: Log column mapping for phone
+                phone_mapping_debug = f"Row {index + 1}: Column mapping for phone: {[(col, column_mapping.get(col)) for col in df.columns if 'phone' in col.lower() or 'Phone' in col]}"
+                print(phone_mapping_debug)
+                if not hasattr(debug_info, 'phone_debug'):
+                    debug_info['phone_debug'] = []
+                debug_info['phone_debug'].append(debug_phone_info)
+                debug_info['phone_debug'].append(debug_client_id_info)
+                
+                # Handle date of birth - required for new clients, optional for updates
+                dob = None
                 try:
-                    if pd.notna(row['dob']) and str(row['dob']).strip():
-                        dob = pd.to_datetime(row['dob']).date()
+                    dob_value = get_field_data('dob')
+                    if dob_value:
+                        dob = pd.to_datetime(dob_value).date()
                     else:
-                        # Default to 1900-01-01 if no date provided
-                        dob = datetime(1900, 1, 1).date()
-                except:
-                    # If date parsing fails, use default
-                    dob = datetime(1900, 1, 1).date()
+                        # Check if this is an update (has Client ID) - if so, DOB is optional
+                        client_id = get_field_data('client_id')
+                        if not client_id:
+                            # This is a new client creation, DOB is required
+                            errors.append(f"Row {index + 1}: Date of Birth is required for new client creation")
+                            skipped_count += 1
+                            continue
+                        # For updates, we can proceed without DOB
+                except Exception as e:
+                    # If date parsing fails, skip this row
+                    errors.append(f"Row {index + 1}: Invalid Date of Birth format - {str(e)}")
+                    skipped_count += 1
+                    continue
                 
                 client_data = {
-                    'first_name': str(row['first_name']).strip() if pd.notna(row['first_name']) else '',
-                    'last_name': str(row['last_name']).strip() if pd.notna(row['last_name']) else '',
+                    'first_name': get_field_data('first_name'),
+                    'last_name': get_field_data('last_name'),
+                    'middle_name': get_field_data('middle_name'),
                     'dob': dob,
-                    'preferred_name': str(row.get('preferred_name', '')).strip() if pd.notna(row.get('preferred_name', '')) else '',
-                    'alias': str(row.get('alias', '')).strip() if pd.notna(row.get('alias', '')) else '',
-                    'gender': str(row.get('gender', '')).strip() if pd.notna(row.get('gender', '')) else 'Unknown',
-                    'sexual_orientation': str(row.get('sexual_orientation', '')).strip() if pd.notna(row.get('sexual_orientation', '')) else '',
-                    'citizenship_status': str(row.get('citizenship_status', '')).strip() if pd.notna(row.get('citizenship_status', '')) else '',
-                    'indigenous_status': str(row.get('indigenous_status', '')).strip() if pd.notna(row.get('indigenous_status', '')) else '',
-                    'country_of_birth': str(row.get('country_of_birth', '')).strip() if pd.notna(row.get('country_of_birth', '')) else '',
-                    'client_id': str(row.get('client_id', '')).strip() if pd.notna(row.get('client_id', '')) else '',
-                    'phone_work': str(row.get('phone_work', '')).strip() if pd.notna(row.get('phone_work', '')) else '',
-                    'phone_alt': str(row.get('phone_alt', '')).strip() if pd.notna(row.get('phone_alt', '')) else '',
-                    'permission_to_phone': str(row.get('permission_to_phone', '')).lower() in ['true', '1', 'yes', 'y'] if pd.notna(row.get('permission_to_phone', '')) else False,
-                    'permission_to_email': str(row.get('permission_to_email', '')).lower() in ['true', '1', 'yes', 'y'] if pd.notna(row.get('permission_to_email', '')) else False,
-                    'medical_conditions': str(row.get('medical_conditions', '')).strip() if pd.notna(row.get('medical_conditions', '')) else '',
-                    'primary_diagnosis': str(row.get('primary_diagnosis', '')).strip() if pd.notna(row.get('primary_diagnosis', '')) else '',
-                    'comments': str(row.get('comments', '')).strip() if pd.notna(row.get('comments', '')) else '',
+                    'preferred_name': get_field_data('preferred_name'),
+                    'alias': get_field_data('alias'),
+                    'gender': get_field_data('gender', 'Unknown'),
+                    'gender_identity': get_field_data('gender_identity'),
+                    'pronoun': get_field_data('pronoun'),
+                    'marital_status': get_field_data('marital_status'),
+                    'citizenship_status': get_field_data('citizenship_status'),
+                    'location_county': get_field_data('location_county'),
+                    'province': get_field_data('province'),
+                    'city': get_field_data('city'),
+                    'postal_code': get_field_data('postal_code'),
+                    'address': get_field_data('address'),
+                    'address_2': get_field_data('address_2'),
+                    'language': get_field_data('language'),
+                    'preferred_language': get_field_data('preferred_language'),
+                    'mother_tongue': get_field_data('mother_tongue'),
+                    'official_language': get_field_data('official_language'),
+                    'language_interpreter_required': parse_boolean(get_field_data('language_interpreter_required')),
+                    'self_identification_race_ethnicity': get_field_data('self_identification_race_ethnicity'),
+                    'lgbtq_status': get_field_data('lgbtq_status'),
+                    'highest_level_education': get_field_data('highest_level_education'),
+                    'children_home': parse_boolean(get_field_data('children_home')),
+                    'children_number': parse_integer(get_field_data('children_number')),
+                    'lhin': get_field_data('lhin'),
+                    'client_id': get_field_data('client_id'),
+                    'phone': get_field_data('phone'),
+                    'phone_work': get_field_data('phone_work'),
+                    'phone_alt': get_field_data('phone_alt'),
+                    'permission_to_phone': parse_boolean(get_field_data('permission_to_phone')),
+                    'permission_to_email': parse_boolean(get_field_data('permission_to_email')),
+                    'medical_conditions': get_field_data('medical_conditions'),
+                    'primary_diagnosis': get_field_data('primary_diagnosis'),
+                    'family_doctor': get_field_data('family_doctor'),
+                    'health_card_number': get_field_data('health_card_number'),
+                    'health_card_version': get_field_data('health_card_version'),
+                    'health_card_exp_date': parse_date(get_field_data('health_card_exp_date')),
+                    'health_card_issuing_province': get_field_data('health_card_issuing_province'),
+                    'no_health_card_reason': get_field_data('no_health_card_reason'),
+                    'next_of_kin': get_field_data('next_of_kin'),
+                    'emergency_contact': get_field_data('emergency_contact'),
+                    'comments': get_field_data('comments'),
+                    'chart_number': get_field_data('chart_number'),
                     'contact_information': {
                         'email': email,
                         'phone': phone,
@@ -987,28 +1443,28 @@ def upload_clients(request):
                 }
                 
                 # Handle languages_spoken (expect comma-separated string)
-                languages = str(row.get('languages_spoken', '')).strip() if pd.notna(row.get('languages_spoken', '')) else ''
+                languages = get_field_data('language')
                 if languages:
                     client_data['languages_spoken'] = [lang.strip() for lang in languages.split(',') if lang.strip()]
                 else:
                     client_data['languages_spoken'] = []
                 
                 # Handle ethnicity (expect comma-separated string)
-                ethnicity = str(row.get('ethnicity', '')).strip() if pd.notna(row.get('ethnicity', '')) else ''
+                ethnicity = get_field_data('ethnicity')
                 if ethnicity:
                     client_data['ethnicity'] = [eth.strip() for eth in ethnicity.split(',') if eth.strip()]
                 else:
                     client_data['ethnicity'] = []
                 
                 # Handle support_workers (expect comma-separated string)
-                support_workers = str(row.get('support_workers', '')).strip() if pd.notna(row.get('support_workers', '')) else ''
+                support_workers = get_field_data('support_workers')
                 if support_workers:
                     client_data['support_workers'] = [worker.strip() for worker in support_workers.split(',') if worker.strip()]
                 else:
                     client_data['support_workers'] = []
                 
-                # Handle next_of_kin (expect JSON string)
-                next_of_kin = str(row.get('next_of_kin', '')).strip() if pd.notna(row.get('next_of_kin', '')) else ''
+                # Handle next_of_kin (expect JSON string or simple text)
+                next_of_kin = get_field_data('next_of_kin')
                 if next_of_kin:
                     try:
                         client_data['next_of_kin'] = json.loads(next_of_kin)
@@ -1018,8 +1474,8 @@ def upload_clients(request):
                 else:
                     client_data['next_of_kin'] = {}
                 
-                # Handle emergency_contact (expect JSON string)
-                emergency_contact = str(row.get('emergency_contact', '')).strip() if pd.notna(row.get('emergency_contact', '')) else ''
+                # Handle emergency_contact (expect JSON string or simple text)
+                emergency_contact = get_field_data('emergency_contact')
                 if emergency_contact:
                     try:
                         client_data['emergency_contact'] = json.loads(emergency_contact)
@@ -1036,15 +1492,15 @@ def upload_clients(request):
                         addresses = json.loads(str(row['addresses']))
                     except:
                         addresses = []
-                elif 'street' in row and pd.notna(row['street']):
+                elif get_field_data('address'):
                     address = {
-                        'type': str(row.get('address_type', 'Home')).strip(),
-                        'street': str(row['street']).strip(),
-                        'address_2': str(row.get('address_2', '')).strip(),
-                        'city': str(row.get('city', '')).strip(),
-                        'state': str(row.get('state', '')).strip(),
-                        'zip': str(row.get('zip', '')).strip(),
-                        'country': str(row.get('country', 'USA')).strip()
+                        'type': get_field_data('address_type', 'Home'),
+                        'street': get_field_data('address'),
+                        'address_2': get_field_data('address_2'),
+                        'city': get_field_data('city'),
+                        'state': get_field_data('province'),
+                        'zip': get_field_data('postal_code'),
+                        'country': 'USA'  # Default country
                     }
                     if any(address.values()):
                         addresses = [address]
@@ -1058,38 +1514,172 @@ def upload_clients(request):
                 original_phone = ''
                 original_client_id = ''
                 
-                # Check for existing client_id first
+                # Check for existing client_id first - this is the primary update mechanism
                 existing_client_id = None
+                client = None
+                is_update = False
+                
                 if client_data.get('client_id'):
                     try:
-                        existing_client_id = Client.objects.get(client_id=client_data['client_id'])
-                        if not duplicate_client:  # Only set as duplicate if not already found
-                            duplicate_client = existing_client_id
-                            match_type = 'exact_client_id'
-                    except Client.DoesNotExist:
-                        pass
+                        # Debug: Log Client ID lookup
+                        client_id_to_find = client_data['client_id']
+                        print(f"Row {index + 1}: Looking for existing client with Client ID: '{client_id_to_find}'")
+                        
+                        # Use .first() to handle potential duplicate Client IDs
+                        existing_client_id = Client.objects.filter(client_id=client_data['client_id']).first()
+                        print(f"Row {index + 1}: Found existing client: {existing_client_id}")
+                        
+                        if existing_client_id:
+                            # Found existing client by Client ID - UPDATE instead of CREATE
+                            client = existing_client_id
+                            is_update = True
+                            updated_count += 1
+                            
+                            # Update the existing client with new data (only non-empty values)
+                            # Filter out empty values to prevent overwriting existing data
+                            
+                            # Debug: Log what's in client_data before filtering
+                            print(f"Row {index + 1}: client_data keys: {list(client_data.keys())}")
+                            if 'gender' in client_data:
+                                print(f"Row {index + 1}: gender in client_data: '{client_data['gender']}'")
+                            if 'contact_information' in client_data:
+                                print(f"Row {index + 1}: contact_information in client_data: {client_data['contact_information']}")
+                            
+                            filtered_data = {}
+                            for field, value in client_data.items():
+                                if value is not None and value != '':
+                                    if isinstance(value, str) and value.strip() == '':
+                                        continue
+                                    if isinstance(value, dict) and not value:
+                                        continue
+                                    
+                                    # Skip default values for fields not in CSV
+                                    if field == 'gender' and value == 'Unknown':
+                                        # Check if Gender column exists in CSV
+                                        if 'Gender' not in df.columns and 'gender' not in df.columns:
+                                            continue
+                                    
+                                    # Skip boolean fields with default False values when column doesn't exist
+                                    if field in ['language_interpreter_required', 'children_home', 'permission_to_phone', 'permission_to_email'] and value is False:
+                                        # Check if corresponding column exists in CSV
+                                        column_name = field.replace('_', ' ').title()
+                                        if column_name not in df.columns and field not in df.columns:
+                                            continue
+                                    
+                                    # Skip empty string fields when column doesn't exist
+                                    if isinstance(value, str) and value.strip() == '':
+                                        # Check if corresponding column exists in CSV
+                                        column_name = field.replace('_', ' ').title()
+                                        if column_name not in df.columns and field not in df.columns:
+                                            continue
+                                    
+                                    # Handle contact_information specially - only include if it has actual values
+                                    if field == 'contact_information' and isinstance(value, dict):
+                                        # Check if contact_information has any non-empty values
+                                        has_values = False
+                                        for key, val in value.items():
+                                            if val and str(val).strip():
+                                                has_values = True
+                                                break
+                                        if not has_values:
+                                            continue
+                                    
+                                    # Handle other dictionary fields (addresses, etc.) - only include if they have actual values
+                                    if isinstance(value, dict) and field not in ['contact_information']:
+                                        has_values = False
+                                        for key, val in value.items():
+                                            if val and str(val).strip():
+                                                has_values = True
+                                                break
+                                        if not has_values:
+                                            continue
+                                    
+                                    filtered_data[field] = value
+                            
+                            # Debug: Log what fields are being updated
+                            print(f"Row {index + 1}: Updating client {client.first_name} {client.last_name}")
+                            print(f"Row {index + 1}: Original gender: '{client.gender}'")
+                            print(f"Row {index + 1}: Filtered data fields: {list(filtered_data.keys())}")
+                            if 'gender' in filtered_data:
+                                print(f"Row {index + 1}: Gender in filtered_data: '{filtered_data['gender']}'")
+                            
+                            # Apply only the filtered (non-empty) values
+                            for field, value in filtered_data.items():
+                                if hasattr(client, field):
+                                    setattr(client, field, value)
+                            
+                            # Save the updated client
+                            client.save()
+                            logger.info(f"Updated existing client by Client ID {client_data['client_id']}: {client.first_name} {client.last_name}")
+                        
+                    except Exception as e:
+                        logger.error(f"Error updating client with ID {client_data['client_id']}: {e}")
+                        # Continue to create new client if update fails
                 
-                # Always create the client, even if duplicates are found
-                # Store original values for duplicate relationship creation
-                if duplicate_client:
-                    original_email = client_data.get('contact_information', {}).get('email', '')
-                    original_phone = client_data.get('contact_information', {}).get('phone', '')
-                    original_client_id = client_data.get('client_id', '')
+                # If no existing client found by Client ID, check for other duplicates
+                if not is_update:
+                    # For new client creation, validate required fields
+                    required_fields = ['first_name', 'last_name', 'phone_number', 'dob']
+                    missing_required = []
                     
-                    # Don't modify email/phone - keep original values
-                    # The client will be created with original contact information
-                    # Duplicate detection will be handled through the ClientDuplicate relationship
-                
-                # Create the client with original data (no more unique constraint issues)
-                client = Client.objects.create(**client_data)
-                created_count += 1
-                if duplicate_client:
-                    logger.info(f"Created new client with duplicate flag: {client.email or client.phone}")
-                else:
-                    logger.info(f"Created new client: {client.email or client.phone}")
+                    for field in required_fields:
+                        if field == 'phone_number':
+                            # Check phone number in both locations
+                            phone_value = client_data.get('contact_information', {}).get('phone')
+                            if not phone_value or (isinstance(phone_value, str) and phone_value.strip() == ''):
+                                # Also check the direct phone field
+                                phone_value = client_data.get('phone')
+                                if not phone_value or (isinstance(phone_value, str) and phone_value.strip() == ''):
+                                    missing_required.append(field)
+                        else:
+                            value = client_data.get(field)
+                            if not value or (isinstance(value, str) and value.strip() == ''):
+                                missing_required.append(field)
+                    
+                    # Debug: Log what's in client_data for required fields
+                    debug_fields = []
+                    for f in required_fields:
+                        if f == 'phone_number':
+                            contact_phone = client_data.get('contact_information', {}).get('phone')
+                            direct_phone = client_data.get('phone')
+                            debug_fields.append((f, f"contact_information.phone='{contact_phone}', direct phone='{direct_phone}'"))
+                        else:
+                            debug_fields.append((f, client_data.get(f)))
+                    debug_row_info = f"Row {index + 1}: client_data for required fields: {debug_fields}"
+                    print(debug_row_info)
+                    if not hasattr(debug_info, 'row_debug'):
+                        debug_info['row_debug'] = []
+                    debug_info['row_debug'].append(debug_row_info)
+                    
+                    if missing_required:
+                        errors.append(f"Row {index + 1}: Missing required fields for new client creation: {', '.join(missing_required)}")
+                        skipped_count += 1
+                        continue
+                    
+                    # Check for duplicates using our custom logic
+                    duplicate_client, match_type = find_duplicate_client(client_data)
+                    
+                    # Store original values for duplicate relationship creation
+                    if duplicate_client:
+                        original_email = client_data.get('contact_information', {}).get('email', '')
+                        original_phone = client_data.get('contact_information', {}).get('phone', '')
+                        original_client_id = client_data.get('client_id', '')
+                        
+                        # Don't modify email/phone - keep original values
+                        # The client will be created with original contact information
+                        # Duplicate detection will be handled through the ClientDuplicate relationship
+                    
+                    # Create the client with original data (no more unique constraint issues)
+                    client = Client.objects.create(**client_data)
+                    created_count += 1
+                    if duplicate_client:
+                        logger.info(f"Created new client with duplicate flag: {client.email or client.phone}")
+                    else:
+                        logger.info(f"Created new client: {client.email or client.phone}")
                 
                 # If we have a client and found a potential duplicate, create duplicate relationship for review
-                if client and duplicate_client:
+                # Only do this for newly created clients, not updated ones
+                if client and duplicate_client and not is_update:
                     client_name = f"{client_data.get('first_name', '')} {client_data.get('last_name', '')}".strip()
                     existing_name = f"{duplicate_client.first_name} {duplicate_client.last_name}".strip()
                     
@@ -1132,7 +1722,10 @@ def upload_clients(request):
                 
                 # Process intake data if available and we have a client
                 if has_intake_data and client is not None:
-                    process_intake_data(client, row, index)
+                    print(f"DEBUG: Processing intake data for client {client.first_name} {client.last_name}")
+                    process_intake_data(client, row, index, column_mapping)
+                else:
+                    print(f"DEBUG: Skipping intake data - has_intake_data: {has_intake_data}, client: {client is not None}")
                     
             except Exception as e:
                 error_message = str(e)
@@ -1153,7 +1746,7 @@ def upload_clients(request):
         
         response_data = {
             'success': True,
-            'message': f'Upload completed successfully! All clients have been added to the system.',
+            'message': f'Upload completed successfully! {created_count} clients created, {updated_count} clients updated.',
             'stats': {
                 'total_rows': len(df),
                 'created': created_count,
@@ -1164,7 +1757,10 @@ def upload_clients(request):
             },
             'duplicate_details': duplicate_details[:20],  # Limit to first 20 duplicates for display
             'errors': errors[:10] if errors else [],  # Limit to first 10 errors
+            'debug_info': debug_info,  # Add debug information
             'notes': [
+                'Existing clients with matching Client ID were updated with new information',
+                'New clients were created for records without existing Client ID matches',
                 'Missing date of birth values were set to 1900-01-01',
                 'Missing gender values were set to "Unknown"',
                 f'{duplicate_created_count} clients were created with potential duplicate flags for review',

@@ -42,7 +42,7 @@
                     </div>
                 </div>
                 <div class="flex-1">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-3">Bulk Client Upload</h3>
+                    <h3 class="text-lg font-semibold text-gray-900 mb-3">Bulk Client Upload & Update</h3>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div class="flex items-start space-x-2">
                             <div class="w-6 h-6 bg-green-100 rounded flex items-center justify-center flex-shrink-0">
@@ -242,19 +242,19 @@
                         <div class="space-y-2">
                             <div class="flex items-center text-sm text-neutral-700 font-body">
                                 <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
-                                first_name
+                                <span class="font-semibold">First Name</span> (or first_name, firstname, fname, given name)
                             </div>
                             <div class="flex items-center text-sm text-neutral-700 font-body">
                                 <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
-                                last_name
+                                <span class="font-semibold">Last Name</span> (or last_name, lastname, lname, surname, family name)
                             </div>
                             <div class="flex items-center text-sm text-neutral-700 font-body">
                                 <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
-                                email
+                                <span class="font-semibold">Phone</span> (or phone_number, telephone, tel, mobile, cell)
                             </div>
                             <div class="flex items-center text-sm text-neutral-700 font-body">
                                 <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
-                                phone_number
+                                <span class="font-semibold">DOB</span> (or dob, date of birth, birthdate, birth date) - YYYY-MM-DD format
                             </div>
                         </div>
                     </div>
@@ -265,47 +265,130 @@
                         <div class="space-y-2">
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                dob (YYYY-MM-DD) - defaults to 1900-01-01 if not provided
+                                <span class="font-semibold">Email</span> (or e-mail, email address, e_mail)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                preferred_name
+                                <span class="font-semibold">Client ID</span> (or client_id, clientid, id, client number)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                alias
+                                <span class="font-semibold">Middle Name</span> (or middle_name, middlename, mname)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                gender - defaults to "Unknown" if not provided
+                                <span class="font-semibold">Preferred Name</span> (or preferred_name, preferredname, nickname)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                sexual_orientation
+                                <span class="font-semibold">Alias/Last Name at Birth</span> (or alias, maiden name)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                languages_spoken (comma-separated)
+                                <span class="font-semibold">Age</span>
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                ethnicity (comma-separated)
+                                <span class="font-semibold">Gender</span> (or sex) - defaults to "Unknown"
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                citizenship_status
+                                <span class="font-semibold">Gender Identity</span> (or gender_identity, genderidentity)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                indigenous_status
+                                <span class="font-semibold">Pronoun</span> (or pronouns, preferred pronoun)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                country_of_birth
+                                <span class="font-semibold">Marital Status</span> (or marital_status, maritalstatus)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                street, city, state, zip, country, address_2
+                                <span class="font-semibold">Citizenship Status</span> (or citizenship_status, citizenship)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Location/County</span> (or location/county, location, county)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Province</span> (or state)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">City</span> (or town)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Postal Code</span> (or postal_code, zip, zip code)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Address</span> (or street address, street)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Address 2</span> (or address_2, address2, apt, apartment, suite)
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Language & Identity Columns -->
+                    <div>
+                        <h3 class="text-lg font-bold text-neutral-800 font-subheader mb-4">Language & Identity Columns</h3>
+                        <div class="space-y-2">
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Language</span> (or language, languages) - comma-separated
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Preferred Language</span> (or preferred_language, preferredlanguage)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Mother Tongue</span> (or mother_tongue, mothertongue, native language)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Official Language</span> (or official_language, officiallanguage)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Language Interpreter Required</span> (or interpreter required, interpreter)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Self-Identification as Race/Ethnicity</span> (or race/ethnicity, race ethnicity)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Ethnicity</span> (or ethnic background) - comma-separated
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Aboriginal Status</span> (or aboriginal_status, indigenous status, indigenous)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">LGBTQ+?</span> (or lgbtq, lgbtq+, sexual orientation)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Highest Level of Education</span> (or education level, education)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Children Home</span> (or children_home, childrenhome, has children)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Children Number</span> (or children_number, childrennumber, number of children)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">LHIN</span> (or local health integration network)
                             </div>
                         </div>
                     </div>
@@ -316,43 +399,122 @@
                         <div class="space-y-2">
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                                phone_work
+                                <span class="font-semibold">Phone (Work)</span> (or phone_work, work phone, workphone)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                                phone_alt
+                                <span class="font-semibold">Phone (Alt)</span> (or phone_alt, alternative phone, alt phone)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                                permission_to_phone (true/false/yes/no/1/0)
+                                <span class="font-semibold">Permission to Phone</span> (or permission_to_phone, phone permission) - true/false/yes/no/1/0
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                                permission_to_email (true/false/yes/no/1/0)
+                                <span class="font-semibold">Permission to Email</span> (or permission_to_email, email permission) - true/false/yes/no/1/0
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                                medical_conditions
+                                <span class="font-semibold">Medical Conditions</span> (or medical_conditions, health conditions)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                                primary_diagnosis
+                                <span class="font-semibold">Primary Diagnosis</span> (or primary_diagnosis, diagnosis)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                                support_workers (comma-separated)
+                                <span class="font-semibold">Family Doctor</span> (or family_doctor, doctor, physician)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                                comments
+                                <span class="font-semibold">HC</span> (or health_card, health card number)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                                next_of_kin (simple text, not JSON)
+                                <span class="font-semibold">HC Version</span> (or health_card_version, health card version)
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
-                                emergency_contact (simple text, not JSON)
+                                <span class="font-semibold">HC Exp Date</span> (or health_card_exp_date, health card expiry)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">HC Issuing Province</span> (or health_card_issuing_province)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">No HC Reason</span> (or no_health_card_reason)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Next of Kin</span> (or next_of_kin, kin) - simple text
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Emergency Contact</span> (or emergency_contact, emergency) - simple text
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Comments</span> (or notes, remarks)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-purple-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Chart Number</span> (or chart_number, chart)
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Program Enrollment Columns -->
+                    <div>
+                        <h3 class="text-lg font-bold text-neutral-800 font-subheader mb-4">Program Enrollment Columns</h3>
+                        <div class="space-y-2">
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Program</span> (or program_name, program name, programname)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Sub-program</span> (or sub_program, subprogram, sub program)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Worker / Support Worker(s)</span> (or support_workers, supportworkers, workers) - comma-separated
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Level of Support</span> (or level_of_support, levelofsupport, support level)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Client Type</span> (or client_type, clienttype, type)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Admission Date</span> (or admission_date, admissiondate, start date, enrollment date)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Discharge Date</span> (or discharge_date, dischargedate, end date, exit date)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Days Elapsed</span> (or days_elapsed, dayselapsed, days since admission)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Program Status</span> (or program_status, programstatus, status)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Reason (for Discharge/Program Status)</span> (or reason_discharge, discharge reason, reason)
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Receiving Services</span> (or receiving_services, receivingservices, active) - true/false/yes/no/1/0
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-orange-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">Referral Source</span> (or referral_source, referralsource, source)
                             </div>
                         </div>
                     </div>
@@ -370,11 +532,16 @@
                             <div class="text-sm text-blue-800">
                                 <p class="font-bold mb-2">Key Points:</p>
                                 <ul class="space-y-1 text-blue-700">
-                                    <li>• Only 4 columns are required: <strong>first_name, last_name, email, phone_number</strong></li>
-                                    <li>• Missing <strong>dob</strong> will default to 1900-01-01</li>
-                                    <li>• Missing <strong>gender</strong> will default to "Unknown"</li>
+                                    <li>• <strong>UPDATE FUNCTIONALITY:</strong> If Client ID matches existing client, the record will be updated instead of creating a duplicate</li>
+                                    <li>• Only 4 columns are required: <strong>First Name, Last Name, Phone, DOB</strong> (case-insensitive)</li>
+                                    <li>• <strong>All column names are case-insensitive</strong> - use any variation shown in parentheses</li>
+                                    <li>• <strong>DOB is required</strong> and must be in YYYY-MM-DD format</li>
+                                    <li>• Missing <strong>Gender</strong> will default to "Unknown"</li>
+                                    <li>• <strong>Email is now optional</strong> - can be included or omitted</li>
                                     <li>• Permission fields accept: true/false/yes/no/1/0 (case insensitive)</li>
-                                    <li>• Avoid JSON format for next_of_kin and emergency_contact - use simple text</li>
+                                    <li>• Comma-separated fields: Language, Ethnicity, Support Workers</li>
+                                    <li>• Date format: YYYY-MM-DD for all date fields</li>
+                                    <li>• Program enrollment fields create automatic enrollments when included</li>
                                     <li>• All other fields are optional and can be added later</li>
                                 </ul>
                             </div>

@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
 from django.db.models import Count, Q
+from django.db import models
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import get_user_model
 from functools import wraps
@@ -132,24 +133,86 @@ def dashboard(request):
         return redirect('core:profile')
     
     # User has proper permissions, show dashboard
-    # Get basic statistics
-    total_clients = Client.objects.count()
-    active_programs = Program.objects.count()
-    total_staff = Staff.objects.count()
+    # Check if user is a program manager to filter data accordingly
+    is_program_manager = False
+    assigned_programs = None
     
-    # Get active restrictions count
-    from django.utils import timezone
-    from django.db import models
-    today = timezone.now().date()
-    active_restrictions = ServiceRestriction.objects.filter(
-        is_archived=False,
-        start_date__lte=today
-    ).filter(
-        models.Q(end_date__isnull=True) | models.Q(end_date__gte=today)
-    ).count()
+    try:
+        staff_profile = request.user.staff_profile
+        if staff_profile.is_program_manager():
+            is_program_manager = True
+            assigned_programs = staff_profile.get_assigned_programs()
+    except Exception:
+        pass
     
-    # Get recent clients (last 5)
-    recent_clients = Client.objects.order_by('-created_at')[:5]
+    # Get basic statistics - filter for program managers
+    if is_program_manager and assigned_programs:
+        # Program managers see only clients enrolled in their assigned programs
+        total_clients = Client.objects.filter(
+            clientprogramenrollment__program__in=assigned_programs
+        ).distinct().count()
+        active_programs = assigned_programs.count()
+        total_staff = Staff.objects.count()  # Staff count is same for all
+        
+        # Get active restrictions count for assigned programs
+        from django.utils import timezone
+        today = timezone.now().date()
+        active_restrictions = ServiceRestriction.objects.filter(
+            is_archived=False,
+            start_date__lte=today,
+            program__in=assigned_programs
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=today)
+        ).count()
+        
+        # Get recent clients (last 5) from assigned programs
+        recent_clients = Client.objects.filter(
+            clientprogramenrollment__program__in=assigned_programs
+        ).distinct().order_by('-created_at')[:5]
+        
+        # Get recent restrictions (last 5) for assigned programs
+        recent_restrictions = ServiceRestriction.objects.filter(
+            is_archived=False,
+            program__in=assigned_programs
+        ).select_related('client', 'program').order_by('-created_at')[:5]
+        
+        # Get restricted clients (Bill 168 and No Trespass) for assigned programs
+        restricted_clients = ServiceRestriction.objects.filter(
+            is_archived=False,
+            program__in=assigned_programs
+        ).filter(
+            Q(is_bill_168=True) | Q(is_no_trespass=True)
+        ).select_related('client', 'program').order_by('-created_at')[:10]
+    else:
+        # SuperAdmin and Staff see all data
+        total_clients = Client.objects.count()
+        active_programs = Program.objects.count()
+        total_staff = Staff.objects.count()
+        
+        # Get active restrictions count
+        from django.utils import timezone
+        today = timezone.now().date()
+        active_restrictions = ServiceRestriction.objects.filter(
+            is_archived=False,
+            start_date__lte=today
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=today)
+        ).count()
+        
+        # Get recent clients (last 5)
+        recent_clients = Client.objects.order_by('-created_at')[:5]
+        
+        # Get recent restrictions (last 5)
+        recent_restrictions = ServiceRestriction.objects.filter(
+            is_archived=False
+        ).select_related('client', 'program').order_by('-created_at')[:5]
+        
+        # Get restricted clients (Bill 168 and No Trespass)
+        restricted_clients = ServiceRestriction.objects.filter(
+            is_archived=False
+        ).filter(
+            Q(is_bill_168=True) | Q(is_no_trespass=True)
+        ).select_related('client', 'program').order_by('-created_at')[:10]
     
     # Get program status with enrollment counts and capacity information
     # Filter programs for Program Managers
@@ -194,7 +257,11 @@ def dashboard(request):
         'total_staff': total_staff,
         'active_restrictions': active_restrictions,
         'recent_clients': recent_clients,
+        'recent_restrictions': recent_restrictions,
+        'restricted_clients': restricted_clients,
         'program_status': program_status,
+        'is_program_manager': is_program_manager,
+        'assigned_programs': assigned_programs,
     }
     
     return render(request, 'dashboard.html', context)
@@ -310,6 +377,8 @@ class RestrictionListView(ProgramManagerAccessMixin, ListView):
         restriction_type_filter = self.request.GET.get('restriction_type', '')
         scope_filter = self.request.GET.get('scope', '')
         status_filter = self.request.GET.get('status', '')
+        bill_168_filter = self.request.GET.get('bill_168', '')
+        no_trespass_filter = self.request.GET.get('no_trespass', '')
         search_query = self.request.GET.get('search', '').strip()
         
         if restriction_type_filter:
@@ -317,6 +386,18 @@ class RestrictionListView(ProgramManagerAccessMixin, ListView):
         
         if scope_filter:
             queryset = queryset.filter(scope=scope_filter)
+        
+        if bill_168_filter:
+            if bill_168_filter == 'true':
+                queryset = queryset.filter(is_bill_168=True)
+            elif bill_168_filter == 'false':
+                queryset = queryset.filter(is_bill_168=False)
+        
+        if no_trespass_filter:
+            if no_trespass_filter == 'true':
+                queryset = queryset.filter(is_no_trespass=True)
+            elif no_trespass_filter == 'false':
+                queryset = queryset.filter(is_no_trespass=False)
         
         if status_filter and status_filter != 'all':
             if status_filter == 'active':
@@ -326,9 +407,9 @@ class RestrictionListView(ProgramManagerAccessMixin, ListView):
                     is_archived=False,
                     start_date__lte=today
                 ).filter(
-                    models.Q(is_indefinite=True) | 
-                    models.Q(end_date__isnull=True) | 
-                    models.Q(end_date__gte=today)
+                    Q(is_indefinite=True) | 
+                    Q(end_date__isnull=True) | 
+                    Q(end_date__gte=today)
                 )
             elif status_filter == 'expired':
                 # Use the model's is_expired method logic
@@ -427,6 +508,8 @@ class RestrictionListView(ProgramManagerAccessMixin, ListView):
         context['current_restriction_type'] = self.request.GET.get('restriction_type', '')
         context['current_scope'] = self.request.GET.get('scope', '')
         context['current_status'] = self.request.GET.get('status', 'all')
+        context['current_bill_168'] = self.request.GET.get('bill_168', '')
+        context['current_no_trespass'] = self.request.GET.get('no_trespass', '')
         context['current_search'] = self.request.GET.get('search', '')
         context['per_page'] = self.request.GET.get('per_page', '10')
         
@@ -1131,6 +1214,8 @@ class RestrictionCreateView(ProgramManagerAccessMixin, CreateView):
                         'scope': restriction.scope,
                         'program': str(restriction.program) if restriction.program else None,
                         'restriction_type': restriction.restriction_type,
+                        'is_bill_168': restriction.is_bill_168,
+                        'is_no_trespass': restriction.is_no_trespass,
                         'start_date': str(restriction.start_date),
                         'end_date': str(restriction.end_date) if restriction.end_date else None,
                         'is_indefinite': restriction.is_indefinite,
@@ -1208,6 +1293,12 @@ class RestrictionUpdateView(ProgramManagerAccessMixin, UpdateView):
             
             if original_restriction.restriction_type != restriction.restriction_type:
                 changes['restriction_type'] = f"{original_restriction.restriction_type} → {restriction.restriction_type}"
+            
+            if original_restriction.is_bill_168 != restriction.is_bill_168:
+                changes['is_bill_168'] = f"{original_restriction.is_bill_168} → {restriction.is_bill_168}"
+            
+            if original_restriction.is_no_trespass != restriction.is_no_trespass:
+                changes['is_no_trespass'] = f"{original_restriction.is_no_trespass} → {restriction.is_no_trespass}"
             
             if original_restriction.start_date != restriction.start_date:
                 changes['start_date'] = f"{original_restriction.start_date} → {restriction.start_date}"
@@ -1858,6 +1949,8 @@ class RestrictionCSVExportView(ProgramManagerAccessMixin, ListView):
         restriction_type_filter = self.request.GET.get('restriction_type', '')
         scope_filter = self.request.GET.get('scope', '')
         status_filter = self.request.GET.get('status', '')
+        bill_168_filter = self.request.GET.get('bill_168', '')
+        no_trespass_filter = self.request.GET.get('no_trespass', '')
         search_query = self.request.GET.get('search', '').strip()
         
         if restriction_type_filter:
@@ -1865,6 +1958,18 @@ class RestrictionCSVExportView(ProgramManagerAccessMixin, ListView):
         
         if scope_filter:
             queryset = queryset.filter(scope=scope_filter)
+        
+        if bill_168_filter:
+            if bill_168_filter == 'true':
+                queryset = queryset.filter(is_bill_168=True)
+            elif bill_168_filter == 'false':
+                queryset = queryset.filter(is_bill_168=False)
+        
+        if no_trespass_filter:
+            if no_trespass_filter == 'true':
+                queryset = queryset.filter(is_no_trespass=True)
+            elif no_trespass_filter == 'false':
+                queryset = queryset.filter(is_no_trespass=False)
         
         if status_filter:
             if status_filter == 'active':

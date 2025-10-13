@@ -5,7 +5,23 @@ from django.utils import timezone
 from django.db import models
 from datetime import datetime, date
 import csv
-from core.models import Client, Program, ClientProgramEnrollment
+from core.models import Client, Program, ClientProgramEnrollment, Staff
+
+def get_program_manager_filtering(request):
+    """Helper function to get program manager filtering data"""
+    is_program_manager = False
+    assigned_programs = None
+    
+    if request.user.is_authenticated:
+        try:
+            staff_profile = request.user.staff_profile
+            if staff_profile.is_program_manager():
+                is_program_manager = True
+                assigned_programs = staff_profile.get_assigned_programs()
+        except Exception:
+            pass
+    
+    return is_program_manager, assigned_programs
 
 class ReportListView(ListView):
     template_name = 'reports/report_list.html'
@@ -19,33 +35,65 @@ class ReportListView(ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['total_clients'] = Client.objects.count()
-        context['active_programs'] = Program.objects.count()
         
-        # Calculate actual enrollment rate
-        # Enrollment rate = (Total active enrollments / Total program capacity) * 100
-        total_capacity = 0
-        active_enrollments = 0
-        today = timezone.now().date()
+        # Get program manager filtering
+        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
         
-        for program in Program.objects.all():
-            total_capacity += program.capacity_current
+        # Filter data based on user role
+        if is_program_manager and assigned_programs:
+            # Program managers see only data for their assigned programs
+            context['total_clients'] = Client.objects.filter(
+                clientprogramenrollment__program__in=assigned_programs
+            ).distinct().count()
+            context['active_programs'] = assigned_programs.count()
             
-            # Count active enrollments for this program
-            program_active_enrollments = ClientProgramEnrollment.objects.filter(
-                program=program,
-                start_date__lte=today
-            ).filter(
-                models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
-            ).count()
+            # Calculate enrollment rate for assigned programs only
+            total_capacity = 0
+            active_enrollments = 0
+            today = timezone.now().date()
             
-            active_enrollments += program_active_enrollments
+            for program in assigned_programs:
+                total_capacity += program.capacity_current
+                
+                # Count active enrollments for this program
+                program_active_enrollments = ClientProgramEnrollment.objects.filter(
+                    program=program,
+                    start_date__lte=today
+                ).filter(
+                    models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
+                ).count()
+                
+                active_enrollments += program_active_enrollments
+        else:
+            # SuperAdmin and Staff see all data
+            context['total_clients'] = Client.objects.count()
+            context['active_programs'] = Program.objects.count()
+            
+            # Calculate actual enrollment rate
+            # Enrollment rate = (Total active enrollments / Total program capacity) * 100
+            total_capacity = 0
+            active_enrollments = 0
+            today = timezone.now().date()
+            
+            for program in Program.objects.all():
+                total_capacity += program.capacity_current
+                
+                # Count active enrollments for this program
+                program_active_enrollments = ClientProgramEnrollment.objects.filter(
+                    program=program,
+                    start_date__lte=today
+                ).filter(
+                    models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
+                ).count()
+                
+                active_enrollments += program_active_enrollments
         
         # Calculate enrollment rate
         enrollment_rate = (active_enrollments / total_capacity * 100) if total_capacity > 0 else 0
         context['enrollment_rate'] = round(enrollment_rate, 1)
         
         context['recent_reports'] = []  # Placeholder for recent reports
+        context['is_program_manager'] = is_program_manager
         return context
 
 class OrganizationalSummaryView(TemplateView):
@@ -53,13 +101,29 @@ class OrganizationalSummaryView(TemplateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['total_clients'] = Client.objects.count()
-        context['total_programs'] = Program.objects.count()
         
-        # Calculate active enrollments using date-based logic
-        enrollments = ClientProgramEnrollment.objects.all()
+        # Get program manager filtering
+        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        
+        # Filter data based on user role
+        if is_program_manager and assigned_programs:
+            # Program managers see only data for their assigned programs
+            context['total_clients'] = Client.objects.filter(
+                clientprogramenrollment__program__in=assigned_programs
+            ).distinct().count()
+            context['total_programs'] = assigned_programs.count()
+            
+            # Calculate active enrollments using date-based logic for assigned programs
+            enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
+        else:
+            # SuperAdmin and Staff see all data
+            context['total_clients'] = Client.objects.count()
+            context['total_programs'] = Program.objects.count()
+            
+            # Calculate active enrollments using date-based logic
+            enrollments = ClientProgramEnrollment.objects.all()
+        
         today = timezone.now().date()
-        
         active_count = 0
         for enrollment in enrollments:
             if today < enrollment.start_date:
@@ -77,6 +141,7 @@ class OrganizationalSummaryView(TemplateView):
                 active_count += 1
         
         context['active_enrollments'] = active_count
+        context['is_program_manager'] = is_program_manager
         return context
 
 class VacancyTrackerView(TemplateView):
@@ -84,6 +149,9 @@ class VacancyTrackerView(TemplateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        
+        # Get program manager filtering
+        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
         
         # Get date filter from query parameters
         as_of_date = self.request.GET.get('as_of_date')
@@ -98,7 +166,12 @@ class VacancyTrackerView(TemplateView):
         # Get department filter
         department_id = self.request.GET.get('department')
         
-        programs = Program.objects.all()
+        # Filter programs based on user role
+        if is_program_manager and assigned_programs:
+            programs = assigned_programs
+        else:
+            programs = Program.objects.all()
+        
         if department_id:
             programs = programs.filter(department_id=department_id)
         
@@ -129,6 +202,7 @@ class VacancyTrackerView(TemplateView):
         context['as_of_date'] = as_of_date
         context['departments'] = Program.objects.values_list('department_id', 'department__name').distinct()
         context['selected_department'] = department_id
+        context['is_program_manager'] = is_program_manager
         return context
 
 class ReportExportView(TemplateView):
@@ -219,7 +293,17 @@ class ClientDemographicsView(TemplateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        clients = Client.objects.all()
+        
+        # Get program manager filtering
+        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        
+        # Filter clients based on user role
+        if is_program_manager and assigned_programs:
+            clients = Client.objects.filter(
+                clientprogramenrollment__program__in=assigned_programs
+            ).distinct()
+        else:
+            clients = Client.objects.all()
         
         # Age distribution
         age_groups = {
@@ -267,6 +351,7 @@ class ClientDemographicsView(TemplateView):
             'total_clients': clients.count(),
             'age_groups': age_groups,
             'gender_counts': gender_counts,
+            'is_program_manager': is_program_manager,
         })
         return context
 
@@ -287,14 +372,29 @@ class ClientEnrollmentHistoryView(ListView):
     
     def get_queryset(self):
         """Get enrollments ordered by most recent start date first"""
-        return ClientProgramEnrollment.objects.select_related('client', 'program', 'program__department').order_by('-start_date')
+        # Get program manager filtering
+        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        
+        # Filter enrollments based on user role
+        if is_program_manager and assigned_programs:
+            return ClientProgramEnrollment.objects.filter(
+                program__in=assigned_programs
+            ).select_related('client', 'program', 'program__department').order_by('-start_date')
+        else:
+            return ClientProgramEnrollment.objects.select_related('client', 'program', 'program__department').order_by('-start_date')
     
     def get_context_data(self, **kwargs):
         """Add statistics to context"""
         context = super().get_context_data(**kwargs)
         
+        # Get program manager filtering
+        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        
         # Get all enrollments for statistics (not just current page)
-        all_enrollments = ClientProgramEnrollment.objects.all()
+        if is_program_manager and assigned_programs:
+            all_enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
+        else:
+            all_enrollments = ClientProgramEnrollment.objects.all()
         today = timezone.now().date()
         
         # Calculate active, completed, and pending enrollments based on date logic
@@ -320,6 +420,7 @@ class ClientEnrollmentHistoryView(ListView):
         
         # Add per_page to context for the template
         context['per_page'] = str(self.get_paginate_by(self.get_queryset()))
+        context['is_program_manager'] = is_program_manager
         
         return context
 
@@ -331,7 +432,16 @@ class ClientEnrollmentHistoryExportView(ListView):
     
     def get_queryset(self):
         """Get enrollments ordered by most recent start date first"""
-        return ClientProgramEnrollment.objects.select_related('client', 'program', 'program__department').order_by('-start_date')
+        # Get program manager filtering
+        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        
+        # Filter enrollments based on user role
+        if is_program_manager and assigned_programs:
+            return ClientProgramEnrollment.objects.filter(
+                program__in=assigned_programs
+            ).select_related('client', 'program', 'program__department').order_by('-start_date')
+        else:
+            return ClientProgramEnrollment.objects.select_related('client', 'program', 'program__department').order_by('-start_date')
     
     def get(self, request, *args, **kwargs):
         # Create CSV response
@@ -390,7 +500,15 @@ class ClientOutcomesView(TemplateView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        enrollments = ClientProgramEnrollment.objects.all()
+        
+        # Get program manager filtering
+        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        
+        # Filter enrollments based on user role
+        if is_program_manager and assigned_programs:
+            enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
+        else:
+            enrollments = ClientProgramEnrollment.objects.all()
         
         # Calculate statistics using date-based logic
         today = timezone.now().date()
@@ -419,6 +537,7 @@ class ClientOutcomesView(TemplateView):
             'active_enrollments': active_count,
             'pending_enrollments': pending_count,
             'success_rate': round(success_rate, 1),
+            'is_program_manager': is_program_manager,
         })
         return context
 
@@ -446,10 +565,22 @@ class ProgramCapacityView(ListView):
         context = super().get_context_data(**kwargs)
         # Add the current per_page value to context for the pagination component
         context['per_page'] = str(self.get_paginate_by(self.get_queryset()))
+        
+        # Get program manager filtering
+        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        context['is_program_manager'] = is_program_manager
+        
         return context
     
     def get_queryset(self):
-        programs = Program.objects.all()
+        # Get program manager filtering
+        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        
+        # Filter programs based on user role
+        if is_program_manager and assigned_programs:
+            programs = assigned_programs
+        else:
+            programs = Program.objects.all()
         
         program_data = []
         for program in programs:

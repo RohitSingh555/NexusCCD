@@ -159,9 +159,9 @@ class DischargeAdmin(admin.ModelAdmin):
 
 @admin.register(ServiceRestriction)
 class ServiceRestrictionAdmin(admin.ModelAdmin):
-    list_display = ['client', 'scope', 'program', 'start_date', 'end_date', 'created_at']
-    search_fields = ['client__first_name', 'client__last_name', 'reason']
-    list_filter = ['scope', 'start_date', 'end_date', 'created_at']
+    list_display = ['client', 'scope', 'program', 'restriction_type', 'is_bill_168', 'is_no_trespass', 'start_date', 'end_date', 'created_at']
+    search_fields = ['client__first_name', 'client__last_name', 'notes']
+    list_filter = ['scope', 'restriction_type', 'is_bill_168', 'is_no_trespass', 'start_date', 'end_date', 'created_at']
     readonly_fields = ['external_id', 'created_at', 'updated_at']
 
 

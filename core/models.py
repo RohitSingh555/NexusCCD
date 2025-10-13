@@ -565,6 +565,10 @@ class ClientProgramEnrollment(BaseModel):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True)
     notes = models.TextField(null=True, blank=True)
     
+    # Additional enrollment details
+    days_elapsed = models.IntegerField(blank=True, help_text='Number of days elapsed since enrollment start', null=True)
+    receiving_services_date = models.DateField(blank=True, db_index=True, help_text='Date when client started receiving services', null=True)
+    
     # Audit fields
     created_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who created this record")
     updated_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who last updated this record")
@@ -637,14 +641,16 @@ class ServiceRestriction(BaseModel):
         ('program', 'Program'),
     ]
     
-    RESTRICTION_TYPE_CHOICES = [
-        ('general', 'General Restriction'),
-        ('bill_168', 'Bill 168 (Violence Against Staff)'),
-        ('no_trespass', 'No Trespass Order'),
-        ('behaviors', 'Behavioral Issues'),
+    BEHAVIOR_CHOICES = [
+        ('aggressive', 'Aggressive'),
+        ('harassment', 'Harassment'),
+        ('theft', 'Theft'),
+        ('threatening', 'Threatening'),
+        ('intoxicated', 'Intoxicated'),
+        ('property_damage', 'Property Damage'),
     ]
     
-    BEHAVIOR_CHOICES = [
+    DETAILED_BEHAVIOR_CHOICES = [
         ('aggressive_behavior', 'Aggressive Behavior'),
         ('threats', 'Threats'),
         ('violence', 'Violence'),
@@ -662,7 +668,9 @@ class ServiceRestriction(BaseModel):
     client = models.ForeignKey(Client, on_delete=models.CASCADE, db_index=True)
     scope = models.CharField(max_length=10, choices=SCOPE_CHOICES, db_index=True)
     program = models.ForeignKey(Program, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
-    restriction_type = models.CharField(max_length=20, choices=RESTRICTION_TYPE_CHOICES, default='general', db_index=True)
+    restriction_type = models.JSONField(default=list, help_text="List of behaviors that led to this restriction")
+    is_bill_168 = models.BooleanField(default=False, db_index=True, help_text="Check if this is a Bill 168 (Violence Against Staff) restriction")
+    is_no_trespass = models.BooleanField(default=False, db_index=True, help_text="Check if this is a No Trespass Order")
     start_date = models.DateField(db_index=True)
     end_date = models.DateField(null=True, blank=True, db_index=True)
     is_indefinite = models.BooleanField(default=False, db_index=True, help_text="Check if this restriction has no end date")
@@ -695,6 +703,38 @@ class ServiceRestriction(BaseModel):
     
     def __str__(self):
         return f"{self.client} - {self.get_restriction_type_display()}"
+    
+    def get_restriction_type_display(self):
+        """Get display text for restriction type (behaviors)"""
+        if not self.restriction_type:
+            return "No behaviors specified"
+        
+        # Get the display names for the selected behaviors
+        behavior_dict = dict(self.BEHAVIOR_CHOICES)
+        display_names = []
+        
+        for behavior in self.restriction_type:
+            if behavior in behavior_dict:
+                display_names.append(behavior_dict[behavior])
+        
+        if display_names:
+            return ", ".join(display_names)
+        else:
+            return "No behaviors specified"
+    
+    def get_behavior_tags(self):
+        """Get behaviors as a list of tuples (value, display_name) for template rendering"""
+        if not self.restriction_type:
+            return []
+        
+        behavior_dict = dict(self.BEHAVIOR_CHOICES)
+        tags = []
+        
+        for behavior in self.restriction_type:
+            if behavior in behavior_dict:
+                tags.append((behavior, behavior_dict[behavior]))
+        
+        return tags
     
     def is_active(self):
         """Check if the restriction is currently active"""

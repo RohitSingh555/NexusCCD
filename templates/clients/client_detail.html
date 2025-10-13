@@ -402,9 +402,17 @@
                                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold {% if restriction.is_active %}bg-red-100 text-red-800{% else %}bg-neutral-100 text-neutral-800{% endif %}">
                                                     {% if restriction.is_active %}Active{% else %}Inactive{% endif %}
                                                 </span>
-                                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                                                    {{ restriction.get_restriction_type_display }}
-                                                </span>
+                                                <div class="flex flex-wrap gap-1">
+                                                    {% for behavior_value, behavior_display in restriction.get_behavior_tags %}
+                                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                                                            {{ behavior_display }}
+                                                        </span>
+                                                    {% empty %}
+                                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-800">
+                                                            No behaviors
+                                                        </span>
+                                                    {% endfor %}
+                                                </div>
                                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800">
                                                     {{ restriction.get_scope_display }}
                                                 </span>

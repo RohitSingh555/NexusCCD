@@ -154,6 +154,7 @@
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Entity</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Action</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Done By</th>
+                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Change Details</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Details</th>
                     </tr>
                 </thead>
@@ -194,6 +195,22 @@
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
                             {% if log.action == 'delete' %}
                                 <span class="text-neutral-400 font-bold">
+                                    No Changes
+                                </span>
+                            {% elif log.diff_json %}
+                                <button onclick='showChangeDetailsFromData("{{ log.id }}", "{{ log.diff_json|escapejs }}", "{{ log.entity }}", "{{ log.action }}")' 
+                                        class="text-brand-sky hover:text-brand-darkBlue font-bold transition-colors duration-200 cursor-pointer underline">
+                                    View Changes
+                                </button>
+                            {% else %}
+                                <span class="text-neutral-400 font-bold">
+                                    No Changes
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
+                            {% if log.action == 'delete' %}
+                                <span class="text-neutral-400 font-bold">
                                     No Details
                                 </span>
                             {% else %}
@@ -223,7 +240,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="px-6 py-4 text-center text-neutral-500 font-body">
+                        <td colspan="6" class="px-6 py-4 text-center text-neutral-500 font-body">
                             No audit logs found.
                         </td>
                     </tr>
@@ -254,6 +271,42 @@
             </p>
             <div class="flex justify-end">
                 <button onclick="closeEntityErrorModal()" class="px-4 py-2 bg-neutral-500 text-white rounded-lg hover:bg-neutral-600 transition-colors">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Change Details Modal -->
+<div id="changeDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
+        <div class="p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-brand-sky rounded-full flex items-center justify-center mr-3">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-neutral-900" id="changeModalTitle">Change Details</h3>
+                        <p class="text-sm text-neutral-600" id="changeModalSubtitle">View what was changed</p>
+                    </div>
+                </div>
+                <button onclick="closeChangeDetailsModal()" class="text-neutral-400 hover:text-neutral-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="border-t border-neutral-200 pt-4">
+                <div id="changeDetailsContent" class="max-h-96 overflow-y-auto">
+                    <!-- Change details will be populated here -->
+                </div>
+            </div>
+            <div class="flex justify-end mt-6 pt-4 border-t border-neutral-200">
+                <button onclick="closeChangeDetailsModal()" class="px-4 py-2 bg-neutral-500 text-white rounded-lg hover:bg-neutral-600 transition-colors">
                     Close
                 </button>
             </div>
@@ -320,6 +373,143 @@ function closeEntityErrorModal() {
 document.getElementById('entityErrorModal').addEventListener('click', function(e) {
     if (e.target === this) {
         closeEntityErrorModal();
+    }
+});
+
+// Function to handle data passed directly from Django template
+function showChangeDetailsFromData(logId, diffData, entity, action) {
+    console.log('showChangeDetailsFromData called with:', { logId, diffData, entity, action });
+    console.log('diffData type:', typeof diffData);
+    console.log('diffData value:', diffData);
+    showChangeDetails(logId, diffData, entity, action);
+}
+
+// Change Details Modal Functions
+function showChangeDetails(logId, diffData, entity, action) {
+    const modal = document.getElementById('changeDetailsModal');
+    const title = document.getElementById('changeModalTitle');
+    const subtitle = document.getElementById('changeModalSubtitle');
+    const content = document.getElementById('changeDetailsContent');
+    
+    if (!modal) {
+        console.error('Modal element not found');
+        return;
+    }
+    
+    // Parse the diff data - it comes as a Python dict string, need to convert to JSON
+    let parsedDiffData = diffData;
+    console.log('showChangeDetails - diffData:', diffData);
+    console.log('showChangeDetails - diffData type:', typeof diffData);
+    
+    if (typeof diffData === 'string') {
+        try {
+            // Convert Python dict string to JSON string, then parse
+            let jsonString = diffData
+                .replace(/'/g, '"')  // Replace single quotes with double quotes
+                .replace(/True/g, 'true')  // Replace Python True with JSON true
+                .replace(/False/g, 'false')  // Replace Python False with JSON false
+                .replace(/None/g, 'null');  // Replace Python None with JSON null
+            
+            parsedDiffData = JSON.parse(jsonString);
+            console.log('Successfully converted and parsed data');
+        } catch (e) {
+            console.error('Error parsing diff data:', e);
+            console.error('Raw diffData string:', diffData);
+            parsedDiffData = {};
+        }
+    }
+    
+    console.log('showChangeDetails - parsedDiffData:', parsedDiffData);
+    console.log('showChangeDetails - Object.keys(parsedDiffData):', Object.keys(parsedDiffData));
+    
+    // Set modal title and subtitle
+    title.textContent = `${entity} ${action.charAt(0).toUpperCase() + action.slice(1)} Details`;
+    subtitle.textContent = `Changes made to ${entity.toLowerCase()}`;
+    
+    // Format and display the change data
+    let html = '';
+    
+    if (action === 'create') {
+        html = '<div class="space-y-4">';
+        html += '<div class="bg-green-50 border border-green-200 rounded-lg p-4">';
+        html += '<h4 class="font-bold text-green-800 mb-2">New Record Created</h4>';
+        html += '<p class="text-green-700">The following fields were set when this record was created:</p>';
+        html += '</div>';
+        
+        console.log('CREATE: parsedDiffData check:', parsedDiffData);
+        console.log('CREATE: Object.keys(parsedDiffData):', Object.keys(parsedDiffData));
+        console.log('CREATE: Object.keys(parsedDiffData).length:', Object.keys(parsedDiffData).length);
+        if (parsedDiffData && Object.keys(parsedDiffData).length > 0) {
+            html += '<div class="space-y-3">';
+            for (const [field, value] of Object.entries(parsedDiffData)) {
+                html += `<div class="flex justify-between items-start py-3 border-b border-neutral-100 last:border-b-0">`;
+                html += `<span class="font-medium text-neutral-700 capitalize min-w-0 flex-shrink-0">${field.replace(/_/g, ' ')}:</span>`;
+                html += `<span class="text-neutral-900 ml-4 text-right max-w-xs break-words">${formatValue(value)}</span>`;
+                html += `</div>`;
+            }
+            html += '</div>';
+        } else {
+            html += '<p class="text-neutral-500 italic">No specific field details available</p>';
+        }
+        html += '</div>';
+    } else if (action === 'update') {
+        html = '<div class="space-y-4">';
+        html += '<div class="bg-blue-50 border border-blue-200 rounded-lg p-4">';
+        html += '<h4 class="font-bold text-blue-800 mb-2">Record Updated</h4>';
+        html += '<p class="text-blue-700">The following fields were updated:</p>';
+        html += '</div>';
+        
+        if (parsedDiffData && Object.keys(parsedDiffData).length > 0) {
+            html += '<div class="space-y-3">';
+            for (const [field, value] of Object.entries(parsedDiffData)) {
+                html += `<div class="flex justify-between items-start py-3 border-b border-neutral-100 last:border-b-0">`;
+                html += `<span class="font-medium text-neutral-700 capitalize min-w-0 flex-shrink-0">${field.replace(/_/g, ' ')}:</span>`;
+                html += `<span class="text-neutral-900 ml-4 text-right max-w-xs break-words">${formatValue(value)}</span>`;
+                html += `</div>`;
+            }
+            html += '</div>';
+        } else {
+            html += '<p class="text-neutral-500 italic">No specific field changes available</p>';
+        }
+        html += '</div>';
+    } else {
+        html = '<div class="text-center py-8">';
+        html += '<p class="text-neutral-500">No change details available for this action.</p>';
+        html += '</div>';
+    }
+    
+    content.innerHTML = html;
+    modal.classList.remove('hidden');
+}
+
+function closeChangeDetailsModal() {
+    const modal = document.getElementById('changeDetailsModal');
+    modal.classList.add('hidden');
+}
+
+function formatValue(value) {
+    if (value === null || value === undefined) {
+        return '<span class="text-neutral-400 italic">(empty)</span>';
+    }
+    if (typeof value === 'boolean') {
+        return value ? '<span class="text-green-600 font-medium">Yes</span>' : '<span class="text-red-600 font-medium">No</span>';
+    }
+    if (typeof value === 'object') {
+        return '<pre class="text-xs bg-neutral-100 p-2 rounded overflow-x-auto">' + JSON.stringify(value, null, 2) + '</pre>';
+    }
+    if (typeof value === 'string' && value.length > 100) {
+        return value.substring(0, 100) + '<span class="text-neutral-400">...</span>';
+    }
+    if (typeof value === 'string' && value === '') {
+        return '<span class="text-neutral-400 italic">(empty)</span>';
+    }
+    return value;
+}
+
+// Close change details modal when clicking outside
+document.getElementById('changeDetailsModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeChangeDetailsModal();
     }
 });
 </script>

@@ -952,27 +952,58 @@
     </div>
 </div>
 
-<!-- Not Duplicate Modal -->
+<!-- Not Duplicate Comparison Modal -->
 <div id="notDuplicateModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
-    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-lg bg-white">
-        <div class="mt-3">
-            <div class="flex items-center justify-center w-12 h-12 mx-auto bg-green-100 rounded-full">
-                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-            </div>
-            <div class="mt-2 px-7 py-3">
-                <h3 class="text-lg font-medium text-gray-900">Not Duplicate</h3>
-                <div class="mt-2">
-                    <p class="text-sm text-gray-500">Are you sure these are different people? Both clients will be kept in the system.</p>
+    <div class="relative top-4 mx-auto p-4 border w-11/12 max-w-6xl shadow-lg rounded-lg bg-white">
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center">
+                <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-xl font-semibold text-gray-900">Record Comparison</h3>
+                    <p class="text-sm text-gray-500">Compare both records to confirm they are different people</p>
                 </div>
             </div>
-            <div class="flex items-center justify-end px-4 py-3 bg-gray-50 rounded-b-lg">
-                <button onclick="closeNotDuplicateModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 mr-2 text-sm font-medium transition-all duration-200">
+            <button onclick="closeNotDuplicateModal()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Comparison Table -->
+        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Field</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-3/8">Record A</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-3/8">Record B</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comparisonTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Comparison rows will be populated by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+            <div class="text-sm text-gray-500">
+                <p>Review the comparison above. If these are indeed different people, click "Confirm Not Duplicate" to keep both records.</p>
+            </div>
+            <div class="flex space-x-3">
+                <button onclick="closeNotDuplicateModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 text-sm font-medium transition-all duration-200">
                     Cancel
                 </button>
                 <button onclick="confirmNotDuplicate()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium transition-all duration-200">
-                    Confirm
+                    Confirm Not Duplicate
                 </button>
             </div>
         </div>
@@ -1014,6 +1045,207 @@
 <script>
 let currentDuplicateId = null;
 let selectedDuplicates = [];
+
+// Make duplicates data available to JavaScript
+const duplicates = [
+    {% for group in grouped_duplicates.values %}
+        {% for duplicate in group.duplicates %}
+        {
+            id: {{ duplicate.id }},
+            client_a: {
+                id: {{ duplicate.primary_client.id }},
+                // Personal Details
+                client_id: {% if duplicate.primary_client.client_id %}"{{ duplicate.primary_client.client_id|escapejs }}"{% else %}null{% endif %},
+                first_name: {% if duplicate.primary_client.first_name %}"{{ duplicate.primary_client.first_name|escapejs }}"{% else %}null{% endif %},
+                last_name: {% if duplicate.primary_client.last_name %}"{{ duplicate.primary_client.last_name|escapejs }}"{% else %}null{% endif %},
+                middle_name: {% if duplicate.primary_client.middle_name %}"{{ duplicate.primary_client.middle_name|escapejs }}"{% else %}null{% endif %},
+                preferred_name: {% if duplicate.primary_client.preferred_name %}"{{ duplicate.primary_client.preferred_name|escapejs }}"{% else %}null{% endif %},
+                alias: {% if duplicate.primary_client.alias %}"{{ duplicate.primary_client.alias|escapejs }}"{% else %}null{% endif %},
+                date_of_birth: {% if duplicate.primary_client.dob and duplicate.primary_client.dob != None %}"{{ duplicate.primary_client.dob|date:'Y-m-d' }}"{% else %}null{% endif %},
+                age: {% if duplicate.primary_client.age %}{{ duplicate.primary_client.age }}{% else %}null{% endif %},
+                gender: {% if duplicate.primary_client.gender %}"{{ duplicate.primary_client.gender|escapejs }}"{% else %}null{% endif %},
+                gender_identity: {% if duplicate.primary_client.gender_identity %}"{{ duplicate.primary_client.gender_identity|escapejs }}"{% else %}null{% endif %},
+                pronoun: {% if duplicate.primary_client.pronoun %}"{{ duplicate.primary_client.pronoun|escapejs }}"{% else %}null{% endif %},
+                marital_status: {% if duplicate.primary_client.marital_status %}"{{ duplicate.primary_client.marital_status|escapejs }}"{% else %}null{% endif %},
+                citizenship_status: {% if duplicate.primary_client.citizenship_status %}"{{ duplicate.primary_client.citizenship_status|escapejs }}"{% else %}null{% endif %},
+                country_of_birth: {% if duplicate.primary_client.country_of_birth %}"{{ duplicate.primary_client.country_of_birth|escapejs }}"{% else %}null{% endif %},
+                sexual_orientation: {% if duplicate.primary_client.sexual_orientation %}"{{ duplicate.primary_client.sexual_orientation|escapejs }}"{% else %}null{% endif %},
+                
+                // Location Details
+                location_county: {% if duplicate.primary_client.location_county %}"{{ duplicate.primary_client.location_county|escapejs }}"{% else %}null{% endif %},
+                province: {% if duplicate.primary_client.province %}"{{ duplicate.primary_client.province|escapejs }}"{% else %}null{% endif %},
+                city: {% if duplicate.primary_client.city %}"{{ duplicate.primary_client.city|escapejs }}"{% else %}null{% endif %},
+                postal_code: {% if duplicate.primary_client.postal_code %}"{{ duplicate.primary_client.postal_code|escapejs }}"{% else %}null{% endif %},
+                address: {% if duplicate.primary_client.address %}"{{ duplicate.primary_client.address|escapejs }}"{% else %}null{% endif %},
+                address_2: {% if duplicate.primary_client.address_2 %}"{{ duplicate.primary_client.address_2|escapejs }}"{% else %}null{% endif %},
+                
+                // Cultural & Demographic
+                language: {% if duplicate.primary_client.language %}"{{ duplicate.primary_client.language|escapejs }}"{% else %}null{% endif %},
+                preferred_language: {% if duplicate.primary_client.preferred_language %}"{{ duplicate.primary_client.preferred_language|escapejs }}"{% else %}null{% endif %},
+                mother_tongue: {% if duplicate.primary_client.mother_tongue %}"{{ duplicate.primary_client.mother_tongue|escapejs }}"{% else %}null{% endif %},
+                official_language: {% if duplicate.primary_client.official_language %}"{{ duplicate.primary_client.official_language|escapejs }}"{% else %}null{% endif %},
+                language_interpreter_required: {{ duplicate.primary_client.language_interpreter_required|yesno:"true,false" }},
+                self_identification_race_ethnicity: {% if duplicate.primary_client.self_identification_race_ethnicity %}"{{ duplicate.primary_client.self_identification_race_ethnicity|escapejs }}"{% else %}null{% endif %},
+                ethnicity: {{ duplicate.primary_client.ethnicity|safe }},
+                aboriginal_status: {% if duplicate.primary_client.aboriginal_status %}"{{ duplicate.primary_client.aboriginal_status|escapejs }}"{% else %}null{% endif %},
+                indigenous_status: {{ duplicate.primary_client.indigenous_status|yesno:"true,false" }},
+                lgbtq_status: {% if duplicate.primary_client.lgbtq_status %}"{{ duplicate.primary_client.lgbtq_status|escapejs }}"{% else %}null{% endif %},
+                highest_level_education: {% if duplicate.primary_client.highest_level_education %}"{{ duplicate.primary_client.highest_level_education|escapejs }}"{% else %}null{% endif %},
+                children_home: {{ duplicate.primary_client.children_home|yesno:"true,false" }},
+                children_number: {% if duplicate.primary_client.children_number %}{{ duplicate.primary_client.children_number }}{% else %}null{% endif %},
+                lhin: {% if duplicate.primary_client.lhin %}"{{ duplicate.primary_client.lhin|escapejs }}"{% else %}null{% endif %},
+                
+                // Medical & Health
+                medical_conditions: {% if duplicate.primary_client.medical_conditions %}"{{ duplicate.primary_client.medical_conditions|escapejs }}"{% else %}null{% endif %},
+                primary_diagnosis: {% if duplicate.primary_client.primary_diagnosis %}"{{ duplicate.primary_client.primary_diagnosis|escapejs }}"{% else %}null{% endif %},
+                family_doctor: {% if duplicate.primary_client.family_doctor %}"{{ duplicate.primary_client.family_doctor|escapejs }}"{% else %}null{% endif %},
+                health_card_number: {% if duplicate.primary_client.health_card_number %}"{{ duplicate.primary_client.health_card_number|escapejs }}"{% else %}null{% endif %},
+                health_card_version: {% if duplicate.primary_client.health_card_version %}"{{ duplicate.primary_client.health_card_version|escapejs }}"{% else %}null{% endif %},
+                health_card_exp_date: {% if duplicate.primary_client.health_card_exp_date %}"{{ duplicate.primary_client.health_card_exp_date|date:'Y-m-d' }}"{% else %}null{% endif %},
+                health_card_issuing_province: {% if duplicate.primary_client.health_card_issuing_province %}"{{ duplicate.primary_client.health_card_issuing_province|escapejs }}"{% else %}null{% endif %},
+                no_health_card_reason: {% if duplicate.primary_client.no_health_card_reason %}"{{ duplicate.primary_client.no_health_card_reason|escapejs }}"{% else %}null{% endif %},
+                
+                // Contact & Permissions
+                permission_to_phone: {{ duplicate.primary_client.permission_to_phone|yesno:"true,false" }},
+                permission_to_email: {{ duplicate.primary_client.permission_to_email|yesno:"true,false" }},
+                phone: {% if duplicate.primary_client.phone %}"{{ duplicate.primary_client.phone|escapejs }}"{% else %}null{% endif %},
+                phone_work: {% if duplicate.primary_client.phone_work %}"{{ duplicate.primary_client.phone_work|escapejs }}"{% else %}null{% endif %},
+                phone_alt: {% if duplicate.primary_client.phone_alt %}"{{ duplicate.primary_client.phone_alt|escapejs }}"{% else %}null{% endif %},
+                email: {% if duplicate.primary_client.email %}"{{ duplicate.primary_client.email|escapejs }}"{% else %}null{% endif %},
+                next_of_kin: {{ duplicate.primary_client.next_of_kin|safe }},
+                emergency_contact: {{ duplicate.primary_client.emergency_contact|safe }},
+                comments: {% if duplicate.primary_client.comments %}"{{ duplicate.primary_client.comments|escapejs }}"{% else %}null{% endif %},
+                
+                // Program Details
+                program: {% if duplicate.primary_client.program %}"{{ duplicate.primary_client.program|escapejs }}"{% else %}null{% endif %},
+                sub_program: {% if duplicate.primary_client.sub_program %}"{{ duplicate.primary_client.sub_program|escapejs }}"{% else %}null{% endif %},
+                support_workers: {{ duplicate.primary_client.support_workers|safe }},
+                level_of_support: {% if duplicate.primary_client.level_of_support %}"{{ duplicate.primary_client.level_of_support|escapejs }}"{% else %}null{% endif %},
+                client_type: {% if duplicate.primary_client.client_type %}"{{ duplicate.primary_client.client_type|escapejs }}"{% else %}null{% endif %},
+                admission_date: {% if duplicate.primary_client.admission_date %}"{{ duplicate.primary_client.admission_date|date:'Y-m-d' }}"{% else %}null{% endif %},
+                discharge_date: {% if duplicate.primary_client.discharge_date %}"{{ duplicate.primary_client.discharge_date|date:'Y-m-d' }}"{% else %}null{% endif %},
+                days_elapsed: {% if duplicate.primary_client.days_elapsed %}{{ duplicate.primary_client.days_elapsed }}{% else %}null{% endif %},
+                program_status: {% if duplicate.primary_client.program_status %}"{{ duplicate.primary_client.program_status|escapejs }}"{% else %}null{% endif %},
+                reason_discharge: {% if duplicate.primary_client.reason_discharge %}"{{ duplicate.primary_client.reason_discharge|escapejs }}"{% else %}null{% endif %},
+                receiving_services: {{ duplicate.primary_client.receiving_services|yesno:"true,false" }},
+                referral_source: {% if duplicate.primary_client.referral_source %}"{{ duplicate.primary_client.referral_source|escapejs }}"{% else %}null{% endif %},
+                program_enrollments: [
+                    {% for enrollment in duplicate.primary_client.clientprogramenrollment_set.all %}
+                    {
+                        program: "{{ enrollment.program.name|escapejs }}",
+                        status: "{{ enrollment.status|escapejs }}",
+                        start_date: "{{ enrollment.start_date|date:'Y-m-d' }}",
+                        end_date: {% if enrollment.end_date %}"{{ enrollment.end_date|date:'Y-m-d' }}"{% else %}null{% endif %}
+                    }{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ],
+                
+                // Administrative
+                chart_number: {% if duplicate.primary_client.chart_number %}"{{ duplicate.primary_client.chart_number|escapejs }}"{% else %}null{% endif %},
+                uid_external: {% if duplicate.primary_client.uid_external %}"{{ duplicate.primary_client.uid_external|escapejs }}"{% else %}null{% endif %},
+                languages_spoken: {{ duplicate.primary_client.languages_spoken|safe }},
+                updated_by: {% if duplicate.primary_client.updated_by %}"{{ duplicate.primary_client.updated_by|escapejs }}"{% else %}null{% endif %},
+                created_at: {% if duplicate.primary_client.created_at %}"{{ duplicate.primary_client.created_at|date:'Y-m-d' }}"{% else %}null{% endif %}
+            },
+            client_b: {
+                id: {{ duplicate.duplicate_client.id }},
+                // Personal Details
+                client_id: {% if duplicate.duplicate_client.client_id %}"{{ duplicate.duplicate_client.client_id|escapejs }}"{% else %}null{% endif %},
+                first_name: {% if duplicate.duplicate_client.first_name %}"{{ duplicate.duplicate_client.first_name|escapejs }}"{% else %}null{% endif %},
+                last_name: {% if duplicate.duplicate_client.last_name %}"{{ duplicate.duplicate_client.last_name|escapejs }}"{% else %}null{% endif %},
+                middle_name: {% if duplicate.duplicate_client.middle_name %}"{{ duplicate.duplicate_client.middle_name|escapejs }}"{% else %}null{% endif %},
+                preferred_name: {% if duplicate.duplicate_client.preferred_name %}"{{ duplicate.duplicate_client.preferred_name|escapejs }}"{% else %}null{% endif %},
+                alias: {% if duplicate.duplicate_client.alias %}"{{ duplicate.duplicate_client.alias|escapejs }}"{% else %}null{% endif %},
+                date_of_birth: {% if duplicate.duplicate_client.dob and duplicate.duplicate_client.dob != None %}"{{ duplicate.duplicate_client.dob|date:'Y-m-d' }}"{% else %}null{% endif %},
+                age: {% if duplicate.duplicate_client.age %}{{ duplicate.duplicate_client.age }}{% else %}null{% endif %},
+                gender: {% if duplicate.duplicate_client.gender %}"{{ duplicate.duplicate_client.gender|escapejs }}"{% else %}null{% endif %},
+                gender_identity: {% if duplicate.duplicate_client.gender_identity %}"{{ duplicate.duplicate_client.gender_identity|escapejs }}"{% else %}null{% endif %},
+                pronoun: {% if duplicate.duplicate_client.pronoun %}"{{ duplicate.duplicate_client.pronoun|escapejs }}"{% else %}null{% endif %},
+                marital_status: {% if duplicate.duplicate_client.marital_status %}"{{ duplicate.duplicate_client.marital_status|escapejs }}"{% else %}null{% endif %},
+                citizenship_status: {% if duplicate.duplicate_client.citizenship_status %}"{{ duplicate.duplicate_client.citizenship_status|escapejs }}"{% else %}null{% endif %},
+                country_of_birth: {% if duplicate.duplicate_client.country_of_birth %}"{{ duplicate.duplicate_client.country_of_birth|escapejs }}"{% else %}null{% endif %},
+                sexual_orientation: {% if duplicate.duplicate_client.sexual_orientation %}"{{ duplicate.duplicate_client.sexual_orientation|escapejs }}"{% else %}null{% endif %},
+                
+                // Location Details
+                location_county: {% if duplicate.duplicate_client.location_county %}"{{ duplicate.duplicate_client.location_county|escapejs }}"{% else %}null{% endif %},
+                province: {% if duplicate.duplicate_client.province %}"{{ duplicate.duplicate_client.province|escapejs }}"{% else %}null{% endif %},
+                city: {% if duplicate.duplicate_client.city %}"{{ duplicate.duplicate_client.city|escapejs }}"{% else %}null{% endif %},
+                postal_code: {% if duplicate.duplicate_client.postal_code %}"{{ duplicate.duplicate_client.postal_code|escapejs }}"{% else %}null{% endif %},
+                address: {% if duplicate.duplicate_client.address %}"{{ duplicate.duplicate_client.address|escapejs }}"{% else %}null{% endif %},
+                address_2: {% if duplicate.duplicate_client.address_2 %}"{{ duplicate.duplicate_client.address_2|escapejs }}"{% else %}null{% endif %},
+                
+                // Cultural & Demographic
+                language: {% if duplicate.duplicate_client.language %}"{{ duplicate.duplicate_client.language|escapejs }}"{% else %}null{% endif %},
+                preferred_language: {% if duplicate.duplicate_client.preferred_language %}"{{ duplicate.duplicate_client.preferred_language|escapejs }}"{% else %}null{% endif %},
+                mother_tongue: {% if duplicate.duplicate_client.mother_tongue %}"{{ duplicate.duplicate_client.mother_tongue|escapejs }}"{% else %}null{% endif %},
+                official_language: {% if duplicate.duplicate_client.official_language %}"{{ duplicate.duplicate_client.official_language|escapejs }}"{% else %}null{% endif %},
+                language_interpreter_required: {{ duplicate.duplicate_client.language_interpreter_required|yesno:"true,false" }},
+                self_identification_race_ethnicity: {% if duplicate.duplicate_client.self_identification_race_ethnicity %}"{{ duplicate.duplicate_client.self_identification_race_ethnicity|escapejs }}"{% else %}null{% endif %},
+                ethnicity: {{ duplicate.duplicate_client.ethnicity|safe }},
+                aboriginal_status: {% if duplicate.duplicate_client.aboriginal_status %}"{{ duplicate.duplicate_client.aboriginal_status|escapejs }}"{% else %}null{% endif %},
+                indigenous_status: {{ duplicate.duplicate_client.indigenous_status|yesno:"true,false" }},
+                lgbtq_status: {% if duplicate.duplicate_client.lgbtq_status %}"{{ duplicate.duplicate_client.lgbtq_status|escapejs }}"{% else %}null{% endif %},
+                highest_level_education: {% if duplicate.duplicate_client.highest_level_education %}"{{ duplicate.duplicate_client.highest_level_education|escapejs }}"{% else %}null{% endif %},
+                children_home: {{ duplicate.duplicate_client.children_home|yesno:"true,false" }},
+                children_number: {% if duplicate.duplicate_client.children_number %}{{ duplicate.duplicate_client.children_number }}{% else %}null{% endif %},
+                lhin: {% if duplicate.duplicate_client.lhin %}"{{ duplicate.duplicate_client.lhin|escapejs }}"{% else %}null{% endif %},
+                
+                // Medical & Health
+                medical_conditions: {% if duplicate.duplicate_client.medical_conditions %}"{{ duplicate.duplicate_client.medical_conditions|escapejs }}"{% else %}null{% endif %},
+                primary_diagnosis: {% if duplicate.duplicate_client.primary_diagnosis %}"{{ duplicate.duplicate_client.primary_diagnosis|escapejs }}"{% else %}null{% endif %},
+                family_doctor: {% if duplicate.duplicate_client.family_doctor %}"{{ duplicate.duplicate_client.family_doctor|escapejs }}"{% else %}null{% endif %},
+                health_card_number: {% if duplicate.duplicate_client.health_card_number %}"{{ duplicate.duplicate_client.health_card_number|escapejs }}"{% else %}null{% endif %},
+                health_card_version: {% if duplicate.duplicate_client.health_card_version %}"{{ duplicate.duplicate_client.health_card_version|escapejs }}"{% else %}null{% endif %},
+                health_card_exp_date: {% if duplicate.duplicate_client.health_card_exp_date %}"{{ duplicate.duplicate_client.health_card_exp_date|date:'Y-m-d' }}"{% else %}null{% endif %},
+                health_card_issuing_province: {% if duplicate.duplicate_client.health_card_issuing_province %}"{{ duplicate.duplicate_client.health_card_issuing_province|escapejs }}"{% else %}null{% endif %},
+                no_health_card_reason: {% if duplicate.duplicate_client.no_health_card_reason %}"{{ duplicate.duplicate_client.no_health_card_reason|escapejs }}"{% else %}null{% endif %},
+                
+                // Contact & Permissions
+                permission_to_phone: {{ duplicate.duplicate_client.permission_to_phone|yesno:"true,false" }},
+                permission_to_email: {{ duplicate.duplicate_client.permission_to_email|yesno:"true,false" }},
+                phone: {% if duplicate.duplicate_client.phone %}"{{ duplicate.duplicate_client.phone|escapejs }}"{% else %}null{% endif %},
+                phone_work: {% if duplicate.duplicate_client.phone_work %}"{{ duplicate.duplicate_client.phone_work|escapejs }}"{% else %}null{% endif %},
+                phone_alt: {% if duplicate.duplicate_client.phone_alt %}"{{ duplicate.duplicate_client.phone_alt|escapejs }}"{% else %}null{% endif %},
+                email: {% if duplicate.duplicate_client.email %}"{{ duplicate.duplicate_client.email|escapejs }}"{% else %}null{% endif %},
+                next_of_kin: {{ duplicate.duplicate_client.next_of_kin|safe }},
+                emergency_contact: {{ duplicate.duplicate_client.emergency_contact|safe }},
+                comments: {% if duplicate.duplicate_client.comments %}"{{ duplicate.duplicate_client.comments|escapejs }}"{% else %}null{% endif %},
+                
+                // Program Details
+                program: {% if duplicate.duplicate_client.program %}"{{ duplicate.duplicate_client.program|escapejs }}"{% else %}null{% endif %},
+                sub_program: {% if duplicate.duplicate_client.sub_program %}"{{ duplicate.duplicate_client.sub_program|escapejs }}"{% else %}null{% endif %},
+                support_workers: {{ duplicate.duplicate_client.support_workers|safe }},
+                level_of_support: {% if duplicate.duplicate_client.level_of_support %}"{{ duplicate.duplicate_client.level_of_support|escapejs }}"{% else %}null{% endif %},
+                client_type: {% if duplicate.duplicate_client.client_type %}"{{ duplicate.duplicate_client.client_type|escapejs }}"{% else %}null{% endif %},
+                admission_date: {% if duplicate.duplicate_client.admission_date %}"{{ duplicate.duplicate_client.admission_date|date:'Y-m-d' }}"{% else %}null{% endif %},
+                discharge_date: {% if duplicate.duplicate_client.discharge_date %}"{{ duplicate.duplicate_client.discharge_date|date:'Y-m-d' }}"{% else %}null{% endif %},
+                days_elapsed: {% if duplicate.duplicate_client.days_elapsed %}{{ duplicate.duplicate_client.days_elapsed }}{% else %}null{% endif %},
+                program_status: {% if duplicate.duplicate_client.program_status %}"{{ duplicate.duplicate_client.program_status|escapejs }}"{% else %}null{% endif %},
+                reason_discharge: {% if duplicate.duplicate_client.reason_discharge %}"{{ duplicate.duplicate_client.reason_discharge|escapejs }}"{% else %}null{% endif %},
+                receiving_services: {{ duplicate.duplicate_client.receiving_services|yesno:"true,false" }},
+                referral_source: {% if duplicate.duplicate_client.referral_source %}"{{ duplicate.duplicate_client.referral_source|escapejs }}"{% else %}null{% endif %},
+                program_enrollments: [
+                    {% for enrollment in duplicate.duplicate_client.clientprogramenrollment_set.all %}
+                    {
+                        program: "{{ enrollment.program.name|escapejs }}",
+                        status: "{{ enrollment.status|escapejs }}",
+                        start_date: "{{ enrollment.start_date|date:'Y-m-d' }}",
+                        end_date: {% if enrollment.end_date %}"{{ enrollment.end_date|date:'Y-m-d' }}"{% else %}null{% endif %}
+                    }{% if not forloop.last %},{% endif %}
+                    {% endfor %}
+                ],
+                
+                // Administrative
+                chart_number: {% if duplicate.duplicate_client.chart_number %}"{{ duplicate.duplicate_client.chart_number|escapejs }}"{% else %}null{% endif %},
+                uid_external: {% if duplicate.duplicate_client.uid_external %}"{{ duplicate.duplicate_client.uid_external|escapejs }}"{% else %}null{% endif %},
+                languages_spoken: {{ duplicate.duplicate_client.languages_spoken|safe }},
+                updated_by: {% if duplicate.duplicate_client.updated_by %}"{{ duplicate.duplicate_client.updated_by|escapejs }}"{% else %}null{% endif %},
+                created_at: {% if duplicate.duplicate_client.created_at %}"{{ duplicate.duplicate_client.created_at|date:'Y-m-d' }}"{% else %}null{% endif %}
+            }
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    {% endfor %}
+];
 
 // Individual action modals
 function openMarkDuplicateModal(duplicateId) {
@@ -1280,7 +1512,203 @@ function rebindComparisonEvents(duplicateId) {
 
 function openNotDuplicateModal(duplicateId) {
     currentDuplicateId = duplicateId;
+    
+    // Find the duplicate data
+    const duplicate = duplicates.find(d => d.id === duplicateId);
+    if (!duplicate) {
+        console.error('Duplicate not found:', duplicateId);
+        return;
+    }
+    
+    // Populate the comparison table
+    populateComparisonTable(duplicate);
+    
     document.getElementById('notDuplicateModal').classList.remove('hidden');
+}
+
+function populateComparisonTable(duplicate) {
+    const tbody = document.getElementById('comparisonTableBody');
+    tbody.innerHTML = '';
+    
+    
+    // Define fields to compare - ALL CLIENT MODEL FIELDS
+    const fieldsToCompare = [
+        // Personal Details
+        { key: 'client_id', label: 'Client ID' },
+        { key: 'first_name', label: 'First Name' },
+        { key: 'last_name', label: 'Last Name' },
+        { key: 'middle_name', label: 'Middle Name' },
+        { key: 'preferred_name', label: 'Preferred Name' },
+        { key: 'alias', label: 'Alias' },
+        { key: 'date_of_birth', label: 'Date of Birth' },
+        { key: 'age', label: 'Age' },
+        { key: 'gender', label: 'Gender' },
+        { key: 'gender_identity', label: 'Gender Identity' },
+        { key: 'pronoun', label: 'Pronoun' },
+        { key: 'marital_status', label: 'Marital Status' },
+        { key: 'citizenship_status', label: 'Citizenship Status' },
+        { key: 'country_of_birth', label: 'Country of Birth' },
+        { key: 'sexual_orientation', label: 'Sexual Orientation' },
+        
+        // Location Details
+        { key: 'location_county', label: 'County' },
+        { key: 'province', label: 'Province' },
+        { key: 'city', label: 'City' },
+        { key: 'postal_code', label: 'Postal Code' },
+        { key: 'address', label: 'Address' },
+        { key: 'address_2', label: 'Address 2' },
+        
+        // Cultural & Demographic
+        { key: 'language', label: 'Language' },
+        { key: 'preferred_language', label: 'Preferred Language' },
+        { key: 'mother_tongue', label: 'Mother Tongue' },
+        { key: 'official_language', label: 'Official Language' },
+        { key: 'language_interpreter_required', label: 'Interpreter Required' },
+        { key: 'self_identification_race_ethnicity', label: 'Race/Ethnicity' },
+        { key: 'ethnicity', label: 'Ethnicity' },
+        { key: 'aboriginal_status', label: 'Aboriginal Status' },
+        { key: 'indigenous_status', label: 'Indigenous Status' },
+        { key: 'lgbtq_status', label: 'LGBTQ+ Status' },
+        { key: 'highest_level_education', label: 'Education Level' },
+        { key: 'children_home', label: 'Children at Home' },
+        { key: 'children_number', label: 'Number of Children' },
+        { key: 'lhin', label: 'LHIN' },
+        
+        // Medical & Health
+        { key: 'medical_conditions', label: 'Medical Conditions' },
+        { key: 'primary_diagnosis', label: 'Primary Diagnosis' },
+        { key: 'family_doctor', label: 'Family Doctor' },
+        { key: 'health_card_number', label: 'Health Card Number' },
+        { key: 'health_card_version', label: 'Health Card Version' },
+        { key: 'health_card_exp_date', label: 'Health Card Expiry' },
+        { key: 'health_card_issuing_province', label: 'HC Issuing Province' },
+        { key: 'no_health_card_reason', label: 'No Health Card Reason' },
+        
+        // Contact & Permissions
+        { key: 'permission_to_phone', label: 'Permission to Phone' },
+        { key: 'permission_to_email', label: 'Permission to Email' },
+        { key: 'phone', label: 'Phone' },
+        { key: 'phone_work', label: 'Work Phone' },
+        { key: 'phone_alt', label: 'Alternative Phone' },
+        { key: 'email', label: 'Email' },
+        { key: 'next_of_kin', label: 'Next of Kin' },
+        { key: 'emergency_contact', label: 'Emergency Contact' },
+        { key: 'comments', label: 'Comments' },
+        
+        // Program Details
+        { key: 'program', label: 'Program' },
+        { key: 'sub_program', label: 'Sub Program' },
+        { key: 'support_workers', label: 'Support Workers' },
+        { key: 'level_of_support', label: 'Level of Support' },
+        { key: 'client_type', label: 'Client Type' },
+        { key: 'admission_date', label: 'Admission Date' },
+        { key: 'discharge_date', label: 'Discharge Date' },
+        { key: 'days_elapsed', label: 'Days Elapsed' },
+        { key: 'program_status', label: 'Program Status' },
+        { key: 'reason_discharge', label: 'Discharge Reason' },
+        { key: 'receiving_services', label: 'Receiving Services' },
+        { key: 'referral_source', label: 'Referral Source' },
+        { key: 'program_enrollments', label: 'Program Enrollments' },
+        
+        // Administrative
+        { key: 'chart_number', label: 'Chart Number' },
+        { key: 'uid_external', label: 'External UID' },
+        { key: 'languages_spoken', label: 'Languages Spoken' },
+        { key: 'updated_by', label: 'Updated By' },
+        { key: 'created_at', label: 'Created Date' }
+    ];
+    
+    fieldsToCompare.forEach(field => {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-50';
+        
+        const recordA = duplicate.client_a;
+        const recordB = duplicate.client_b;
+        
+        const valueA = getFieldValue(recordA, field.key);
+        const valueB = getFieldValue(recordB, field.key);
+        
+        // Check if values are different for highlighting
+        const isDifferent = valueA !== valueB;
+        
+        row.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 bg-gray-50">
+                ${field.label}
+            </td>
+            <td class="px-6 py-4 text-sm text-gray-900 ${isDifferent ? 'bg-red-50' : ''}">
+                ${valueA || '<span class="text-gray-400 italic">Not provided</span>'}
+            </td>
+            <td class="px-6 py-4 text-sm text-gray-900 ${isDifferent ? 'bg-red-50' : ''}">
+                ${valueB || '<span class="text-gray-400 italic">Not provided</span>'}
+            </td>
+        `;
+        
+        tbody.appendChild(row);
+    });
+}
+
+function getFieldValue(record, fieldKey) {
+    if (!record) return '';
+    
+    // Handle program enrollments
+    if (fieldKey === 'program_enrollments') {
+        if (record.program_enrollments && record.program_enrollments.length > 0) {
+            return record.program_enrollments.map(enrollment => 
+                `${enrollment.program} (${enrollment.status}) - ${enrollment.start_date}${enrollment.end_date ? ' to ' + enrollment.end_date : ''}`
+            ).join('; ');
+        }
+        return '';
+    }
+    
+    // Handle nested fields
+    if (fieldKey === 'address') {
+        return record.addresses && record.addresses.length > 0 ? record.addresses[0].address : '';
+    }
+    
+    // Handle date formatting
+    if (fieldKey === 'date_of_birth' || fieldKey === 'created_at') {
+        const dateValue = record[fieldKey];
+        
+        if (dateValue && dateValue !== null && dateValue !== '' && dateValue !== 'null' && dateValue !== 'None') {
+            try {
+                const date = new Date(dateValue);
+                if (!isNaN(date.getTime())) {
+                    return date.toLocaleDateString();
+                }
+            } catch (e) {
+                console.error('Date parsing error:', e);
+            }
+        }
+        return '';
+    }
+    
+    // Handle boolean fields
+    if (fieldKey === 'indigenous_status' || fieldKey === 'language_interpreter_required' || 
+        fieldKey === 'children_home' || fieldKey === 'permission_to_phone' || 
+        fieldKey === 'permission_to_email' || fieldKey === 'receiving_services') {
+        return record[fieldKey] ? 'Yes' : 'No';
+    }
+    
+    // Handle JSON fields
+    if (fieldKey === 'ethnicity' || fieldKey === 'next_of_kin' || fieldKey === 'emergency_contact' || 
+        fieldKey === 'support_workers' || fieldKey === 'languages_spoken') {
+        if (record[fieldKey] && typeof record[fieldKey] === 'object') {
+            if (Array.isArray(record[fieldKey])) {
+                return record[fieldKey].join(', ');
+            } else {
+                return JSON.stringify(record[fieldKey]);
+            }
+        }
+        return '';
+    }
+    
+    // Handle other fields - check for empty strings, null, undefined
+    const value = record[fieldKey];
+    if (value === null || value === undefined || value === '' || value === 'null' || value === 'None' || value === 'undefined') {
+        return '';
+    }
+    
+    return String(value);
 }
 
 function closeNotDuplicateModal() {
@@ -1402,57 +1830,183 @@ function closeMergeModal() {
 }
 
 function loadMergeContent(duplicateId) {
-    const mergeUrl = "{% url 'clients:duplicate-merge' 0 %}".replace('0', duplicateId);
+    // Find the duplicate data
+    const duplicate = duplicates.find(d => d.id === duplicateId);
+    if (!duplicate) {
+        console.error('Duplicate not found:', duplicateId);
+        return;
+    }
     
-    fetch(mergeUrl)
-        .then(response => response.text())
-        .then(html => {
-            // Extract the main content from the merge page
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
+    // Create comprehensive merge interface with all fields
+    const mergeContent = createMergeInterface(duplicate);
+    document.getElementById('mergeContent').innerHTML = mergeContent;
+}
+
+function createMergeInterface(duplicate) {
+    const clientA = duplicate.client_a;
+    const clientB = duplicate.client_b;
+    
+    // Define all fields to merge - ALL CLIENT MODEL FIELDS
+    const fieldsToMerge = [
+        // Personal Details
+        { key: 'client_id', label: 'Client ID' },
+        { key: 'first_name', label: 'First Name' },
+        { key: 'last_name', label: 'Last Name' },
+        { key: 'middle_name', label: 'Middle Name' },
+        { key: 'preferred_name', label: 'Preferred Name' },
+        { key: 'alias', label: 'Alias' },
+        { key: 'date_of_birth', label: 'Date of Birth' },
+        { key: 'age', label: 'Age' },
+        { key: 'gender', label: 'Gender' },
+        { key: 'gender_identity', label: 'Gender Identity' },
+        { key: 'pronoun', label: 'Pronoun' },
+        { key: 'marital_status', label: 'Marital Status' },
+        { key: 'citizenship_status', label: 'Citizenship Status' },
+        { key: 'country_of_birth', label: 'Country of Birth' },
+        { key: 'sexual_orientation', label: 'Sexual Orientation' },
+        
+        // Location Details
+        { key: 'location_county', label: 'County' },
+        { key: 'province', label: 'Province' },
+        { key: 'city', label: 'City' },
+        { key: 'postal_code', label: 'Postal Code' },
+        { key: 'address', label: 'Address' },
+        { key: 'address_2', label: 'Address 2' },
+        
+        // Cultural & Demographic
+        { key: 'language', label: 'Language' },
+        { key: 'preferred_language', label: 'Preferred Language' },
+        { key: 'mother_tongue', label: 'Mother Tongue' },
+        { key: 'official_language', label: 'Official Language' },
+        { key: 'language_interpreter_required', label: 'Interpreter Required' },
+        { key: 'self_identification_race_ethnicity', label: 'Race/Ethnicity' },
+        { key: 'ethnicity', label: 'Ethnicity' },
+        { key: 'aboriginal_status', label: 'Aboriginal Status' },
+        { key: 'indigenous_status', label: 'Indigenous Status' },
+        { key: 'lgbtq_status', label: 'LGBTQ+ Status' },
+        { key: 'highest_level_education', label: 'Education Level' },
+        { key: 'children_home', label: 'Children at Home' },
+        { key: 'children_number', label: 'Number of Children' },
+        { key: 'lhin', label: 'LHIN' },
+        
+        // Medical & Health
+        { key: 'medical_conditions', label: 'Medical Conditions' },
+        { key: 'primary_diagnosis', label: 'Primary Diagnosis' },
+        { key: 'family_doctor', label: 'Family Doctor' },
+        { key: 'health_card_number', label: 'Health Card Number' },
+        { key: 'health_card_version', label: 'Health Card Version' },
+        { key: 'health_card_exp_date', label: 'Health Card Expiry' },
+        { key: 'health_card_issuing_province', label: 'HC Issuing Province' },
+        { key: 'no_health_card_reason', label: 'No Health Card Reason' },
+        
+        // Contact & Permissions
+        { key: 'permission_to_phone', label: 'Permission to Phone' },
+        { key: 'permission_to_email', label: 'Permission to Email' },
+        { key: 'phone', label: 'Phone' },
+        { key: 'phone_work', label: 'Work Phone' },
+        { key: 'phone_alt', label: 'Alternative Phone' },
+        { key: 'email', label: 'Email' },
+        { key: 'next_of_kin', label: 'Next of Kin' },
+        { key: 'emergency_contact', label: 'Emergency Contact' },
+        { key: 'comments', label: 'Comments' },
+        
+        // Program Details
+        { key: 'program', label: 'Program' },
+        { key: 'sub_program', label: 'Sub Program' },
+        { key: 'support_workers', label: 'Support Workers' },
+        { key: 'level_of_support', label: 'Level of Support' },
+        { key: 'client_type', label: 'Client Type' },
+        { key: 'admission_date', label: 'Admission Date' },
+        { key: 'discharge_date', label: 'Discharge Date' },
+        { key: 'days_elapsed', label: 'Days Elapsed' },
+        { key: 'program_status', label: 'Program Status' },
+        { key: 'reason_discharge', label: 'Discharge Reason' },
+        { key: 'receiving_services', label: 'Receiving Services' },
+        { key: 'referral_source', label: 'Referral Source' },
+        
+        // Administrative
+        { key: 'chart_number', label: 'Chart Number' },
+        { key: 'uid_external', label: 'External UID' },
+        { key: 'languages_spoken', label: 'Languages Spoken' },
+        { key: 'updated_by', label: 'Updated By' }
+    ];
+    
+    let html = `
+        <div class="space-y-6">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 class="text-lg font-semibold text-blue-900 mb-2">Merge Duplicate Clients</h4>
+                <p class="text-sm text-blue-700">Select which values to keep for each field. You can choose from Record A, Record B, or enter a custom value.</p>
+            </div>
             
-            // Find the main content area (adjust selector based on your merge page structure)
-            const mainContent = doc.querySelector('.container, main, .content, #main-content') || doc.body;
-            
-            // Update the modal content
-            document.getElementById('mergeContent').innerHTML = mainContent.innerHTML;
-            
-            // Re-execute any scripts that were in the loaded content
-            const scripts = document.getElementById('mergeContent').querySelectorAll('script');
-            scripts.forEach(script => {
-                const newScript = document.createElement('script');
-                newScript.textContent = script.textContent;
-                document.head.appendChild(newScript);
-                document.head.removeChild(newScript);
-            });
-            
-            // Re-bind event listeners for buttons and interactive elements
-            rebindMergeEvents(duplicateId);
-            
-            // Set up value box selection functionality
-            setupValueBoxSelection();
-            
-            // Apply font size overrides after content is loaded
-            applyMergeFontSizeOverrides();
-        })
-        .catch(error => {
-            console.error('Error loading merge content:', error);
-            document.getElementById('mergeContent').innerHTML = `
-                <div class="flex items-center justify-center h-80">
-                    <div class="text-center">
-                        <div class="text-red-500 mb-4">
-                            <svg class="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-                            </svg>
-                        </div>
-                        <p class="text-red-600">Error loading merge interface. Please try again.</p>
-                        <button onclick="loadMergeContent(${duplicateId})" class="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                            Retry
-                        </button>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Field</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Record A</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/12">Record B</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-3/4">Custom</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+    `;
+    
+    fieldsToMerge.forEach(field => {
+        const valueA = getFieldValue(clientA, field.key);
+        const valueB = getFieldValue(clientB, field.key);
+        const fieldId = `merge_${field.key}`;
+        
+        html += `
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 text-sm font-medium text-gray-900 bg-gray-50">
+                    ${field.label}
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-900">
+                    <label class="flex items-center">
+                        <input type="radio" name="${fieldId}" value="a" class="mr-2" ${valueA && !valueB ? 'checked' : ''}>
+                        <span class="truncate max-w-xs" title="${valueA || 'Not provided'}">${valueA || 'Not provided'}</span>
+                    </label>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-900">
+                    <label class="flex items-center">
+                        <input type="radio" name="${fieldId}" value="b" class="mr-2" ${valueB && !valueA ? 'checked' : ''}>
+                        <span class="truncate max-w-xs" title="${valueB || 'Not provided'}">${valueB || 'Not provided'}</span>
+                    </label>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-900">
+                    <div class="space-y-2">
+                        <label class="flex items-center">
+                            <input type="radio" name="${fieldId}" value="custom" class="mr-2">
+                            <span class="text-sm font-medium text-gray-700">Custom Value</span>
+                        </label>
+                        <input type="text" name="${fieldId}_custom" placeholder="Enter custom value for ${field.label}" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                               onchange="document.querySelector('input[name=${fieldId}][value=custom]').checked = true"
+                               onfocus="document.querySelector('input[name=${fieldId}][value=custom]').checked = true">
                     </div>
-                </div>
-            `;
-        });
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += `
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <h4 class="text-sm font-semibold text-yellow-800 mb-2">⚠️ Important Notes:</h4>
+                <ul class="text-sm text-yellow-700 space-y-1">
+                    <li>• Record A will be kept as the primary client</li>
+                    <li>• Record B will be deleted after merging</li>
+                    <li>• All program enrollments from both records will be preserved</li>
+                    <li>• Make sure to review all fields carefully before confirming</li>
+                </ul>
+            </div>
+        </div>
+    `;
+    
+    return html;
 }
 
 function rebindMergeEvents(duplicateId) {

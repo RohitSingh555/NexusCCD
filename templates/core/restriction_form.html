@@ -1,9 +1,21 @@
 {% extends 'dashboard_base.html' %}
 {% load static %}
 
+
 {% block title %}{% if object %}Edit Service Restriction{% else %}Add New Service Restriction{% endif %} - Central Client Database{% endblock %}
 
 {% block page_title %}{% if object %}Edit Service Restriction{% else %}Add New Service Restriction{% endif %}{% endblock %}
+
+{% block extra_css %}
+<style>
+.behavior-checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: #0ea5e9;
+}
+</style>
+{% endblock %}
+
 
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -101,10 +113,10 @@
                 </div>
                 
                 <div>
-                    <label for="{{ form.scope.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Scope *</label>
+                    <label for="{{ form.scope.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">SR Agency Wide *</label>
                     <select name="{{ form.scope.name }}" id="{{ form.scope.id_for_label }}" @change="updateProgramVisibility()" class="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
                         <option value="">Select Scope</option>
-                        <option value="global" {% if form.scope.value == 'global' %}selected{% endif %}>Global (All Programs)</option>
+                        <option value="org" {% if form.scope.value == 'org' %}selected{% endif %}>Organization-wide</option>
                         <option value="program" {% if form.scope.value == 'program' %}selected{% endif %}>Program-Specific</option>
                     </select>
                     {% if form.scope.errors %}
@@ -122,16 +134,62 @@
                 </div>
                 
                 <div>
-                    <label for="{{ form.restriction_type.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Restriction Type *</label>
-                    <select name="{{ form.restriction_type.name }}" id="{{ form.restriction_type.id_for_label }}" @change="updateBehaviorVisibility()" class="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
-                        <option value="">Select Restriction Type</option>
-                        <option value="general" {% if form.restriction_type.value == 'general' %}selected{% endif %}>General Restriction</option>
-                        <option value="bill_168" {% if form.restriction_type.value == 'bill_168' %}selected{% endif %}>Bill 168 (Violence Against Staff)</option>
-                        <option value="no_trespass" {% if form.restriction_type.value == 'no_trespass' %}selected{% endif %}>No Trespass Order</option>
-                        <option value="behaviors" {% if form.restriction_type.value == 'behaviors' %}selected{% endif %}>Behavioral Issues</option>
-                    </select>
+                    <label for="{{ form.restriction_type.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Behavior *</label>
+                    <div class="relative">
+                        <div class="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent bg-white cursor-pointer" id="behavior-dropdown-trigger" onclick="toggleBehaviorDropdown()">
+                            <span id="behavior-display">Select behaviors...</span>
+                            <span class="float-right">▼</span>
+                        </div>
+                        <div id="behavior-dropdown" class="absolute z-10 w-full mt-1 bg-white border border-neutral-300 rounded-xl shadow-lg">
+                            <div class="p-2">
+                                <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
+                                    <input type="checkbox" value="aggressive" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
+                                    <span>Aggressive</span>
+                                </label>
+                                <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
+                                    <input type="checkbox" value="harassment" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
+                                    <span>Harassment</span>
+                                </label>
+                                <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
+                                    <input type="checkbox" value="theft" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
+                                    <span>Theft</span>
+                                </label>
+                                <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
+                                    <input type="checkbox" value="threatening" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
+                                    <span>Threatening</span>
+                                </label>
+                                <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
+                                    <input type="checkbox" value="intoxicated" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
+                                    <span>Intoxicated</span>
+                                </label>
+                                <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
+                                    <input type="checkbox" value="property_damage" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
+                                    <span>Property Damage</span>
+                                </label>
+                            </div>
+                        </div>
+                        <input type="hidden" name="{{ form.restriction_type.name }}" id="{{ form.restriction_type.id_for_label }}" value="">
+                    </div>
                     {% if form.restriction_type.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.restriction_type.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex items-center">
+                        {{ form.is_bill_168 }}
+                        <label for="{{ form.is_bill_168.id_for_label }}" class="ml-2 text-sm font-bold text-neutral-700 font-body">Bill 168 (Violence Against Staff)</label>
+                    </div>
+                    {% if form.is_bill_168.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.is_bill_168.errors.0 }}</div>
+                    {% endif %}
+                    
+                    <div class="flex items-center">
+                        {{ form.is_no_trespass }}
+                        <label for="{{ form.is_no_trespass.id_for_label }}" class="ml-2 text-sm font-bold text-neutral-700 font-body">No Trespass Order</label>
+                    </div>
+                    {% if form.is_no_trespass.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.is_no_trespass.errors.0 }}</div>
                     {% endif %}
                 </div>
                 
@@ -659,4 +717,70 @@ document.addEventListener('DOMContentLoaded', function() {
         border-left-color: #1d4ed8;
     }
 </style>
+
+<script>
+function toggleBehaviorDropdown() {
+    const dropdown = document.getElementById('behavior-dropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('hidden');
+    }
+}
+
+function updateBehaviorDisplay() {
+    const checkboxes = document.querySelectorAll('.behavior-checkbox:checked');
+    const display = document.getElementById('behavior-display');
+    const hiddenInput = document.getElementById('{{ form.restriction_type.id_for_label }}');
+    
+    if (checkboxes.length === 0) {
+        display.textContent = 'Select behaviors...';
+        hiddenInput.value = '';
+    } else {
+        const selectedValues = Array.from(checkboxes).map(cb => cb.value);
+        const selectedLabels = Array.from(checkboxes).map(cb => {
+            const label = cb.nextElementSibling.textContent;
+            return label;
+        });
+        
+        display.textContent = selectedLabels.join(', ');
+        hiddenInput.value = JSON.stringify(selectedValues);
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    const dropdown = document.getElementById('behavior-dropdown');
+    const trigger = document.getElementById('behavior-dropdown-trigger');
+    
+    if (!dropdown.contains(event.target) && !trigger.contains(event.target)) {
+        dropdown.classList.add('hidden');
+    }
+});
+
+// Initialize with existing values if editing
+document.addEventListener('DOMContentLoaded', function() {
+    // Make sure dropdown starts hidden
+    const dropdown = document.getElementById('behavior-dropdown');
+    if (dropdown) {
+        dropdown.classList.add('hidden');
+    }
+    
+    const hiddenInput = document.getElementById('{{ form.restriction_type.id_for_label }}');
+    const existingValue = hiddenInput.value;
+    
+    if (existingValue) {
+        try {
+            const selectedValues = JSON.parse(existingValue);
+            selectedValues.forEach(value => {
+                const checkbox = document.querySelector(`.behavior-checkbox[value="${value}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+            updateBehaviorDisplay();
+        } catch (e) {
+            // No existing behavior values to load
+        }
+    }
+});
+</script>
 {% endblock %}
