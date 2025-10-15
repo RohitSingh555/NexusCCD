@@ -78,7 +78,7 @@ class ClientForm(forms.ModelForm):
             'reason_discharge', 'receiving_services', 'referral_source',
             
             # 🧾 ADMINISTRATIVE / SYSTEM FIELDS
-            'chart_number',
+            'chart_number', 'source',
             
             # Legacy fields
             'image', 'profile_picture', 'contact_information', 'addresses', 'languages_spoken',
@@ -124,6 +124,9 @@ class ClientForm(forms.ModelForm):
             'permission_to_phone': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'permission_to_email': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'receiving_services': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            
+            # Source dropdown
+            'source': forms.Select(attrs={'class': 'form-control'}, choices=[('', 'Select Source'), ('SMIMS', 'SMIMS'), ('EMHware', 'EMHware')]),
         }
     
     def __init__(self, *args, **kwargs):
@@ -149,7 +152,7 @@ class ClientForm(forms.ModelForm):
             'health_card_issuing_province', 'no_health_card_reason', 'phone_work', 'phone_alt', 
             'program', 'sub_program', 'level_of_support', 'client_type', 'admission_date', 
             'discharge_date', 'days_elapsed', 'program_status', 'reason_discharge', 
-            'referral_source', 'chart_number', 'image', 'profile_picture'
+            'referral_source', 'chart_number', 'source', 'image', 'profile_picture'
         ]
         
         for field in optional_fields:

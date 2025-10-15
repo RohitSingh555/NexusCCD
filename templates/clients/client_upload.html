@@ -87,6 +87,43 @@
             <!-- Upload Area -->
             <div class="p-8" x-data="uploadManager()">
                 {% csrf_token %}
+                
+                <!-- Source Selection -->
+                <div class="mb-8">
+                    <h3 class="text-lg font-bold text-neutral-900 font-header mb-4">Select Data Source</h3>
+                    <p class="text-sm text-neutral-600 font-body mb-4">Choose the source system for the client data you're uploading:</p>
+                    <div class="flex space-x-4">
+                        <label class="flex items-center p-4 border-2 border-neutral-200 rounded-lg cursor-pointer hover:border-brand-sky transition-all duration-200" 
+                               :class="{ 'border-brand-sky bg-brand-sky/5': selectedSource === 'SMIMS' }">
+                            <input type="radio" name="source" value="SMIMS" x-model="selectedSource" class="sr-only">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center" 
+                                     :class="{ 'border-brand-sky bg-brand-sky': selectedSource === 'SMIMS', 'border-neutral-300': selectedSource !== 'SMIMS' }">
+                                    <div x-show="selectedSource === 'SMIMS'" class="w-2 h-2 bg-white rounded-full"></div>
+                                </div>
+                                <div>
+                                    <div class="font-bold text-neutral-900">SMIMS</div>
+                                    <div class="text-sm text-neutral-600">Select for SMIMS system data</div>
+                                </div>
+                            </div>
+                        </label>
+                        
+                        <label class="flex items-center p-4 border-2 border-neutral-200 rounded-lg cursor-pointer hover:border-brand-sky transition-all duration-200" 
+                               :class="{ 'border-brand-sky bg-brand-sky/5': selectedSource === 'EMHware' }">
+                            <input type="radio" name="source" value="EMHware" x-model="selectedSource" class="sr-only">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center" 
+                                     :class="{ 'border-brand-sky bg-brand-sky': selectedSource === 'EMHware', 'border-neutral-300': selectedSource !== 'EMHware' }">
+                                    <div x-show="selectedSource === 'EMHware'" class="w-2 h-2 bg-white rounded-full"></div>
+                                </div>
+                                <div>
+                                    <div class="font-bold text-neutral-900">EMHware</div>
+                                    <div class="text-sm text-neutral-600">Select for EMHware system data</div>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
                 <!-- File Drop Zone -->
                 <div 
                     class="border-2 border-dashed border-neutral-300 rounded-xl p-12 text-center transition-all duration-300 hover:border-brand-sky hover:bg-brand-sky/5"
@@ -213,7 +250,7 @@
                 <div class="mt-8 flex justify-center">
                     <button 
                         @click="uploadFile()" 
-                        :disabled="!fileSelected || isUploading"
+                        :disabled="!fileSelected || !selectedSource || isUploading"
                         class="px-8 py-3 bg-brand-sky text-white text-lg font-bold rounded-xl hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         :class="{ 'animate-pulse': isUploading }"
                     >
@@ -610,6 +647,7 @@ function uploadManager() {
         isUploading: false,
         currentStep: 0,
         successMessage: '',
+        selectedSource: 'SMIMS', // Default to SMIMS
         
         handleFileDrop(event) {
             this.isDragging = false;
@@ -681,6 +719,7 @@ function uploadManager() {
             
             const formData = new FormData();
             formData.append('file', this.selectedFile);
+            formData.append('source', this.selectedSource);
             
             try {
                 // Simulate progress steps

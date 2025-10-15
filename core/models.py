@@ -482,6 +482,7 @@ class Client(BaseModel):
     
     # 🧾 ADMINISTRATIVE / SYSTEM FIELDS
     chart_number = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    source = models.CharField(max_length=50, choices=[('SMIMS', 'SMIMS'), ('EMHware', 'EMHware')], null=True, blank=True, db_index=True, help_text="Source system where client data originated")
     
     # Legacy fields (keeping for backward compatibility)
     image = models.URLField(max_length=500, null=True, blank=True)
@@ -571,6 +572,7 @@ class Client(BaseModel):
             models.Index(fields=['province'], name='client_province_idx'),
             models.Index(fields=['city'], name='client_city_idx'),
             models.Index(fields=['postal_code'], name='client_postal_code_idx'),
+            models.Index(fields=['source'], name='client_source_idx'),
         ]
     
     def __str__(self):

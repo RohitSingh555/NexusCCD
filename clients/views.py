@@ -959,6 +959,11 @@ def upload_clients(request):
         if 'file' not in request.FILES:
             return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
         
+        # Get the source parameter
+        source = request.POST.get('source', 'SMIMS')  # Default to SMIMS if not provided
+        if source not in ['SMIMS', 'EMHware']:
+            return JsonResponse({'success': False, 'error': 'Invalid source. Must be SMIMS or EMHware.'}, status=400)
+        
         file = request.FILES['file']
         file_extension = file.name.split('.')[-1].lower()
         
@@ -977,84 +982,27 @@ def upload_clients(request):
         # Create case-insensitive field mapping
         def create_field_mapping(df_columns):
             """Create a mapping from case-insensitive column names to standardized field names"""
-            field_mapping = {
-                # Required fields
-                'first_name': ['first_name', 'first name', 'firstname', 'fname', 'given name', 'First Name', 'FIRST NAME'],
-                'last_name': ['last_name', 'last name', 'lastname', 'lname', 'surname', 'family name', 'Last Name', 'LAST NAME'],
-                'email': ['email', 'e-mail', 'email address', 'e_mail'],
-                'phone_number': ['phone_number', 'phone number', 'phone', 'telephone', 'tel', 'mobile', 'cell', 'Phone', 'PHONE'],
-                'phone': ['phone_number', 'phone number', 'phone', 'telephone', 'tel', 'mobile', 'cell', 'Phone', 'PHONE'],
-                
-                # Basic information
-                'client_id': ['client_id', 'client id', 'clientid', 'id', 'client number', 'Client ID', 'CLIENT ID'],
-                'middle_name': ['middle name', 'middlename', 'mname'],
-                'preferred_name': ['preferred name', 'preferredname', 'nickname', 'nick name'],
-                'alias': ['alias', 'alias/last name at birth', 'last name at birth', 'maiden name'],
-                'dob': ['dob', 'date of birth', 'birthdate', 'birth date', 'dateofbirth', 'DOB', 'DOB'],
-                'age': ['age'],
-                'gender': ['gender', 'sex'],
-                'gender_identity': ['gender identity', 'genderidentity'],
-                'pronoun': ['pronoun', 'pronouns', 'preferred pronoun'],
-                'marital_status': ['marital status', 'maritalstatus', 'marriage status'],
-                'citizenship_status': ['citizenship status', 'citizenshipstatus', 'citizenship'],
-                'location_county': ['location/county', 'location', 'county', 'location county'],
-                'province': ['province', 'state'],
-                'city': ['city', 'town'],
-                'postal_code': ['postal code', 'postalcode', 'zip', 'zip code', 'zipcode'],
-                'address': ['address', 'street address', 'street'],
-                'address_2': ['address 2', 'address2', 'address line 2', 'apt', 'apartment', 'suite'],
-                
-                # Language fields
-                'language': ['language', 'languages'],
-                'preferred_language': ['preferred language', 'preferredlanguage'],
-                'mother_tongue': ['mother tongue', 'mothertongue', 'native language'],
-                'official_language': ['official language', 'officiallanguage'],
-                'language_interpreter_required': ['language interpreter required', 'interpreter required', 'interpreter'],
-                'self_identification_race_ethnicity': ['self-identification as race/ethnicity', 'race/ethnicity', 'race ethnicity', 'self identification'],
-                'ethnicity': ['ethnicity', 'ethnic background'],
-                'aboriginal_status': ['aboriginal status', 'aboriginalstatus', 'indigenous status', 'indigenous'],
-                'lgbtq_status': ['lgbtq+?', 'lgbtq', 'lgbtq+', 'sexual orientation'],
-                'highest_level_education': ['highest level of education', 'education level', 'education'],
-                'children_home': ['children home', 'childrenhome', 'has children'],
-                'children_number': ['children number', 'childrennumber', 'number of children'],
-                'lhin': ['lhin', 'local health integration network'],
-                
-                # Medical fields
-                'medical_conditions': ['medical conditions', 'medicalconditions', 'health conditions'],
-                'primary_diagnosis': ['primary diagnosis', 'primarydiagnosis', 'diagnosis'],
-                'family_doctor': ['family doctor', 'familydoctor', 'doctor', 'physician'],
-                'health_card_number': ['hc', 'health card', 'healthcard', 'health card number'],
-                'health_card_version': ['hc version', 'health card version', 'healthcardversion'],
-                'health_card_exp_date': ['hc exp date', 'health card exp date', 'health card expiry', 'healthcardexpdate'],
-                'health_card_issuing_province': ['hc issuing province', 'health card issuing province', 'healthcardissuingprovince'],
-                'no_health_card_reason': ['no hc reason', 'no health card reason', 'nohealthcardreason'],
-                
-                # Contact fields
-                'permission_to_phone': ['permission to phone', 'permissiontophone', 'phone permission'],
-                'permission_to_email': ['permission to email', 'permissiontoemail', 'email permission'],
-                'phone_work': ['phone (work)', 'phone work', 'work phone', 'workphone'],
-                'phone_alt': ['phone (alt)', 'phone alt', 'alternative phone', 'alt phone'],
-                'next_of_kin': ['next of kin', 'nextofkin', 'kin'],
-                'emergency_contact': ['emergency contact', 'emergencycontact', 'emergency'],
-                'comments': ['comments', 'notes', 'remarks'],
-                
-                # Program fields
-                'program_name': ['program', 'program name', 'programname'],
-                'sub_program': ['sub-program', 'subprogram', 'sub program'],
-                'support_workers': ['worker / support worker(s)', 'support workers', 'supportworkers', 'workers'],
-                'level_of_support': ['level of support', 'levelofsupport', 'support level'],
-                'client_type': ['client type', 'clienttype', 'type'],
-                'admission_date': ['admission date', 'admissiondate', 'start date', 'enrollment date'],
-                'discharge_date': ['discharge date', 'dischargedate', 'end date', 'exit date'],
-                'days_elapsed': ['days elapsed', 'dayselapsed', 'days since admission'],
-                'program_status': ['program status', 'programstatus', 'status'],
-                'reason_discharge': ['reason (for discharge/program status)', 'reason for discharge', 'discharge reason', 'reason'],
-                'receiving_services': ['receiving services', 'receivingservices', 'active'],
-                'referral_source': ['referral source', 'referralsource', 'source'],
-                
-                # Additional fields
-                'chart_number': ['chart number', 'chartnumber', 'chart'],
-            }
+            import os
+            import json
+            
+            # Load field mapping from JSON file
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            json_file_path = os.path.join(current_dir, 'field_mapping.json')
+            
+            try:
+                with open(json_file_path, 'r') as f:
+                    field_mapping_data = json.load(f)
+                    field_mapping = field_mapping_data['field_mapping']
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                logger.error(f"Error loading field mapping from JSON: {e}")
+                # Fallback to basic mapping if JSON file is not found or corrupted
+                field_mapping = {
+                    'first_name': ['first_name', 'first name', 'firstname', 'fname', 'given name', 'First Name', 'FIRST NAME'],
+                    'last_name': ['last_name', 'last name', 'lastname', 'lname', 'surname', 'family name', 'Last Name', 'LAST NAME'],
+                    'email': ['email', 'e-mail', 'email address', 'e_mail'],
+                    'phone': ['phone_number', 'phone number', 'phone', 'telephone', 'tel', 'mobile', 'cell', 'Phone', 'PHONE'],
+                    'dob': ['dob', 'date of birth', 'birthdate', 'birth date', 'dateofbirth', 'DOB', 'DOB'],
+                }
             
             # Create reverse mapping from column names to standardized names
             column_mapping = {}
@@ -1119,7 +1067,7 @@ def upload_clients(request):
                     if pd.notna(client_id_value) and str(client_id_value).strip():
                         client_id_clean = str(client_id_value).strip()
                         print(f"DEBUG: Row {index + 1}: Looking up client_id '{client_id_clean}' in database")
-                        existing_client = Client.objects.filter(client_id=client_id_clean).first()
+                        existing_client = Client.objects.filter(client_id=client_id_clean, source=source).first()
                         print(f"DEBUG: Row {index + 1}: Database lookup result: {existing_client}")
                         if existing_client:
                             has_existing_client_ids = True
@@ -1288,7 +1236,7 @@ def upload_clients(request):
                 
                 program_name = get_field_data('program_name')
                 program_department = get_field_data('program_department')
-                source = get_field_data('source', 'SMIS')
+                # Use the source from the form (upload type selection), not from CSV
                 
                 print(f"DEBUG: Program enrollment data - program_name: '{program_name}', source: '{source}'")
                 intake_date_value = get_field_data('admission_date')
@@ -1638,6 +1586,11 @@ def upload_clients(request):
                     'lhin': get_field_data('lhin'),
                     'client_id': get_field_data('client_id'),
                     'phone': get_field_data('phone'),
+                    'email': email,  # Add email to direct field
+                    'source': source,  # Add the source field from the form
+                    'level_of_support': get_field_data('level_of_support'),
+                    'client_type': get_field_data('client_type'),
+                    'referral_source': get_field_data('referral_source'),
                     'phone_work': get_field_data('phone_work'),
                     'phone_alt': get_field_data('phone_alt'),
                     'permission_to_phone': parse_boolean(get_field_data('permission_to_phone')),
@@ -1678,8 +1631,7 @@ def upload_clients(request):
                 support_workers = get_field_data('support_workers')
                 if support_workers:
                     client_data['support_workers'] = [worker.strip() for worker in support_workers.split(',') if worker.strip()]
-                else:
-                    client_data['support_workers'] = []
+                # Don't set empty list if no support_workers column exists - this prevents overwriting existing data
                 
                 # Handle next_of_kin (expect JSON string or simple text)
                 next_of_kin = get_field_data('next_of_kin')
@@ -1743,8 +1695,8 @@ def upload_clients(request):
                         client_id_to_find = client_data['client_id']
                         print(f"Row {index + 1}: Looking for existing client with Client ID: '{client_id_to_find}'")
                         
-                        # Use .first() to handle potential duplicate Client IDs
-                        existing_client_id = Client.objects.filter(client_id=client_data['client_id']).first()
+                        # Use .first() to handle potential duplicate Client IDs - match by both client_id and source
+                        existing_client_id = Client.objects.filter(client_id=client_data['client_id'], source=source).first()
                         print(f"Row {index + 1}: Found existing client: {existing_client_id}")
                         
                         if existing_client_id:
@@ -2968,6 +2920,8 @@ def merge_clients(request, duplicate_id):
         notes = data.get('notes', '')
         
         print(f"Selected fields: {selected_fields}")
+        print(f"Number of selected fields: {len(selected_fields)}")
+        print(f"Selected fields keys: {list(selected_fields.keys())}")
         
         if not selected_fields:
             return JsonResponse({
@@ -2986,27 +2940,44 @@ def merge_clients(request, duplicate_id):
         merged_client = primary_client
         
         # Process each field and update the primary client
-        for field_name, source in selected_fields.items():
+        print(f"Processing {len(selected_fields)} fields for merge")
+        for field_name, field_data in selected_fields.items():
+            print(f"Processing field: {field_name} with data: {field_data}")
+            # Handle both old format (string) and new format (dict)
+            if isinstance(field_data, dict):
+                source = field_data.get('source')
+                custom_value = field_data.get('value')
+            else:
+                # Backward compatibility with old format
+                source = field_data
+                custom_value = None
+            
             if source == 'primary':
                 value = getattr(primary_client, field_name, '')
                 print(f"Using primary {field_name}: {value}")
             elif source == 'duplicate':
                 value = getattr(duplicate_client, field_name, '')
                 print(f"Using duplicate {field_name}: {value}")
+            elif source == 'custom' and custom_value:
+                value = custom_value
+                print(f"Using custom {field_name}: {value}")
             else:
                 continue
                 
             # Handle special fields that need special processing
-            if field_name in ['email', 'phone']:
-                # Update contact_information
-                contact_info = merged_client.contact_information or {}
-                contact_info[field_name] = value
-                merged_client.contact_information = contact_info
-            elif field_name in ['addresses', 'next_of_kin', 'emergency_contact', 'support_workers', 'languages_spoken']:
+            if field_name in ['addresses', 'next_of_kin', 'emergency_contact', 'support_workers', 'languages_spoken']:
                 # Handle JSON fields - copy the entire structure
                 setattr(merged_client, field_name, value)
+            elif field_name in ['permission_to_phone', 'permission_to_email']:
+                # Handle boolean fields
+                if value == 'true':
+                    setattr(merged_client, field_name, True)
+                elif value == 'false':
+                    setattr(merged_client, field_name, False)
+                else:
+                    setattr(merged_client, field_name, value)
             else:
-                # Update regular fields
+                # Update regular fields (including email, phone, phone_work, phone_alt)
                 setattr(merged_client, field_name, value)
         
         # Save the updated primary client
