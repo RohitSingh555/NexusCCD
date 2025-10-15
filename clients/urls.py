@@ -17,6 +17,7 @@ urlpatterns = [
     path('dedupe/action/<int:duplicate_id>/<str:action>/', views.mark_duplicate_action, name='duplicate_action'),
     path('dedupe/bulk-action/', views.bulk_duplicate_action, name='bulk_duplicate_action'),
     path('dedupe/compare/<int:duplicate_id>/', views.client_duplicate_comparison, name='duplicate-comparison'),
+    path('dedupe/not-duplicate/<int:duplicate_id>/', views.client_not_duplicate_comparison, name='not-duplicate-comparison'),
     path('dedupe/merge/<int:duplicate_id>/', views.client_merge_view, name='duplicate-merge'),
     path('dedupe/merge/<int:duplicate_id>/process/', views.merge_clients, name='merge_clients'),
     path('dedupe/resolve/<int:duplicate_id>/', views.resolve_duplicate_selection, name='resolve_duplicate'),

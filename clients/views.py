@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, TemplateView
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.contrib import messages
 from core.message_utils import success_message, error_message, warning_message, info_message, create_success, update_success, delete_success, validation_error, permission_error, not_found_error
 from django.http import JsonResponse
@@ -17,7 +17,7 @@ from django.db import IntegrityError
 from django.http import HttpResponse
 import csv
 from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate
-from core.views import ProgramManagerAccessMixin, jwt_required
+from core.views import ProgramManagerAccessMixin, AnalystAccessMixin, jwt_required
 from core.fuzzy_matching import fuzzy_matcher
 from .forms import ClientForm
 import pandas as pd
@@ -31,7 +31,7 @@ from django.views.decorators.http import require_http_methods
 logger = logging.getLogger(__name__)
 
 @method_decorator(jwt_required, name='dispatch')
-class ClientListView(ProgramManagerAccessMixin, ListView):
+class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
     model = Client
     template_name = 'clients/client_list.html'
     context_object_name = 'clients'
@@ -59,14 +59,65 @@ class ClientListView(ProgramManagerAccessMixin, ListView):
         # because it tries to select_related('program') which doesn't exist on Client model
         queryset = Client.objects.all().order_by('-created_at')
         
-        # For program managers, we need to filter clients based on their program enrollments
+        # For program managers and staff-only users, we need to filter clients based on their relationships
         if self.request.user.is_authenticated:
             try:
                 staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
                 if staff.is_program_manager():
                     # Get assigned programs
                     assigned_programs = staff.get_assigned_programs()
-                    # Filter clients who are enrolled in any of the assigned programs
+                    
+                    # Create a Q object to combine all the relationship filters
+                    relationship_filters = Q()
+                    
+                    # 1. Clients enrolled in programs they manage
+                    relationship_filters |= Q(
+                        clientprogramenrollment__program__in=assigned_programs
+                    )
+                    
+                    # 2. Clients they have created enrollments for
+                    # (This would require tracking who created enrollments - using created_by field)
+                    staff_name = f"{staff.user.first_name} {staff.user.last_name}".strip() or staff.user.username
+                    relationship_filters |= Q(
+                        clientprogramenrollment__created_by=staff_name
+                    )
+                    
+                    # 3. Clients they have created restrictions for
+                    relationship_filters |= Q(
+                        servicerestriction__created_by=staff_name
+                    )
+                    
+                    # 4. Clients they have updated (using updated_by field)
+                    relationship_filters |= Q(
+                        updated_by=staff_name
+                    )
+                    
+                    # Apply the combined filter
+                    queryset = queryset.filter(relationship_filters).distinct()
+                elif 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
+                    # Staff-only users see only clients enrolled in their assigned programs
+                    from staff.models import StaffProgramAssignment
+                    assigned_program_ids = StaffProgramAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('program_id', flat=True)
+                    queryset = queryset.filter(
+                        clientprogramenrollment__program_id__in=assigned_program_ids
+                    ).distinct()
+                
+                elif staff.is_leader():
+                    # Leader users see only clients enrolled in programs from their assigned departments
+                    from core.models import Department
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    assigned_programs = Program.objects.filter(
+                        department__in=assigned_departments
+                    ).distinct()
                     queryset = queryset.filter(
                         clientprogramenrollment__program__in=assigned_programs
                     ).distinct()
@@ -193,18 +244,121 @@ class ClientListView(ProgramManagerAccessMixin, ListView):
         
         return context
 
-class ClientDetailView(DetailView):
+class ClientDetailView(AnalystAccessMixin, DetailView):
     model = Client
     template_name = 'clients/client_detail.html'
     context_object_name = 'client'
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
+    
+    def get(self, request, *args, **kwargs):
+        """Override get method to handle permission checks before rendering"""
+        try:
+            # First, try to get the object
+            self.object = self.get_object()
+        except Exception:
+            # If object doesn't exist, redirect to permission error
+            from django.shortcuts import redirect
+            from django.urls import reverse
+            return redirect(f"{reverse('core:permission_error')}?type=client_not_related&resource=client")
+        
+        # Check if user is a program manager and has access to this client
+        if not request.user.is_superuser:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                if staff.is_program_manager():
+                    # Check if this client is in the filtered queryset from ClientListView
+                    from django.db.models import Q
+                    
+                    # Get assigned programs
+                    assigned_programs = staff.get_assigned_programs()
+                    
+                    # Create the same relationship filters as in ClientListView
+                    relationship_filters = Q()
+                    relationship_filters |= Q(clientprogramenrollment__program__in=assigned_programs)
+                    
+                    staff_name = f"{staff.user.first_name} {staff.user.last_name}".strip() or staff.user.username
+                    relationship_filters |= Q(clientprogramenrollment__created_by=staff_name)
+                    relationship_filters |= Q(servicerestriction__created_by=staff_name)
+                    relationship_filters |= Q(updated_by=staff_name)
+                    
+                    # Check if this client matches any of the relationship filters
+                    if not Client.objects.filter(pk=self.object.pk).filter(relationship_filters).exists():
+                        from django.shortcuts import redirect
+                        from django.urls import reverse
+                        return redirect(f"{reverse('core:permission_error')}?type=client_not_related&resource=client&name={self.object.first_name} {self.object.last_name}")
+                
+                elif 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
+                    # Staff users can only access clients enrolled in their assigned programs
+                    from staff.models import StaffProgramAssignment
+                    assigned_program_ids = StaffProgramAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('program_id', flat=True)
+                    
+                    # Check if this client is enrolled in any of their assigned programs
+                    if not Client.objects.filter(
+                        pk=self.object.pk,
+                        clientprogramenrollment__program_id__in=assigned_program_ids
+                    ).exists():
+                        from django.shortcuts import redirect
+                        from django.urls import reverse
+                        return redirect(f"{reverse('core:permission_error')}?type=client_not_assigned&resource=client&name={self.object.first_name} {self.object.last_name}")
+                
+                elif staff.is_leader():
+                    # Leaders can only access clients enrolled in programs from their assigned departments
+                    from core.models import Department
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    assigned_programs = Program.objects.filter(
+                        department__in=assigned_departments
+                    ).distinct()
+                    
+                    # Check if this client is enrolled in any of their assigned programs
+                    if not Client.objects.filter(
+                        pk=self.object.pk,
+                        clientprogramenrollment__program__in=assigned_programs
+                    ).exists():
+                        from django.shortcuts import redirect
+                        from django.urls import reverse
+                        return redirect(f"{reverse('core:permission_error')}?type=client_not_assigned&resource=client&name={self.object.first_name} {self.object.last_name}")
+                        
+            except Exception:
+                from django.shortcuts import redirect
+                from django.urls import reverse
+                return redirect(f"{reverse('core:permission_error')}?type=access_denied&resource=client")
+        
+        # If we get here, user has access, proceed with normal rendering
+        context = self.get_context_data(object=self.object)
+        return self.render_to_response(context)
 
-class ClientCreateView(CreateView):
+class ClientCreateView(AnalystAccessMixin, CreateView):
     model = Client
     form_class = ClientForm
     template_name = 'clients/client_form_tailwind.html'
     success_url = reverse_lazy('clients:list')
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to create clients"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot create clients
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    messages.error(request, 'You do not have permission to create clients. Contact your administrator.')
+                    return redirect('clients:list')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -448,13 +602,30 @@ class ClientCreateView(CreateView):
             else:
                 print(f"DEBUG: Skipping enrollment {index} - missing program_id or start_date")
 
-class ClientUpdateView(UpdateView):
+class ClientUpdateView(AnalystAccessMixin, UpdateView):
     model = Client
     form_class = ClientForm
     template_name = 'clients/client_form_tailwind.html'
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('clients:list')
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to edit clients"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot edit clients
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    messages.error(request, 'You do not have permission to edit clients. Contact your administrator.')
+                    return redirect('clients:list')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -680,6 +851,23 @@ class ClientDeleteView(DeleteView):
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('clients:list')
     
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to delete clients"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot delete clients
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    messages.error(request, 'You do not have permission to delete clients. Contact your administrator.')
+                    return redirect('clients:list')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
+    
     def form_valid(self, form):
         client = self.get_object()
         
@@ -732,11 +920,41 @@ class ClientDeleteView(DeleteView):
 
 class ClientUploadView(TemplateView):
     template_name = 'clients/client_upload.html'
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to upload clients"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot upload clients
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    messages.error(request, 'You do not have permission to upload clients. Contact your administrator.')
+                    return redirect('clients:list')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
 
 @method_decorator(csrf_exempt, name='dispatch')
 @require_http_methods(["POST"])
 def upload_clients(request):
     """Handle CSV/Excel file upload and process client data"""
+    # Check if user has permission to upload clients
+    if request.user.is_authenticated:
+        try:
+            staff = request.user.staff_profile
+            user_roles = staff.staffrole_set.select_related('role').all()
+            role_names = [staff_role.role.name for staff_role in user_roles]
+            
+            # Staff role users cannot upload clients
+            if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                return JsonResponse({'success': False, 'error': 'You do not have permission to upload clients. Contact your administrator.'}, status=403)
+        except Exception:
+            pass
+    
     try:
         if 'file' not in request.FILES:
             return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
@@ -2087,6 +2305,23 @@ class ClientDedupeView(TemplateView):
     """View for managing client duplicates"""
     template_name = 'clients/client_dedupe.html'
     
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to access duplicate detection"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot access duplicate detection
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    messages.error(request, 'You do not have permission to access duplicate detection. Contact your administrator.')
+                    return redirect('clients:list')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
+    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
@@ -2207,6 +2442,19 @@ def mark_duplicate_action(request, duplicate_id, action):
             duplicate.mark_as_not_duplicate(reviewed_by, notes)
             message = f'Confirmed {duplicate.duplicate_client} is NOT a duplicate. Client kept in system and duplicate flag removed.'
             print(f"Marked as not duplicate: {message}")
+            
+            # Add success message
+            messages.success(request, message)
+            
+            # Return JSON response for AJAX requests
+            if request.content_type == 'application/json':
+                return JsonResponse({
+                    'success': True,
+                    'message': message,
+                    'redirect_url': reverse('clients:dedupe')
+                })
+            else:
+                return redirect('clients:dedupe')
         elif action == 'merge_confirm':
             # Check if this is coming from the merge interface (POST request)
             if request.method == 'POST':
@@ -2317,6 +2565,31 @@ def client_duplicate_comparison(request, duplicate_id):
         return redirect('clients:dedupe')
 
 
+def client_not_duplicate_comparison(request, duplicate_id):
+    """View for side-by-side comparison of clients to confirm they are NOT duplicates"""
+    try:
+        duplicate = get_object_or_404(ClientDuplicate, id=duplicate_id)
+        
+        # Get both clients
+        primary_client = duplicate.primary_client
+        duplicate_client = duplicate.duplicate_client
+        
+        context = {
+            'duplicate': duplicate,
+            'primary_client': primary_client,
+            'duplicate_client': duplicate_client,
+            'similarity_score': duplicate.similarity_score,
+            'match_type': duplicate.match_type,
+            'confidence_level': duplicate.confidence_level,
+        }
+        
+        return render(request, 'clients/client_not_duplicate_comparison.html', context)
+        
+    except Exception as e:
+        messages.error(request, f'Error loading client comparison: {str(e)}')
+        return redirect('clients:dedupe')
+
+
 @require_http_methods(["POST"])
 def resolve_duplicate_selection(request, duplicate_id):
     """Handle the selection of which client to keep and which to delete"""
@@ -2360,19 +2633,51 @@ def resolve_duplicate_selection(request, duplicate_id):
                 'error': 'Invalid client selection'
             }, status=400)
         
-        # Delete the selected client
-        client_to_delete.delete()
+        # Transfer related records to the kept client before deletion
+        try:
+            # Transfer enrollments
+            from core.models import ClientProgramEnrollment
+            enrollments = ClientProgramEnrollment.objects.filter(client=client_to_delete)
+            for enrollment in enrollments:
+                enrollment.client = client_to_keep
+                enrollment.save()
+            
+            # Transfer restrictions
+            from core.models import ServiceRestriction
+            restrictions = ServiceRestriction.objects.filter(client=client_to_delete)
+            for restriction in restrictions:
+                restriction.client = client_to_keep
+                restriction.save()
+            
+            # Delete the selected client
+            client_to_delete.delete()
+            
+        except Exception as transfer_error:
+            return JsonResponse({
+                'success': False,
+                'error': f'Error transferring related records: {str(transfer_error)}'
+            }, status=500)
         
         # Delete the duplicate relationship record
         duplicate.delete()
         
-        message = f'Kept client: {kept_client_name}, Deleted client: {deleted_client_name}'
+        # Count transferred records
+        enrollment_count = ClientProgramEnrollment.objects.filter(client=client_to_keep).count()
+        restriction_count = ServiceRestriction.objects.filter(client=client_to_keep).count()
+        
+        message = f'Successfully resolved duplicate! Kept: {kept_client_name}, Deleted: {deleted_client_name}'
+        if enrollment_count > 0 or restriction_count > 0:
+            message += f' (Transferred {enrollment_count} enrollments and {restriction_count} restrictions)'
+        
+        # Add success message
+        messages.success(request, message)
         
         return JsonResponse({
             'success': True,
             'message': message,
             'kept_client_name': kept_client_name,
-            'deleted_client_name': deleted_client_name
+            'deleted_client_name': deleted_client_name,
+            'redirect_url': reverse('clients:dedupe')
         })
         
     except Exception as e:

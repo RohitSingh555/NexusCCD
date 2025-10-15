@@ -14,4 +14,6 @@ urlpatterns = [
     path('upgrade-user/<uuid:external_id>/', views.upgrade_user_to_staff, name='upgrade_user'),
     path('<uuid:external_id>/toggle-role/', views.toggle_staff_role, name='toggle_role'),
     path('<uuid:external_id>/programs/', views.manage_program_assignments, name='manage_programs'),
+    path('<uuid:external_id>/program-assignments/', views.manage_program_assignments_staff, name='manage_program_assignments_staff'),
+    path('<uuid:external_id>/department-assignments/', views.manage_department_assignments, name='manage_department_assignments'),
 ]

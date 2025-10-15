@@ -11,7 +11,7 @@
     </div>
 
     <!-- Statistics Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 {% if user_permissions.is_staff_only or user_permissions.is_program_manager or user_permissions.is_leader %}lg:grid-cols-3{% else %}lg:grid-cols-4{% endif %} gap-6 mb-8">
         <!-- Total Clients -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 relative">
             <div class="flex items-center">
@@ -39,7 +39,11 @@
                     <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
                         <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
                         <p class="font-medium mb-1">Total Clients</p>
+                        {% if is_staff_only or is_program_manager %}
+                        <p class="text-gray-300">This shows the total number of clients enrolled in your assigned programs.</p>
+                        {% else %}
                         <p class="text-gray-300">This shows the total number of clients registered in the system, including both active and inactive clients.</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -72,13 +76,18 @@
                     <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
                         <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
                         <p class="font-medium mb-1">Active Programs</p>
+                        {% if is_staff_only or is_program_manager %}
+                        <p class="text-gray-300">This shows the total number of programs you are assigned to.</p>
+                        {% else %}
                         <p class="text-gray-300">This shows the total number of programs currently available in the system that clients can enroll in.</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Staff Members -->
+        {% if not user_permissions.is_staff_only and not user_permissions.is_program_manager and not user_permissions.is_leader %}
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 relative">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
@@ -110,6 +119,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
         <!-- Active Restrictions -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 relative">
@@ -147,6 +157,7 @@
     </div>
 
     <!-- Quick Actions -->
+    {% if not user_permissions.is_staff_only and not user_permissions.is_analyst %}
     <div class="mb-8">
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b border-gray-200">
@@ -154,6 +165,7 @@
             </div>
             <div class="p-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {% if user_permissions.can_create_clients %}
                     <a href="{% url 'clients:create' %}" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                         <div class="flex-shrink-0">
                             <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -167,7 +179,9 @@
                             <p class="text-xs text-gray-500">Create new client profile</p>
                         </div>
                     </a>
+                    {% endif %}
 
+                    {% if user_permissions.can_create_programs %}
                     <a href="{% url 'programs:create' %}" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                         <div class="flex-shrink-0">
                             <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
@@ -181,6 +195,7 @@
                             <p class="text-xs text-gray-500">Set up new program</p>
                         </div>
                     </a>
+                    {% endif %}
 
                     <a href="{% url 'reports:list' %}" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                         <div class="flex-shrink-0">
@@ -200,6 +215,7 @@
             </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- Main Content Grid -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -287,7 +303,13 @@
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b border-gray-200">
                 <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-900">Recent Clients</h3>
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        {% if is_staff_only or is_program_manager %}
+                        Recent Clients (Your Programs)
+                        {% else %}
+                        Recent Clients
+                        {% endif %}
+                    </h3>
                     <a href="{% url 'clients:list' %}" class="inline-flex items-center px-3 py-1.5 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
                         View all
                         <svg class="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -346,7 +368,13 @@
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b border-gray-200">
                 <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-gray-900">Program Status</h3>
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        {% if is_staff_only or is_program_manager %}
+                        Program Status (Your Programs)
+                        {% else %}
+                        Program Status
+                        {% endif %}
+                    </h3>
                     <a href="{% url 'programs:list' %}" class="inline-flex items-center px-3 py-1.5 border border-blue-300 text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
                         View all
                         <svg class="ml-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

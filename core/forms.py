@@ -184,7 +184,6 @@ class UserProfileForm(forms.ModelForm):
                 'placeholder': 'Enter your username'
             }),
             'profile_photo': forms.FileInput(attrs={
-                'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent',
                 'accept': 'image/*'
             }),
         }
@@ -196,11 +195,7 @@ class UserProfileForm(forms.ModelForm):
 
     def save(self, commit=True):
         user = super().save(commit=False)
-        print(f"Form cleaned_data: {self.cleaned_data}")
-        print(f"remove_profile_photo value: {self.cleaned_data.get('remove_profile_photo')}")
-        print(f"remove_profile_photo type: {type(self.cleaned_data.get('remove_profile_photo'))}")
         if self.cleaned_data.get('remove_profile_photo'):
-            print("Removing profile photo...")
             if user.profile_photo:
                 user.profile_photo.delete(save=False)  # Delete the file
             user.profile_photo = None

@@ -5,23 +5,61 @@ from django.utils import timezone
 from django.db import models
 from datetime import datetime, date
 import csv
-from core.models import Client, Program, ClientProgramEnrollment, Staff
+from core.models import Client, Program, ClientProgramEnrollment, Staff, Department
 
 def get_program_manager_filtering(request):
-    """Helper function to get program manager filtering data"""
+    """Helper function to get program manager, leader, analyst, and staff-only filtering data"""
     is_program_manager = False
+    is_leader = False
+    is_analyst = False
+    is_staff_only = False
     assigned_programs = None
+    assigned_clients = None
     
     if request.user.is_authenticated:
         try:
             staff_profile = request.user.staff_profile
+            user_roles = staff_profile.staffrole_set.select_related('role').all()
+            role_names = [staff_role.role.name for staff_role in user_roles]
+            
             if staff_profile.is_program_manager():
                 is_program_manager = True
                 assigned_programs = staff_profile.get_assigned_programs()
+            elif staff_profile.is_leader():
+                is_leader = True
+                # Get assigned programs for leader users via departments using direct queries
+                assigned_departments = Department.objects.filter(
+                    leader_assignments__staff=staff_profile,
+                    leader_assignments__is_active=True
+                ).distinct()
+                assigned_programs = Program.objects.filter(
+                    department__in=assigned_departments
+                ).distinct()
+                # Get clients enrolled in assigned programs
+                assigned_clients = Client.objects.filter(
+                    clientprogramenrollment__program__in=assigned_programs
+                ).distinct()
+            elif 'Analyst' in role_names:
+                is_analyst = True
+                # Analysts see all data - no filtering needed
+                assigned_programs = None
+                assigned_clients = None
+            elif staff_profile.is_staff_only():
+                is_staff_only = True
+                # Get assigned programs for staff-only users
+                from staff.models import StaffProgramAssignment
+                assigned_programs = Program.objects.filter(
+                    staff_assignments__staff=staff_profile,
+                    staff_assignments__is_active=True
+                ).distinct()
+                # Get clients enrolled in assigned programs
+                assigned_clients = Client.objects.filter(
+                    clientprogramenrollment__program__in=assigned_programs
+                ).distinct()
         except Exception:
             pass
     
-    return is_program_manager, assigned_programs
+    return is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients
 
 class ReportListView(ListView):
     template_name = 'reports/report_list.html'
@@ -36,15 +74,59 @@ class ReportListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Get program manager filtering
-        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
         # Filter data based on user role
-        if is_program_manager and assigned_programs:
+        if is_analyst:
+            # Analysts see all data across all clients and programs
+            context['total_clients'] = Client.objects.count()
+            context['active_programs'] = Program.objects.count()
+            
+            # Calculate enrollment rate for all programs
+            total_capacity = 0
+            active_enrollments = 0
+            today = timezone.now().date()
+            
+            for program in Program.objects.all():
+                total_capacity += program.capacity_current
+                
+                # Count active enrollments for this program
+                program_active_enrollments = ClientProgramEnrollment.objects.filter(
+                    program=program,
+                    start_date__lte=today
+                ).filter(
+                    models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
+                ).count()
+                
+                active_enrollments += program_active_enrollments
+        elif (is_program_manager or is_leader) and assigned_programs:
             # Program managers see only data for their assigned programs
             context['total_clients'] = Client.objects.filter(
                 clientprogramenrollment__program__in=assigned_programs
             ).distinct().count()
+            context['active_programs'] = assigned_programs.count()
+            
+            # Calculate enrollment rate for assigned programs only
+            total_capacity = 0
+            active_enrollments = 0
+            today = timezone.now().date()
+            
+            for program in assigned_programs:
+                total_capacity += program.capacity_current
+                
+                # Count active enrollments for this program
+                program_active_enrollments = ClientProgramEnrollment.objects.filter(
+                    program=program,
+                    start_date__lte=today
+                ).filter(
+                    models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
+                ).count()
+                
+                active_enrollments += program_active_enrollments
+        elif is_staff_only and assigned_clients and assigned_programs:
+            # Staff-only users see only data for their assigned clients and programs
+            context['total_clients'] = assigned_clients.count()
             context['active_programs'] = assigned_programs.count()
             
             # Calculate enrollment rate for assigned programs only
@@ -102,15 +184,29 @@ class OrganizationalSummaryView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Get program manager filtering
-        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
         # Filter data based on user role
-        if is_program_manager and assigned_programs:
+        if is_analyst:
+            # Analysts see all data across all clients and programs
+            context['total_clients'] = Client.objects.count()
+            context['total_programs'] = Program.objects.count()
+            
+            # Calculate active enrollments using date-based logic for all programs
+            enrollments = ClientProgramEnrollment.objects.all()
+        elif (is_program_manager or is_leader) and assigned_programs:
             # Program managers see only data for their assigned programs
             context['total_clients'] = Client.objects.filter(
                 clientprogramenrollment__program__in=assigned_programs
             ).distinct().count()
+            context['total_programs'] = assigned_programs.count()
+            
+            # Calculate active enrollments using date-based logic for assigned programs
+            enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
+        elif is_staff_only and assigned_clients and assigned_programs:
+            # Staff-only users see only data for their assigned clients and programs
+            context['total_clients'] = assigned_clients.count()
             context['total_programs'] = assigned_programs.count()
             
             # Calculate active enrollments using date-based logic for assigned programs
@@ -150,8 +246,8 @@ class VacancyTrackerView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Get program manager filtering
-        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
         # Get date filter from query parameters
         as_of_date = self.request.GET.get('as_of_date')
@@ -167,7 +263,12 @@ class VacancyTrackerView(TemplateView):
         department_id = self.request.GET.get('department')
         
         # Filter programs based on user role
-        if is_program_manager and assigned_programs:
+        if is_analyst:
+            # Analysts see all programs
+            programs = Program.objects.all()
+        elif (is_program_manager or is_leader) and assigned_programs:
+            programs = assigned_programs
+        elif is_staff_only and assigned_programs:
             programs = assigned_programs
         else:
             programs = Program.objects.all()
@@ -226,7 +327,20 @@ class ReportExportView(TemplateView):
         
         department_id = request.GET.get('department')
         
-        programs = Program.objects.all()
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(request)
+        
+        # Filter programs based on user role
+        if is_analyst:
+            # Analysts see all programs
+            programs = Program.objects.all()
+        elif (is_program_manager or is_leader) and assigned_programs:
+            programs = assigned_programs
+        elif is_staff_only and assigned_programs:
+            programs = assigned_programs
+        else:
+            programs = Program.objects.all()
+        
         if department_id:
             programs = programs.filter(department_id=department_id)
         
@@ -294,14 +408,16 @@ class ClientDemographicsView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Get program manager filtering
-        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
         # Filter clients based on user role
-        if is_program_manager and assigned_programs:
+        if (is_program_manager or is_leader) and assigned_programs:
             clients = Client.objects.filter(
                 clientprogramenrollment__program__in=assigned_programs
             ).distinct()
+        elif is_staff_only and assigned_clients:
+            clients = assigned_clients
         else:
             clients = Client.objects.all()
         
@@ -372,11 +488,15 @@ class ClientEnrollmentHistoryView(ListView):
     
     def get_queryset(self):
         """Get enrollments ordered by most recent start date first"""
-        # Get program manager filtering
-        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
         # Filter enrollments based on user role
-        if is_program_manager and assigned_programs:
+        if (is_program_manager or is_leader) and assigned_programs:
+            return ClientProgramEnrollment.objects.filter(
+                program__in=assigned_programs
+            ).select_related('client', 'program', 'program__department').order_by('-start_date')
+        elif is_staff_only and assigned_programs:
             return ClientProgramEnrollment.objects.filter(
                 program__in=assigned_programs
             ).select_related('client', 'program', 'program__department').order_by('-start_date')
@@ -387,11 +507,13 @@ class ClientEnrollmentHistoryView(ListView):
         """Add statistics to context"""
         context = super().get_context_data(**kwargs)
         
-        # Get program manager filtering
-        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
         # Get all enrollments for statistics (not just current page)
-        if is_program_manager and assigned_programs:
+        if (is_program_manager or is_leader) and assigned_programs:
+            all_enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
+        elif is_staff_only and assigned_programs:
             all_enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
         else:
             all_enrollments = ClientProgramEnrollment.objects.all()
@@ -432,11 +554,15 @@ class ClientEnrollmentHistoryExportView(ListView):
     
     def get_queryset(self):
         """Get enrollments ordered by most recent start date first"""
-        # Get program manager filtering
-        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
         # Filter enrollments based on user role
-        if is_program_manager and assigned_programs:
+        if (is_program_manager or is_leader) and assigned_programs:
+            return ClientProgramEnrollment.objects.filter(
+                program__in=assigned_programs
+            ).select_related('client', 'program', 'program__department').order_by('-start_date')
+        elif is_staff_only and assigned_programs:
             return ClientProgramEnrollment.objects.filter(
                 program__in=assigned_programs
             ).select_related('client', 'program', 'program__department').order_by('-start_date')
@@ -501,11 +627,13 @@ class ClientOutcomesView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        # Get program manager filtering
-        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
         # Filter enrollments based on user role
-        if is_program_manager and assigned_programs:
+        if (is_program_manager or is_leader) and assigned_programs:
+            enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
+        elif is_staff_only and assigned_programs:
             enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
         else:
             enrollments = ClientProgramEnrollment.objects.all()
@@ -566,27 +694,37 @@ class ProgramCapacityView(ListView):
         # Add the current per_page value to context for the pagination component
         context['per_page'] = str(self.get_paginate_by(self.get_queryset()))
         
-        # Get program manager filtering
-        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         context['is_program_manager'] = is_program_manager
         
         return context
     
     def get_queryset(self):
-        # Get program manager filtering
-        is_program_manager, assigned_programs = get_program_manager_filtering(self.request)
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
         # Filter programs based on user role
-        if is_program_manager and assigned_programs:
+        if is_analyst:
+            # Analysts see all programs
+            programs = Program.objects.all()
+        elif (is_program_manager or is_leader) and assigned_programs:
+            programs = assigned_programs
+        elif is_staff_only and assigned_programs:
             programs = assigned_programs
         else:
             programs = Program.objects.all()
         
         program_data = []
+        today = timezone.now().date()
+        
         for program in programs:
+            # Get active enrollments using proper date-based logic
             active_enrollments = ClientProgramEnrollment.objects.filter(
-                program=program, 
-                end_date__isnull=True
+                program=program,
+                start_date__lte=today
+            ).filter(
+                models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
             ).count()
             
             utilization = (active_enrollments / program.capacity_current * 100) if program.capacity_current > 0 else 0
@@ -608,13 +746,30 @@ class ProgramCapacityExportView(ListView):
     template_name = 'reports/program_capacity.html'
     
     def get_queryset(self):
-        programs = Program.objects.all()
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
+        
+        # Filter programs based on user role
+        if is_analyst:
+            # Analysts see all programs
+            programs = Program.objects.all()
+        elif (is_program_manager or is_leader) and assigned_programs:
+            programs = assigned_programs
+        elif is_staff_only and assigned_programs:
+            programs = assigned_programs
+        else:
+            programs = Program.objects.all()
         
         program_data = []
+        today = timezone.now().date()
+        
         for program in programs:
+            # Get active enrollments using proper date-based logic
             active_enrollments = ClientProgramEnrollment.objects.filter(
-                program=program, 
-                end_date__isnull=True
+                program=program,
+                start_date__lte=today
+            ).filter(
+                models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
             ).count()
             
             utilization = (active_enrollments / program.capacity_current * 100) if program.capacity_current > 0 else 0
@@ -698,7 +853,19 @@ class ProgramPerformanceView(ListView):
         return per_page
     
     def get_queryset(self):
-        programs = Program.objects.all()
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
+        
+        # Filter programs based on user role
+        if is_analyst:
+            # Analysts see all programs
+            programs = Program.objects.all()
+        elif (is_program_manager or is_leader) and assigned_programs:
+            programs = assigned_programs
+        elif is_staff_only and assigned_programs:
+            programs = assigned_programs
+        else:
+            programs = Program.objects.all()
         
         program_metrics = []
         today = timezone.now().date()
@@ -749,7 +916,19 @@ class ProgramPerformanceExportView(ListView):
     template_name = 'reports/program_performance.html'
     
     def get_queryset(self):
-        programs = Program.objects.all()
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
+        
+        # Filter programs based on user role
+        if is_analyst:
+            # Analysts see all programs
+            programs = Program.objects.all()
+        elif (is_program_manager or is_leader) and assigned_programs:
+            programs = assigned_programs
+        elif is_staff_only and assigned_programs:
+            programs = assigned_programs
+        else:
+            programs = Program.objects.all()
         
         program_metrics = []
         today = timezone.now().date()
@@ -843,11 +1022,31 @@ class DepartmentSummaryView(TemplateView):
         context = super().get_context_data(**kwargs)
         from core.models import Department
         
-        departments = Department.objects.all()
+        # Get program manager and staff-only filtering
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
+        
+        # Filter departments based on user role
+        if (is_program_manager or is_leader) and assigned_programs:
+            # Get departments that have assigned programs
+            department_ids = assigned_programs.values_list('department_id', flat=True).distinct()
+            departments = Department.objects.filter(id__in=department_ids)
+        elif is_staff_only and assigned_programs:
+            # Get departments that have assigned programs
+            department_ids = assigned_programs.values_list('department_id', flat=True).distinct()
+            departments = Department.objects.filter(id__in=department_ids)
+        else:
+            departments = Department.objects.all()
         department_data = []
         
         for dept in departments:
             programs = dept.program_set.all()
+            
+            # Filter programs based on user role
+            if (is_program_manager or is_leader) and assigned_programs:
+                programs = programs.filter(id__in=assigned_programs.values_list('id', flat=True))
+            elif is_staff_only and assigned_programs:
+                programs = programs.filter(id__in=assigned_programs.values_list('id', flat=True))
+            
             total_capacity = sum(p.capacity_current for p in programs)
             
             total_enrollments = 0
@@ -867,3 +1066,392 @@ class DepartmentSummaryView(TemplateView):
             'total_departments': departments.count(),
         })
         return context
+
+
+# Export Views for the three specific reports
+class ClientDemographicsExportView(TemplateView):
+    """Export client demographics report to CSV"""
+    
+    def get(self, request, *args, **kwargs):
+        # Get the same data as the main view
+        is_program_manager, is_leader, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(request)
+        
+        # Filter clients based on user role
+        if (is_program_manager or is_leader) and assigned_programs:
+            clients = Client.objects.filter(
+                clientprogramenrollment__program__in=assigned_programs
+            ).distinct()
+        elif is_staff_only and assigned_clients:
+            clients = assigned_clients
+        else:
+            clients = Client.objects.all()
+        
+        # Age distribution
+        age_groups = {
+            '0-17': 0,
+            '18-25': 0,
+            '26-35': 0,
+            '36-45': 0,
+            '46-55': 0,
+            '56-65': 0,
+            '65+': 0
+        }
+        
+        for client in clients:
+            age = client.dob
+            if age:
+                from datetime import date
+                today = date.today()
+                age_years = today.year - age.year - ((today.month, today.day) < (age.month, age.day))
+                
+                if age_years <= 17:
+                    age_groups['0-17'] += 1
+                elif age_years <= 25:
+                    age_groups['18-25'] += 1
+                elif age_years <= 35:
+                    age_groups['26-35'] += 1
+                elif age_years <= 45:
+                    age_groups['36-45'] += 1
+                elif age_years <= 55:
+                    age_groups['46-55'] += 1
+                elif age_years <= 65:
+                    age_groups['56-65'] += 1
+                else:
+                    age_groups['65+'] += 1
+        
+        # Gender distribution
+        gender_counts = {}
+        for client in clients:
+            gender = client.gender or 'Unknown'
+            gender_counts[gender] = gender_counts.get(gender, 0) + 1
+        
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="client_demographics_report.csv"'
+        
+        writer = csv.writer(response)
+        
+        # Write header
+        writer.writerow(['Client Demographics Report'])
+        writer.writerow(['Generated on', timezone.now().strftime('%Y-%m-%d %H:%M:%S')])
+        writer.writerow(['Total Clients', clients.count()])
+        writer.writerow([])
+        
+        # Age Distribution Section
+        writer.writerow(['AGE DISTRIBUTION'])
+        writer.writerow(['Age Group', 'Count', 'Percentage'])
+        total_clients = clients.count()
+        for age_group, count in age_groups.items():
+            percentage = (count / total_clients * 100) if total_clients > 0 else 0
+            writer.writerow([age_group, count, f"{percentage:.1f}%"])
+        
+        writer.writerow([])
+        
+        # Gender Distribution Section
+        writer.writerow(['GENDER DISTRIBUTION'])
+        writer.writerow(['Gender', 'Count', 'Percentage'])
+        for gender, count in gender_counts.items():
+            percentage = (count / total_clients * 100) if total_clients > 0 else 0
+            writer.writerow([gender, count, f"{percentage:.1f}%"])
+        
+        writer.writerow([])
+        
+        # Detailed Client Information
+        writer.writerow(['DETAILED CLIENT INFORMATION'])
+        writer.writerow(['Client ID', 'First Name', 'Last Name', 'Preferred Name', 'Date of Birth', 'Age', 'Gender', 'Programs'])
+        
+        for client in clients:
+            # Calculate age
+            age = "N/A"
+            if client.dob:
+                from datetime import date
+                today = date.today()
+                age = today.year - client.dob.year - ((today.month, today.day) < (client.dob.month, client.dob.day))
+            
+            # Get programs for this client
+            client_programs = ClientProgramEnrollment.objects.filter(client=client).values_list('program__name', flat=True)
+            programs_str = ', '.join(client_programs) if client_programs else 'None'
+            
+            writer.writerow([
+                client.client_id or '',
+                client.first_name or '',
+                client.last_name or '',
+                client.preferred_name or '',
+                client.dob.strftime('%Y-%m-%d') if client.dob else '',
+                age,
+                client.gender or 'Unknown',
+                programs_str
+            ])
+        
+        return response
+
+
+class ClientOutcomesExportView(TemplateView):
+    """Export client outcomes report to CSV"""
+    
+    def get(self, request, *args, **kwargs):
+        # Get the same data as the main view
+        is_program_manager, is_leader, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(request)
+        
+        # Filter enrollments based on user role
+        if (is_program_manager or is_leader) and assigned_programs:
+            enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
+        elif is_staff_only and assigned_programs:
+            enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
+        else:
+            enrollments = ClientProgramEnrollment.objects.all()
+        
+        # Calculate statistics using date-based logic
+        today = timezone.now().date()
+        
+        total = enrollments.count()
+        active_count = 0
+        completed_count = 0
+        pending_count = 0
+        
+        for enrollment in enrollments:
+            if today < enrollment.start_date:
+                pending_count += 1
+            elif enrollment.end_date:
+                if today > enrollment.end_date:
+                    completed_count += 1
+                else:
+                    active_count += 1
+            else:
+                active_count += 1
+        
+        success_rate = (completed_count / total * 100) if total > 0 else 0
+        
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="client_outcomes_report.csv"'
+        
+        writer = csv.writer(response)
+        
+        # Write header
+        writer.writerow(['Client Outcomes Report'])
+        writer.writerow(['Generated on', timezone.now().strftime('%Y-%m-%d %H:%M:%S')])
+        writer.writerow([])
+        
+        # Summary Statistics
+        writer.writerow(['SUMMARY STATISTICS'])
+        writer.writerow(['Metric', 'Value'])
+        writer.writerow(['Total Enrollments', total])
+        writer.writerow(['Completed Enrollments', completed_count])
+        writer.writerow(['Active Enrollments', active_count])
+        writer.writerow(['Pending Enrollments', pending_count])
+        writer.writerow(['Success Rate', f"{success_rate:.1f}%"])
+        
+        writer.writerow([])
+        
+        # Performance Insights
+        writer.writerow(['PERFORMANCE INSIGHTS'])
+        if success_rate >= 80:
+            insight = f"Excellent completion rate! Your programs are highly effective with {success_rate:.1f}% success rate."
+        elif success_rate >= 60:
+            insight = f"Good completion rate of {success_rate:.1f}%. Consider reviewing program structure for improvement opportunities."
+        else:
+            insight = f"Completion rate of {success_rate:.1f}% indicates room for improvement. Consider program evaluation and client feedback."
+        
+        writer.writerow(['Completion Analysis', insight])
+        writer.writerow(['Active Engagement', f"Currently {active_count} clients are actively engaged in programs, representing {(active_count/total*100):.1f}% of total enrollments."])
+        
+        writer.writerow([])
+        
+        # Detailed Enrollment Information
+        writer.writerow(['DETAILED ENROLLMENT INFORMATION'])
+        writer.writerow(['Client Name', 'Program Name', 'Department', 'Start Date', 'End Date', 'Status', 'Duration (Days)', 'Created By'])
+        
+        for enrollment in enrollments:
+            # Calculate duration and status
+            if today < enrollment.start_date:
+                duration = 0
+                status = "Pending"
+            elif enrollment.end_date:
+                duration = (enrollment.end_date - enrollment.start_date).days
+                if today > enrollment.end_date:
+                    status = "Completed"
+                else:
+                    status = "Active"
+            else:
+                duration = (today - enrollment.start_date).days
+                status = "Active"
+            
+            writer.writerow([
+                f"{enrollment.client.first_name} {enrollment.client.last_name}",
+                enrollment.program.name,
+                enrollment.program.department.name if enrollment.program.department else '',
+                enrollment.start_date.strftime('%Y-%m-%d'),
+                enrollment.end_date.strftime('%Y-%m-%d') if enrollment.end_date else 'Ongoing',
+                status,
+                duration,
+                enrollment.created_by or ''
+            ])
+        
+        return response
+
+
+class OrganizationalSummaryExportView(TemplateView):
+    """Export organizational summary report to CSV"""
+    
+    def get(self, request, *args, **kwargs):
+        # Get the same data as the main view
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(request)
+        
+        # Filter data based on user role
+        if is_analyst:
+            # Analysts see all data across all clients and programs
+            total_clients = Client.objects.count()
+            total_programs = Program.objects.count()
+            
+            # Calculate active enrollments using date-based logic for all programs
+            enrollments = ClientProgramEnrollment.objects.all()
+        elif (is_program_manager or is_leader) and assigned_programs:
+            total_clients = Client.objects.filter(
+                clientprogramenrollment__program__in=assigned_programs
+            ).distinct().count()
+            total_programs = assigned_programs.count()
+            enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
+        elif is_staff_only and assigned_clients and assigned_programs:
+            total_clients = assigned_clients.count()
+            total_programs = assigned_programs.count()
+            enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
+        else:
+            total_clients = Client.objects.count()
+            total_programs = Program.objects.count()
+            enrollments = ClientProgramEnrollment.objects.all()
+        
+        # Calculate active enrollments using date-based logic
+        today = timezone.now().date()
+        active_count = 0
+        for enrollment in enrollments:
+            if today < enrollment.start_date:
+                continue
+            elif enrollment.end_date:
+                if today > enrollment.end_date:
+                    continue
+                else:
+                    active_count += 1
+            else:
+                active_count += 1
+        
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="organizational_summary_report.csv"'
+        
+        writer = csv.writer(response)
+        
+        # Write header
+        writer.writerow(['Organizational Summary Report'])
+        writer.writerow(['Generated on', timezone.now().strftime('%Y-%m-%d %H:%M:%S')])
+        writer.writerow([])
+        
+        # Summary Statistics
+        writer.writerow(['ORGANIZATIONAL OVERVIEW'])
+        writer.writerow(['Metric', 'Value'])
+        writer.writerow(['Total Clients', total_clients])
+        writer.writerow(['Total Programs', total_programs])
+        writer.writerow(['Active Enrollments', active_count])
+        writer.writerow(['Enrollment Rate', f"{(active_count/total_clients*100):.1f}%" if total_clients > 0 else "0%"])
+        writer.writerow(['Average per Program', f"{(active_count/total_programs):.1f}" if total_programs > 0 else "0"])
+        
+        writer.writerow([])
+        
+        # Client Demographics
+        writer.writerow(['CLIENT DEMOGRAPHICS'])
+        if (is_program_manager or is_leader) and assigned_programs:
+            clients = Client.objects.filter(
+                clientprogramenrollment__program__in=assigned_programs
+            ).distinct()
+        else:
+            clients = Client.objects.all()
+        
+        # Age distribution
+        age_groups = {
+            '0-17': 0,
+            '18-25': 0,
+            '26-35': 0,
+            '36-45': 0,
+            '46-55': 0,
+            '56-65': 0,
+            '65+': 0
+        }
+        
+        for client in clients:
+            age = client.dob
+            if age:
+                from datetime import date
+                today = date.today()
+                age_years = today.year - age.year - ((today.month, today.day) < (age.month, age.day))
+                
+                if age_years <= 17:
+                    age_groups['0-17'] += 1
+                elif age_years <= 25:
+                    age_groups['18-25'] += 1
+                elif age_years <= 35:
+                    age_groups['26-35'] += 1
+                elif age_years <= 45:
+                    age_groups['36-45'] += 1
+                elif age_years <= 55:
+                    age_groups['46-55'] += 1
+                elif age_years <= 65:
+                    age_groups['56-65'] += 1
+                else:
+                    age_groups['65+'] += 1
+        
+        writer.writerow(['Age Group', 'Count', 'Percentage'])
+        for age_group, count in age_groups.items():
+            percentage = (count / total_clients * 100) if total_clients > 0 else 0
+            writer.writerow([age_group, count, f"{percentage:.1f}%"])
+        
+        writer.writerow([])
+        
+        # Gender distribution
+        gender_counts = {}
+        for client in clients:
+            gender = client.gender or 'Unknown'
+            gender_counts[gender] = gender_counts.get(gender, 0) + 1
+        
+        writer.writerow(['Gender', 'Count', 'Percentage'])
+        for gender, count in gender_counts.items():
+            percentage = (count / total_clients * 100) if total_clients > 0 else 0
+            writer.writerow([gender, count, f"{percentage:.1f}%"])
+        
+        writer.writerow([])
+        
+        # Program Statistics
+        writer.writerow(['PROGRAM STATISTICS'])
+        if (is_program_manager or is_leader) and assigned_programs:
+            programs = assigned_programs
+        else:
+            programs = Program.objects.all()
+        
+        writer.writerow(['Program Name', 'Department', 'Location', 'Capacity', 'Active Enrollments', 'Utilization %'])
+        
+        for program in programs:
+            program_enrollments = ClientProgramEnrollment.objects.filter(program=program)
+            program_active = 0
+            
+            for enrollment in program_enrollments:
+                if today < enrollment.start_date:
+                    continue
+                elif enrollment.end_date:
+                    if today > enrollment.end_date:
+                        continue
+                    else:
+                        program_active += 1
+                else:
+                    program_active += 1
+            
+            utilization = (program_active / program.capacity_current * 100) if program.capacity_current > 0 else 0
+            
+            writer.writerow([
+                program.name,
+                program.department.name if program.department else '',
+                program.location or '',
+                program.capacity_current,
+                program_active,
+                f"{utilization:.1f}%"
+            ])
+        
+        return response

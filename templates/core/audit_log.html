@@ -155,12 +155,22 @@
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Action</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Done By</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Change Details</th>
-                        <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Details</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-neutral-200">
                     {% for log in audit_logs %}
-                    <tr class="hover:bg-neutral-50">
+                    <tr class="hover:bg-neutral-50 cursor-pointer transition-colors duration-200" 
+                        {% if log.action != 'delete' %}
+                            {% if log.entity == 'Enrollment' %}
+                                onclick="checkEntityExists('{% url 'core:enrollments_detail' log.entity_id %}', 'Enrollment', '{{ log.entity_id }}')"
+                            {% elif log.entity == 'Client' %}
+                                onclick="checkEntityExists('{% url 'clients:detail' log.entity_id %}', 'Client', '{{ log.entity_id }}')"
+                            {% elif log.entity == 'Program' %}
+                                onclick="checkEntityExists('{% url 'programs:detail' log.entity_id %}', 'Program', '{{ log.entity_id }}')"
+                            {% elif log.entity == 'Restriction' %}
+                                onclick="checkEntityExists('{% url 'core:restrictions_detail' log.entity_id %}', 'Restriction', '{{ log.entity_id }}')"
+                            {% endif %}
+                        {% endif %}>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
                             {{ log.changed_at|date:"M d, Y H:i:s" }}
                         </td>
@@ -185,7 +195,7 @@
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {% if log.action == 'create' %}bg-brand-lime text-neutral-800{% elif log.action == 'update' %}bg-brand-sky text-white{% elif log.action == 'delete' %}bg-accent-400 text-white{% else %}bg-neutral-100 text-neutral-800{% endif %}">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {% if log.action == 'create' %}bg-brand-lime text-neutral-800{% elif log.action == 'update' %}bg-brand-sky text-white{% elif log.action == 'delete' %}bg-accent-400 text-white{% elif log.action == 'login' %}bg-green-500 text-white{% elif log.action == 'logout' %}bg-orange-500 text-white{% else %}bg-neutral-100 text-neutral-800{% endif %}">
                                 {{ log.get_action_display }}
                             </span>
                         </td>
@@ -198,7 +208,7 @@
                                     No Changes
                                 </span>
                             {% elif log.diff_json %}
-                                <button onclick='showChangeDetailsFromData("{{ log.id }}", "{{ log.diff_json|escapejs }}", "{{ log.entity }}", "{{ log.action }}")' 
+                                <button onclick='event.stopPropagation(); showChangeDetailsFromData("{{ log.id }}", "{{ log.diff_json|escapejs }}", "{{ log.entity }}", "{{ log.action }}")' 
                                         class="text-brand-sky hover:text-brand-darkBlue font-bold transition-colors duration-200 cursor-pointer underline">
                                     View Changes
                                 </button>
@@ -208,39 +218,10 @@
                                 </span>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
-                            {% if log.action == 'delete' %}
-                                <span class="text-neutral-400 font-bold">
-                                    No Details
-                                </span>
-                            {% else %}
-                                {% if log.entity == 'Enrollment' %}
-                                    <button onclick="checkEntityExists('{% url 'core:enrollments_detail' log.entity_id %}', 'Enrollment', '{{ log.entity_id }}')" class="text-brand-sky hover:text-brand-darkBlue font-bold transition-colors duration-200 cursor-pointer">
-                                        View Details
-                                    </button>
-                                {% elif log.entity == 'Client' %}
-                                    <button onclick="checkEntityExists('{% url 'clients:detail' log.entity_id %}', 'Client', '{{ log.entity_id }}')" class="text-brand-sky hover:text-brand-darkBlue font-bold transition-colors duration-200 cursor-pointer">
-                                        View Details
-                                    </button>
-                                {% elif log.entity == 'Program' %}
-                                    <button onclick="checkEntityExists('{% url 'programs:detail' log.entity_id %}', 'Program', '{{ log.entity_id }}')" class="text-brand-sky hover:text-brand-darkBlue font-bold transition-colors duration-200 cursor-pointer">
-                                        View Details
-                                    </button>
-                                {% elif log.entity == 'Restriction' %}
-                                    <button onclick="checkEntityExists('{% url 'core:restrictions_detail' log.entity_id %}', 'Restriction', '{{ log.entity_id }}')" class="text-brand-sky hover:text-brand-darkBlue font-bold transition-colors duration-200 cursor-pointer">
-                                        View Details
-                                    </button>
-                                {% else %}
-                                    <span class="text-neutral-400 font-bold">
-                                        No Details
-                                    </span>
-                                {% endif %}
-                            {% endif %}
-                        </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="px-6 py-4 text-center text-neutral-500 font-body">
+                        <td colspan="5" class="px-6 py-4 text-center text-neutral-500 font-body">
                             No audit logs found.
                         </td>
                     </tr>
@@ -280,33 +261,40 @@
 
 <!-- Change Details Modal -->
 <div id="changeDetailsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
-    <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
-        <div class="p-6">
-            <div class="flex items-center justify-between mb-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[85vh] overflow-hidden">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-brand-sky to-brand-darkBlue p-6 text-white">
+            <div class="flex items-center justify-between">
                 <div class="flex items-center">
-                    <div class="w-10 h-10 bg-brand-sky rounded-full flex items-center justify-center mr-3">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-12 h-12 bg-white bg-opacity-20 rounded-xl flex items-center justify-center mr-4">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                         </svg>
                     </div>
                     <div>
-                        <h3 class="text-lg font-bold text-neutral-900" id="changeModalTitle">Change Details</h3>
-                        <p class="text-sm text-neutral-600" id="changeModalSubtitle">View what was changed</p>
+                        <h3 class="text-xl font-bold" id="changeModalTitle">Change Details</h3>
+                        <p class="text-blue-100 text-sm" id="changeModalSubtitle">View what was changed</p>
                     </div>
                 </div>
-                <button onclick="closeChangeDetailsModal()" class="text-neutral-400 hover:text-neutral-600 transition-colors">
+                <button onclick="closeChangeDetailsModal()" class="text-white hover:text-blue-100 transition-colors p-2 rounded-lg hover:bg-white hover:bg-opacity-10">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                     </svg>
                 </button>
             </div>
-            <div class="border-t border-neutral-200 pt-4">
-                <div id="changeDetailsContent" class="max-h-96 overflow-y-auto">
-                    <!-- Change details will be populated here -->
-                </div>
+        </div>
+        
+        <!-- Content -->
+        <div class="p-6">
+            <div id="changeDetailsContent" class="max-h-96 overflow-y-auto space-y-4">
+                <!-- Change details will be populated here -->
             </div>
-            <div class="flex justify-end mt-6 pt-4 border-t border-neutral-200">
-                <button onclick="closeChangeDetailsModal()" class="px-4 py-2 bg-neutral-500 text-white rounded-lg hover:bg-neutral-600 transition-colors">
+        </div>
+        
+        <!-- Footer -->
+        <div class="bg-neutral-50 px-6 py-4 border-t border-neutral-200">
+            <div class="flex justify-end">
+                <button onclick="closeChangeDetailsModal()" class="px-6 py-2 bg-neutral-600 text-white rounded-lg hover:bg-neutral-700 transition-colors font-medium">
                     Close
                 </button>
             </div>
@@ -426,55 +414,216 @@ function showChangeDetails(logId, diffData, entity, action) {
     title.textContent = `${entity} ${action.charAt(0).toUpperCase() + action.slice(1)} Details`;
     subtitle.textContent = `Changes made to ${entity.toLowerCase()}`;
     
-    // Format and display the change data
+    // Format and display the change data in note/message format
     let html = '';
     
     if (action === 'create') {
         html = '<div class="space-y-4">';
-        html += '<div class="bg-green-50 border border-green-200 rounded-lg p-4">';
-        html += '<h4 class="font-bold text-green-800 mb-2">New Record Created</h4>';
-        html += '<p class="text-green-700">The following fields were set when this record was created:</p>';
+        html += '<div class="bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-400 rounded-lg p-5 shadow-sm">';
+        html += '<div class="flex items-start">';
+        html += '<div class="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3 mt-0.5">';
+        html += '<svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+        html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>';
+        html += '</svg>';
         html += '</div>';
+        html += '<div class="flex-1">';
+        html += '<h4 class="font-bold text-green-800 mb-1">New Record Created</h4>';
+        html += '<p class="text-green-700 text-sm mb-3">A new record was added to the system with the following information:</p>';
         
-        console.log('CREATE: parsedDiffData check:', parsedDiffData);
-        console.log('CREATE: Object.keys(parsedDiffData):', Object.keys(parsedDiffData));
-        console.log('CREATE: Object.keys(parsedDiffData).length:', Object.keys(parsedDiffData).length);
         if (parsedDiffData && Object.keys(parsedDiffData).length > 0) {
-            html += '<div class="space-y-3">';
+            html += '<div class="space-y-2">';
             for (const [field, value] of Object.entries(parsedDiffData)) {
-                html += `<div class="flex justify-between items-start py-3 border-b border-neutral-100 last:border-b-0">`;
-                html += `<span class="font-medium text-neutral-700 capitalize min-w-0 flex-shrink-0">${field.replace(/_/g, ' ')}:</span>`;
-                html += `<span class="text-neutral-900 ml-4 text-right max-w-xs break-words">${formatValue(value)}</span>`;
+                html += `<div class="bg-white bg-opacity-60 rounded-lg p-3 border border-green-200">`;
+                html += `<div class="flex items-start justify-between">`;
+                html += `<span class="font-semibold text-green-800 text-sm capitalize">${field.replace(/_/g, ' ')}</span>`;
+                html += `<div class="ml-3 text-right flex-1">`;
+                html += `<span class="text-green-900 text-sm">${formatValue(value)}</span>`;
+                html += `</div>`;
+                html += `</div>`;
                 html += `</div>`;
             }
             html += '</div>';
         } else {
-            html += '<p class="text-neutral-500 italic">No specific field details available</p>';
+            html += '<div class="bg-white bg-opacity-60 rounded-lg p-3 border border-green-200">';
+            html += '<p class="text-green-600 text-sm italic">No specific field details available</p>';
+            html += '</div>';
         }
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
         html += '</div>';
     } else if (action === 'update') {
         html = '<div class="space-y-4">';
-        html += '<div class="bg-blue-50 border border-blue-200 rounded-lg p-4">';
-        html += '<h4 class="font-bold text-blue-800 mb-2">Record Updated</h4>';
-        html += '<p class="text-blue-700">The following fields were updated:</p>';
+        html += '<div class="bg-gradient-to-r from-blue-50 to-sky-50 border-l-4 border-blue-400 rounded-lg p-5 shadow-sm">';
+        html += '<div class="flex items-start">';
+        html += '<div class="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3 mt-0.5">';
+        html += '<svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+        html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>';
+        html += '</svg>';
         html += '</div>';
+        html += '<div class="flex-1">';
+        html += '<h4 class="font-bold text-blue-800 mb-1">Record Updated</h4>';
+        html += '<p class="text-blue-700 text-sm mb-3">The following fields were modified:</p>';
         
         if (parsedDiffData && Object.keys(parsedDiffData).length > 0) {
             html += '<div class="space-y-3">';
             for (const [field, value] of Object.entries(parsedDiffData)) {
-                html += `<div class="flex justify-between items-start py-3 border-b border-neutral-100 last:border-b-0">`;
-                html += `<span class="font-medium text-neutral-700 capitalize min-w-0 flex-shrink-0">${field.replace(/_/g, ' ')}:</span>`;
-                html += `<span class="text-neutral-900 ml-4 text-right max-w-xs break-words">${formatValue(value)}</span>`;
+                html += `<div class="bg-white bg-opacity-60 rounded-lg p-4 border border-blue-200">`;
+                html += `<div class="space-y-2">`;
+                html += `<div class="font-semibold text-blue-800 text-sm capitalize">${field.replace(/_/g, ' ')}</div>`;
+                
+                // Check if the value contains "→" indicating a before/after change
+                if (typeof value === 'string' && value.includes(' → ')) {
+                    const [oldValue, newValue] = value.split(' → ');
+                    html += `<div class="space-y-2">`;
+                    html += `<div class="flex items-center space-x-2">`;
+                    html += `<span class="text-xs font-medium text-red-600 bg-red-50 px-2 py-1 rounded">Before:</span>`;
+                    html += `<span class="text-sm text-red-800 bg-red-50 px-2 py-1 rounded flex-1">${formatValue(oldValue.trim())}</span>`;
+                    html += `</div>`;
+                    html += `<div class="flex items-center space-x-2">`;
+                    html += `<span class="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">After:</span>`;
+                    html += `<span class="text-sm text-green-800 bg-green-50 px-2 py-1 rounded flex-1">${formatValue(newValue.trim())}</span>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                } else {
+                    // Fallback for non-standard format
+                    html += `<div class="text-blue-900 text-sm">${formatValue(value)}</div>`;
+                }
+                html += `</div>`;
                 html += `</div>`;
             }
             html += '</div>';
         } else {
-            html += '<p class="text-neutral-500 italic">No specific field changes available</p>';
+            html += '<div class="bg-white bg-opacity-60 rounded-lg p-3 border border-blue-200">';
+            html += '<p class="text-blue-600 text-sm italic">No specific field changes available</p>';
+            html += '</div>';
         }
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+    } else if (action === 'login') {
+        html = '<div class="space-y-4">';
+        html += '<div class="bg-gradient-to-r from-green-50 to-emerald-50 border-l-4 border-green-400 rounded-lg p-5 shadow-sm">';
+        html += '<div class="flex items-start">';
+        html += '<div class="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3 mt-0.5">';
+        html += '<svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+        html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>';
+        html += '</svg>';
+        html += '</div>';
+        html += '<div class="flex-1">';
+        html += '<h4 class="font-bold text-green-800 mb-1">User Signed In</h4>';
+        html += '<p class="text-green-700 text-sm mb-3">User successfully logged into the system:</p>';
+        
+        // Add user information section
+        html += '<div class="bg-white bg-opacity-60 rounded-lg p-4 border border-green-200 mb-3">';
+        html += '<h5 class="font-semibold text-green-800 text-sm mb-2">User Information</h5>';
+        html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">';
+        html += `<div><span class="text-green-700 text-xs font-medium">Name:</span><br><span class="text-green-900 text-sm">${parsedDiffData.user_name || 'Unknown'}</span></div>`;
+        html += `<div><span class="text-green-700 text-xs font-medium">Email:</span><br><span class="text-green-900 text-sm">${parsedDiffData.user_email || 'Unknown'}</span></div>`;
+        html += '</div>';
+        html += '</div>';
+        
+        if (parsedDiffData && Object.keys(parsedDiffData).length > 0) {
+            // Filter out user information fields from session details
+            const sessionFields = Object.entries(parsedDiffData).filter(([field, value]) => 
+                !['user_name', 'user_email', 'user_username'].includes(field)
+            );
+            
+            if (sessionFields.length > 0) {
+                html += '<div class="space-y-2">';
+                html += '<h5 class="font-semibold text-green-800 text-sm mb-2">Session Details</h5>';
+                for (const [field, value] of sessionFields) {
+                    html += `<div class="bg-white bg-opacity-60 rounded-lg p-3 border border-green-200">`;
+                    html += `<div class="flex items-start justify-between">`;
+                    html += `<span class="font-semibold text-green-800 text-sm capitalize">${field.replace(/_/g, ' ')}</span>`;
+                    html += `<div class="ml-3 text-right flex-1">`;
+                    html += `<span class="text-green-900 text-sm">${formatValue(value)}</span>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                }
+                html += '</div>';
+            } else {
+                html += '<div class="bg-white bg-opacity-60 rounded-lg p-3 border border-green-200">';
+                html += '<p class="text-green-600 text-sm italic">No additional session details available</p>';
+                html += '</div>';
+            }
+        } else {
+            html += '<div class="bg-white bg-opacity-60 rounded-lg p-3 border border-green-200">';
+            html += '<p class="text-green-600 text-sm italic">No additional session details available</p>';
+            html += '</div>';
+        }
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+    } else if (action === 'logout') {
+        html = '<div class="space-y-4">';
+        html += '<div class="bg-gradient-to-r from-orange-50 to-red-50 border-l-4 border-orange-400 rounded-lg p-5 shadow-sm">';
+        html += '<div class="flex items-start">';
+        html += '<div class="flex-shrink-0 w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center mr-3 mt-0.5">';
+        html += '<svg class="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+        html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>';
+        html += '</svg>';
+        html += '</div>';
+        html += '<div class="flex-1">';
+        html += '<h4 class="font-bold text-orange-800 mb-1">User Signed Out</h4>';
+        html += '<p class="text-orange-700 text-sm mb-3">User logged out of the system:</p>';
+        
+        // Add user information section
+        html += '<div class="bg-white bg-opacity-60 rounded-lg p-4 border border-orange-200 mb-3">';
+        html += '<h5 class="font-semibold text-orange-800 text-sm mb-2">User Information</h5>';
+        html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">';
+        html += `<div><span class="text-orange-700 text-xs font-medium">Name:</span><br><span class="text-orange-900 text-sm">${parsedDiffData.user_name || 'Unknown'}</span></div>`;
+        html += `<div><span class="text-orange-700 text-xs font-medium">Email:</span><br><span class="text-orange-900 text-sm">${parsedDiffData.user_email || 'Unknown'}</span></div>`;
+        html += '</div>';
+        html += '</div>';
+        
+        if (parsedDiffData && Object.keys(parsedDiffData).length > 0) {
+            // Filter out user information fields from session details
+            const sessionFields = Object.entries(parsedDiffData).filter(([field, value]) => 
+                !['user_name', 'user_email', 'user_username'].includes(field)
+            );
+            
+            if (sessionFields.length > 0) {
+                html += '<div class="space-y-2">';
+                html += '<h5 class="font-semibold text-orange-800 text-sm mb-2">Session Details</h5>';
+                for (const [field, value] of sessionFields) {
+                    html += `<div class="bg-white bg-opacity-60 rounded-lg p-3 border border-orange-200">`;
+                    html += `<div class="flex items-start justify-between">`;
+                    html += `<span class="font-semibold text-orange-800 text-sm capitalize">${field.replace(/_/g, ' ')}</span>`;
+                    html += `<div class="ml-3 text-right flex-1">`;
+                    html += `<span class="text-orange-900 text-sm">${formatValue(value)}</span>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                    html += `</div>`;
+                }
+                html += '</div>';
+            } else {
+                html += '<div class="bg-white bg-opacity-60 rounded-lg p-3 border border-orange-200">';
+                html += '<p class="text-orange-600 text-sm italic">No additional session details available</p>';
+                html += '</div>';
+            }
+        } else {
+            html += '<div class="bg-white bg-opacity-60 rounded-lg p-3 border border-orange-200">';
+            html += '<p class="text-orange-600 text-sm italic">No additional session details available</p>';
+            html += '</div>';
+        }
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
         html += '</div>';
     } else {
         html = '<div class="text-center py-8">';
-        html += '<p class="text-neutral-500">No change details available for this action.</p>';
+        html += '<div class="bg-neutral-50 rounded-lg p-6 border border-neutral-200">';
+        html += '<div class="w-12 h-12 bg-neutral-200 rounded-full flex items-center justify-center mx-auto mb-3">';
+        html += '<svg class="w-6 h-6 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+        html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>';
+        html += '</svg>';
+        html += '</div>';
+        html += '<p class="text-neutral-600 font-medium">No change details available for this action.</p>';
+        html += '</div>';
         html += '</div>';
     }
     
@@ -488,22 +637,31 @@ function closeChangeDetailsModal() {
 }
 
 function formatValue(value) {
-    if (value === null || value === undefined) {
-        return '<span class="text-neutral-400 italic">(empty)</span>';
+    if (value === null || value === undefined || value === '') {
+        return '<span class="text-neutral-400 italic text-xs">(empty)</span>';
     }
     if (typeof value === 'boolean') {
-        return value ? '<span class="text-green-600 font-medium">Yes</span>' : '<span class="text-red-600 font-medium">No</span>';
+        return value ? '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Yes</span>' : '<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">No</span>';
     }
     if (typeof value === 'object') {
-        return '<pre class="text-xs bg-neutral-100 p-2 rounded overflow-x-auto">' + JSON.stringify(value, null, 2) + '</pre>';
+        return '<div class="bg-neutral-50 border border-neutral-200 rounded p-2 text-xs font-mono overflow-x-auto max-w-xs">' + JSON.stringify(value, null, 2) + '</div>';
     }
-    if (typeof value === 'string' && value.length > 100) {
-        return value.substring(0, 100) + '<span class="text-neutral-400">...</span>';
+    if (typeof value === 'string') {
+        // Handle empty strings
+        if (value.trim() === '') {
+            return '<span class="text-neutral-400 italic text-xs">(empty)</span>';
+        }
+        // Truncate very long strings
+        if (value.length > 60) {
+            return '<span class="block break-words">' + value.substring(0, 60) + '<span class="text-neutral-400">...</span></span>';
+        }
+        // Handle long strings with word wrapping
+        if (value.length > 30) {
+            return '<span class="block break-words">' + value + '</span>';
+        }
+        return '<span class="block">' + value + '</span>';
     }
-    if (typeof value === 'string' && value === '') {
-        return '<span class="text-neutral-400 italic">(empty)</span>';
-    }
-    return value;
+    return '<span class="block">' + value + '</span>';
 }
 
 // Close change details modal when clicking outside

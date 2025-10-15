@@ -1,5 +1,6 @@
 from django.urls import path
 from . import api_views, views
+from .permission_error_view import PermissionErrorView, permission_error_ajax
 
 app_name = 'core'
 
@@ -66,6 +67,10 @@ urlpatterns = [
     
     # Enrollment bulk operations
     path('enrollments/bulk-delete/', views.bulk_delete_enrollments, name='enrollments_bulk_delete'),
+    
+    # Permission error handling
+    path('permission-error/', PermissionErrorView.as_view(), name='permission_error'),
+    path('api/permission-error/', permission_error_ajax, name='permission_error_ajax'),
 ]
 
 # In your main urls.py, add:

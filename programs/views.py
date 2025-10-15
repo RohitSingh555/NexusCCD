@@ -1,16 +1,17 @@
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View
 from django.urls import reverse_lazy
+from django.shortcuts import redirect
 from django.utils import timezone
 from django.db import models
 from django.http import HttpResponse
 from core.models import Program, Department, ClientProgramEnrollment, ProgramManagerAssignment, Staff
-from core.views import jwt_required, ProgramManagerAccessMixin
+from core.views import jwt_required, ProgramManagerAccessMixin, AnalystAccessMixin
 from core.message_utils import success_message, error_message, warning_message, info_message, create_success, update_success, delete_success, validation_error, permission_error, not_found_error
 from django.utils.decorators import method_decorator
 import csv
 
 @method_decorator(jwt_required, name='dispatch')
-class ProgramListView(ProgramManagerAccessMixin, ListView):
+class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
     model = Program
     template_name = 'programs/program_list.html'
     context_object_name = 'programs'
@@ -33,6 +34,24 @@ class ProgramListView(ProgramManagerAccessMixin, ListView):
     def get_queryset(self):
         # First apply the ProgramManagerAccessMixin filtering
         queryset = super().get_queryset()
+        
+        # For staff-only users, filter to only their assigned programs
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    # Staff-only users see only their assigned programs
+                    from staff.models import StaffProgramAssignment
+                    assigned_program_ids = StaffProgramAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('program_id', flat=True)
+                    queryset = queryset.filter(id__in=assigned_program_ids)
+            except Exception:
+                pass
         
         # Apply additional filters
         department_filter = self.request.GET.get('department', '')
@@ -119,36 +138,96 @@ class ProgramListView(ProgramManagerAccessMixin, ListView):
         return context
 
 @method_decorator(jwt_required, name='dispatch')
-class ProgramDetailView(ProgramManagerAccessMixin, DetailView):
+class ProgramDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, DetailView):
     model = Program
     template_name = 'programs/program_detail.html'
     context_object_name = 'program'
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     
-    def get_object(self, queryset=None):
-        """Override to ensure program managers can only access their assigned programs"""
-        obj = super().get_object(queryset)
+    def get(self, request, *args, **kwargs):
+        """Override get method to handle permission checks before rendering"""
+        try:
+            # First, try to get the object
+            self.object = self.get_object()
+        except Exception:
+            # If object doesn't exist, handle based on request type
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                from django.http import JsonResponse
+                return JsonResponse({
+                    'error': True,
+                    'message': "You don't have access to this program. Only programs assigned to you are accessible.",
+                    'type': 'permission_error'
+                }, status=403)
+            else:
+                from django.shortcuts import redirect
+                from django.urls import reverse
+                return redirect(f"{reverse('core:permission_error')}?type=program_not_assigned&resource=program")
         
-        # The ProgramManagerAccessMixin should have already filtered the queryset
-        # But let's double-check access here for extra security
-        if not self.request.user.is_superuser:
+        # Check if user has access to this program
+        if not request.user.is_superuser:
             try:
-                staff = self.request.user.staff_profile
+                staff = request.user.staff_profile
                 if staff.is_program_manager():
                     assigned_programs = staff.get_assigned_programs()
-                    if obj not in assigned_programs:
-                        from django.http import Http404
-                        raise Http404("Program not found or access denied")
+                    if self.object not in assigned_programs:
+                        # Handle based on request type
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            from django.http import JsonResponse
+                            return JsonResponse({
+                                'error': True,
+                                'message': f"You don't have access to {self.object.name}. Only programs assigned to you are accessible.",
+                                'type': 'permission_error'
+                            }, status=403)
+                        else:
+                            from django.shortcuts import redirect
+                            from django.urls import reverse
+                            return redirect(f"{reverse('core:permission_error')}?type=program_not_assigned&resource=program&name={self.object.name}")
+                
+                elif staff.is_leader():
+                    # Leaders can only access programs from their assigned departments
+                    from core.models import Department
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    assigned_programs = Program.objects.filter(
+                        department__in=assigned_departments
+                    ).distinct()
+                    
+                    if self.object not in assigned_programs:
+                        # Handle based on request type
+                        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                            from django.http import JsonResponse
+                            return JsonResponse({
+                                'error': True,
+                                'message': f"You don't have access to {self.object.name}. Only programs in your assigned departments are accessible.",
+                                'type': 'permission_error'
+                            }, status=403)
+                        else:
+                            from django.shortcuts import redirect
+                            from django.urls import reverse
+                            return redirect(f"{reverse('core:permission_error')}?type=program_not_assigned&resource=program&name={self.object.name}")
             except Exception:
-                from django.http import Http404
-                raise Http404("Program not found or access denied")
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    from django.http import JsonResponse
+                    return JsonResponse({
+                        'error': True,
+                        'message': "You don't have permission to access this program.",
+                        'type': 'permission_error'
+                    }, status=403)
+                else:
+                    from django.shortcuts import redirect
+                    from django.urls import reverse
+                    return redirect(f"{reverse('core:permission_error')}?type=access_denied&resource=program")
         
-        return obj
+        # If we get here, user has access, proceed with normal rendering
+        context = self.get_context_data(object=self.object)
+        return self.render_to_response(context)
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        program = context['program']
+        program = context.get('program') or self.object
         
         # Get current enrollments
         from core.models import ClientProgramEnrollment
@@ -180,19 +259,49 @@ class ProgramDetailView(ProgramManagerAccessMixin, DetailView):
         assigned_manager_ids = program_managers.values_list('staff_id', flat=True)
         available_staff = Staff.objects.exclude(id__in=assigned_manager_ids).order_by('first_name', 'last_name')
         
-        # Get capacity information
-        current_enrollments_count = program.get_current_enrollments_count()
-        capacity_percentage = program.get_capacity_percentage()
-        available_capacity = program.get_available_capacity()
-        is_at_capacity = program.is_at_capacity()
+        # Ensure all querysets are properly initialized (defensive programming)
+        if current_enrollments is None:
+            current_enrollments = ClientProgramEnrollment.objects.none()
+        if program_staff is None:
+            program_staff = ProgramStaff.objects.none()
+        if program_managers is None:
+            program_managers = ProgramManagerAssignment.objects.none()
+        if available_clients is None:
+            available_clients = Client.objects.none()
+        if available_staff is None:
+            available_staff = Staff.objects.none()
+        
+        # Get capacity information with defensive programming
+        try:
+            current_enrollments_count = program.get_current_enrollments_count()
+        except Exception:
+            current_enrollments_count = 0
+            
+        try:
+            capacity_percentage = program.get_capacity_percentage()
+        except Exception:
+            capacity_percentage = 0.0
+            
+        try:
+            available_capacity = program.get_available_capacity()
+        except Exception:
+            available_capacity = 0
+            
+        try:
+            is_at_capacity = program.is_at_capacity()
+        except Exception:
+            is_at_capacity = False
         
         # Get enrollment history (last 30 days)
         from datetime import timedelta
         thirty_days_ago = timezone.now().date() - timedelta(days=30)
-        recent_enrollments = ClientProgramEnrollment.objects.filter(
-            program=program,
-            start_date__gte=thirty_days_ago
-        ).select_related('client').order_by('-start_date')[:10]
+        try:
+            recent_enrollments = ClientProgramEnrollment.objects.filter(
+                program=program,
+                start_date__gte=thirty_days_ago
+            ).select_related('client').order_by('-start_date')[:10]
+        except Exception:
+            recent_enrollments = ClientProgramEnrollment.objects.none()
         
         context.update({
             'current_enrollments': current_enrollments,
@@ -212,6 +321,24 @@ class ProgramDetailView(ProgramManagerAccessMixin, DetailView):
 @method_decorator(jwt_required, name='dispatch')
 class ProgramBulkEnrollView(ProgramManagerAccessMixin, View):
     """Handle bulk enrollment of clients in a program"""
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to enroll clients"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot enroll clients
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    from django.contrib import messages
+                    messages.error(request, 'You do not have permission to enroll clients. Contact your administrator.')
+                    return redirect('programs:list')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
     
     def post(self, request, external_id):
         from core.models import Program, ClientProgramEnrollment
@@ -306,6 +433,24 @@ class ProgramBulkEnrollView(ProgramManagerAccessMixin, View):
 class ProgramBulkAssignManagersView(ProgramManagerAccessMixin, View):
     """Handle bulk assignment of program managers to a program"""
     
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to assign managers"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Only SuperAdmin users can assign managers
+                if not any(role in ['SuperAdmin'] for role in role_names):
+                    from django.contrib import messages
+                    messages.error(request, 'You do not have permission to assign managers. Contact your administrator.')
+                    return redirect('programs:list')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
+    
     def post(self, request, external_id):
         from core.models import Program, ProgramManagerAssignment, Staff
         from django.contrib import messages
@@ -374,6 +519,24 @@ class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
     fields = ['name', 'department', 'location', 'capacity_current', 'capacity_effective_date']
     success_url = reverse_lazy('programs:list')
     
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to create programs"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot create programs
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    from django.contrib import messages
+                    messages.error(request, 'You do not have permission to create programs. Contact your administrator.')
+                    return redirect('programs:list')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
+    
     def get_initial(self):
         """Set default values for the form"""
         initial = super().get_initial()
@@ -421,6 +584,24 @@ class ProgramUpdateView(ProgramManagerAccessMixin, UpdateView):
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('programs:list')
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to edit programs"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot edit programs
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    from django.contrib import messages
+                    messages.error(request, 'You do not have permission to edit programs. Contact your administrator.')
+                    return redirect('programs:list')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
     
     def get_object(self, queryset=None):
         """Override to ensure program managers can only edit their assigned programs"""
@@ -496,6 +677,24 @@ class ProgramDeleteView(ProgramManagerAccessMixin, DeleteView):
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('programs:list')
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to delete programs"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot delete programs
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    from django.contrib import messages
+                    messages.error(request, 'You do not have permission to delete programs. Contact your administrator.')
+                    return redirect('programs:list')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
     
     def get_object(self, queryset=None):
         """Override to ensure program managers can only delete their assigned programs"""

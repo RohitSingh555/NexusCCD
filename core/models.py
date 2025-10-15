@@ -118,8 +118,38 @@ class Staff(BaseModel):
         return f"{self.first_name} {self.last_name}"
 
     def is_program_manager(self):
-        """Check if staff has program manager role"""
-        return self.staffrole_set.filter(role__name='Program Manager').exists()
+        """Check if staff has manager role"""
+        return self.staffrole_set.filter(role__name='Manager').exists()
+    
+    def is_staff_only(self):
+        """Check if staff has only Staff role (not Manager or other roles)"""
+        staff_roles = self.staffrole_set.select_related('role').all()
+        role_names = [staff_role.role.name for staff_role in staff_roles]
+        return 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names)
+    
+    def is_leader(self):
+        """Check if staff has Leader role"""
+        return self.staffrole_set.filter(role__name='Leader').exists()
+    
+    def get_assigned_departments(self):
+        """Get all departments assigned to this leader"""
+        if not self.is_leader():
+            return Department.objects.none()
+        # Use the related_name to get assignments, then get departments
+        assignments = self.department_leader_assignments.filter(is_active=True)
+        department_ids = list(assignments.values_list('department_id', flat=True))
+        if not department_ids:
+            return Department.objects.none()
+        return Department.objects.filter(id__in=department_ids)
+    
+    def get_assigned_programs_via_departments(self):
+        """Get all programs in assigned departments for leaders"""
+        if not self.is_leader():
+            return Program.objects.none()
+        assigned_departments = self.get_assigned_departments()
+        return Program.objects.filter(
+            department__in=assigned_departments
+        ).distinct()
     
     def get_assigned_programs(self):
         """Get all programs assigned to this program manager"""
@@ -808,6 +838,8 @@ class AuditLog(BaseModel):
         ('update', 'Update'),
         ('delete', 'Delete'),
         ('import', 'Import'),
+        ('login', 'Login'),
+        ('logout', 'Logout'),
     ]
     
     entity = models.CharField(max_length=100, db_index=True)
@@ -956,7 +988,7 @@ class ClientDuplicate(BaseModel):
         self.save()
 
 class ProgramManagerAssignment(BaseModel):
-    """Assigns a staff member with Program Manager role to specific programs"""
+    """Assigns a staff member with Manager role to specific programs"""
     staff = models.ForeignKey(Staff, on_delete=models.CASCADE, db_index=True, related_name='program_manager_assignments')
     program = models.ForeignKey(Program, on_delete=models.CASCADE, db_index=True, related_name='manager_assignments')
     assigned_by = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_program_managers')
@@ -973,10 +1005,10 @@ class ProgramManagerAssignment(BaseModel):
         ]
     
     def __str__(self):
-        return f"{self.staff} - Program Manager for {self.program.name}"
+        return f"{self.staff} - Manager for {self.program.name}"
 
 class ProgramServiceManagerAssignment(BaseModel):
-    """Assigns a staff member with Program Manager role to specific program services"""
+    """Assigns a staff member with Manager role to specific program services"""
     staff = models.ForeignKey(Staff, on_delete=models.CASCADE, db_index=True, related_name='service_manager_assignments')
     program_service = models.ForeignKey('programs.ProgramService', on_delete=models.CASCADE, db_index=True, related_name='manager_assignments')
     assigned_by = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_service_managers')
@@ -994,3 +1026,23 @@ class ProgramServiceManagerAssignment(BaseModel):
     
     def __str__(self):
         return f"{self.staff} - Service Manager for {self.program_service.name}"
+
+class DepartmentLeaderAssignment(BaseModel):
+    """Assigns a staff member with Leader role to specific departments"""
+    staff = models.ForeignKey(Staff, on_delete=models.CASCADE, db_index=True, related_name='department_leader_assignments')
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, db_index=True, related_name='leader_assignments')
+    assigned_by = models.ForeignKey(Staff, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_department_leaders')
+    assigned_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    notes = models.TextField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'department_leader_assignments'
+        unique_together = ['staff', 'department']
+        indexes = [
+            models.Index(fields=['staff', 'is_active']),
+            models.Index(fields=['department', 'is_active']),
+        ]
+    
+    def __str__(self):
+        return f"{self.staff} - Leader for {self.department.name}"

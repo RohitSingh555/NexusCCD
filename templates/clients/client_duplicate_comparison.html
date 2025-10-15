@@ -55,6 +55,31 @@
         background-color: #d1fae5;
         border-color: #10b981;
     }
+    
+    .field-item {
+        margin-bottom: 0.25rem;
+    }
+    
+    .field-item .field-label {
+        font-weight: 500;
+        color: #6b7280;
+        margin-bottom: 0.125rem;
+    }
+    
+    .field-item .field-value {
+        padding: 0.25rem 0.5rem;
+        background-color: #f9fafb;
+        border-radius: 0.25rem;
+        border: 1px solid #e5e7eb;
+        min-height: 1.5rem;
+        display: flex;
+        align-items: center;
+    }
+    
+    .field-item .field-value:empty::before {
+        content: "—";
+        color: #9ca3af;
+    }
 </style>
 {% endblock %}
 
@@ -116,7 +141,7 @@
             <!-- Primary Client -->
             <div class="client-card bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer" 
                  data-client-id="{{ primary_client.id }}" 
-                 onclick="selectClient({{ primary_client.id }})">
+                 onclick="selectClientInModal({{ primary_client.id }})">
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center space-x-3">
                         <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-sm">
@@ -141,52 +166,215 @@
                     <!-- Basic Information -->
                     <div class="comparison-section">
                         <h4 class="text-sm font-semibold text-gray-700 mb-3">Basic Information</h4>
-                        <div class="space-y-2">
-                            <div class="field-comparison">
-                                <div>
-                                    <div class="field-label">Date of Birth</div>
-                                    <div class="field-value">{{ primary_client.dob|date:"M d, Y" }}</div>
-                                </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item">
+                                <div class="field-label text-xs">Client ID</div>
+                                <div class="field-value text-xs">{{ primary_client.client_id|default:"—" }}</div>
                             </div>
-                            <div class="field-comparison">
-                                <div>
-                                    <div class="field-label">Gender</div>
-                                    <div class="field-value">{{ primary_client.gender }}</div>
-                                </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Date of Birth</div>
+                                <div class="field-value text-xs">{{ primary_client.dob|date:"M d, Y"|default:"—" }}</div>
                             </div>
-                            {% if primary_client.preferred_name %}
-                            <div class="field-comparison">
-                                <div>
-                                    <div class="field-label">Preferred Name</div>
-                                    <div class="field-value">{{ primary_client.preferred_name }}</div>
-                                </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Age</div>
+                                <div class="field-value text-xs">{{ primary_client.age|default:"—" }}</div>
                             </div>
-                            {% endif %}
+                            <div class="field-item">
+                                <div class="field-label text-xs">Gender</div>
+                                <div class="field-value text-xs">{{ primary_client.gender|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Preferred Name</div>
+                                <div class="field-value text-xs">{{ primary_client.preferred_name|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Middle Name</div>
+                                <div class="field-value text-xs">{{ primary_client.middle_name|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Alias</div>
+                                <div class="field-value text-xs">{{ primary_client.alias|default:"—" }}</div>
+                                </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Gender Identity</div>
+                                <div class="field-value text-xs">{{ primary_client.gender_identity|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Pronoun</div>
+                                <div class="field-value text-xs">{{ primary_client.pronoun|default:"—" }}</div>
+                                </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Marital Status</div>
+                                <div class="field-value text-xs">{{ primary_client.marital_status|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Citizenship</div>
+                                <div class="field-value text-xs">{{ primary_client.citizenship_status|default:"—" }}</div>
+                                </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Country of Birth</div>
+                                <div class="field-value text-xs">{{ primary_client.country_of_birth|default:"—" }}</div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Contact Information -->
                     <div class="comparison-section">
                         <h4 class="text-sm font-semibold text-gray-700 mb-3">Contact Information</h4>
-                        <div class="space-y-2">
-                            {% if primary_client.email %}
-                            <div class="field-comparison">
-                                <div>
-                                    <div class="field-label">Email</div>
-                                    <div class="field-value">{{ primary_client.email }}</div>
-                                </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item">
+                                <div class="field-label text-xs">Email</div>
+                                <div class="field-value text-xs">{{ primary_client.email|default:"—" }}</div>
                             </div>
-                            {% endif %}
-                            {% if primary_client.phone %}
-                            <div class="field-comparison">
-                                <div>
-                                    <div class="field-label">Phone</div>
-                                    <div class="field-value">{{ primary_client.phone }}</div>
-                                </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Phone</div>
+                                <div class="field-value text-xs">{{ primary_client.phone|default:"—" }}</div>
                             </div>
-                            {% endif %}
+                            <div class="field-item">
+                                <div class="field-label text-xs">Work Phone</div>
+                                <div class="field-value text-xs">{{ primary_client.phone_work|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Alt Phone</div>
+                                <div class="field-value text-xs">{{ primary_client.phone_alt|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Address</div>
+                                <div class="field-value text-xs">{{ primary_client.address|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Address 2</div>
+                                <div class="field-value text-xs">{{ primary_client.address_2|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">City</div>
+                                <div class="field-value text-xs">{{ primary_client.city|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Province</div>
+                                <div class="field-value text-xs">{{ primary_client.province|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Postal Code</div>
+                                <div class="field-value text-xs">{{ primary_client.postal_code|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">County</div>
+                                <div class="field-value text-xs">{{ primary_client.location_county|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Permission to Phone</div>
+                                <div class="field-value text-xs">{{ primary_client.permission_to_phone|yesno:"Yes,No" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Permission to Email</div>
+                                <div class="field-value text-xs">{{ primary_client.permission_to_email|yesno:"Yes,No" }}</div>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Cultural & Demographic Information -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Cultural & Demographic</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item">
+                                <div class="field-label text-xs">Language</div>
+                                <div class="field-value text-xs">{{ primary_client.language|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Preferred Language</div>
+                                <div class="field-value text-xs">{{ primary_client.preferred_language|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Mother Tongue</div>
+                                <div class="field-value text-xs">{{ primary_client.mother_tongue|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Official Language</div>
+                                <div class="field-value text-xs">{{ primary_client.official_language|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Interpreter Required</div>
+                                <div class="field-value text-xs">{{ primary_client.language_interpreter_required|yesno:"Yes,No" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Race/Ethnicity</div>
+                                <div class="field-value text-xs">{{ primary_client.self_identification_race_ethnicity|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Aboriginal Status</div>
+                                <div class="field-value text-xs">{{ primary_client.aboriginal_status|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Indigenous Status</div>
+                                <div class="field-value text-xs">{{ primary_client.indigenous_status|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">LGBTQ+ Status</div>
+                                <div class="field-value text-xs">{{ primary_client.lgbtq_status|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Sexual Orientation</div>
+                                <div class="field-value text-xs">{{ primary_client.sexual_orientation|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Education Level</div>
+                                <div class="field-value text-xs">{{ primary_client.highest_level_education|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Children at Home</div>
+                                <div class="field-value text-xs">{{ primary_client.children_home|yesno:"Yes,No" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Number of Children</div>
+                                <div class="field-value text-xs">{{ primary_client.children_number|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">LHIN</div>
+                                <div class="field-value text-xs">{{ primary_client.lhin|default:"—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Medical & Health Information -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Medical & Health</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item">
+                                <div class="field-label text-xs">Medical Conditions</div>
+                                <div class="field-value text-xs">{{ primary_client.medical_conditions|default:"—"|truncatechars:50 }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Primary Diagnosis</div>
+                                <div class="field-value text-xs">{{ primary_client.primary_diagnosis|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Family Doctor</div>
+                                <div class="field-value text-xs">{{ primary_client.family_doctor|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Health Card #</div>
+                                <div class="field-value text-xs">{{ primary_client.health_card_number|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">HC Version</div>
+                                <div class="field-value text-xs">{{ primary_client.health_card_version|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">HC Exp Date</div>
+                                <div class="field-value text-xs">{{ primary_client.health_card_exp_date|date:"M d, Y"|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">HC Province</div>
+                                <div class="field-value text-xs">{{ primary_client.health_card_issuing_province|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">No HC Reason</div>
+                                <div class="field-value text-xs">{{ primary_client.no_health_card_reason|default:"—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
 
                     <!-- Enrollments -->
                     <div class="comparison-section">
@@ -250,7 +438,7 @@
             <!-- Duplicate Client -->
             <div class="client-card bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer" 
                  data-client-id="{{ duplicate_client.id }}" 
-                 onclick="selectClient({{ duplicate_client.id }})">
+                 onclick="selectClientInModal({{ duplicate_client.id }})">
                 <div class="flex items-center justify-between mb-4">
                     <div class="flex items-center space-x-3">
                         <div class="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-sm">
@@ -275,52 +463,215 @@
                     <!-- Basic Information -->
                     <div class="comparison-section">
                         <h4 class="text-sm font-semibold text-gray-700 mb-3">Basic Information</h4>
-                        <div class="space-y-2">
-                            <div class="field-comparison">
-                                <div>
-                                    <div class="field-label">Date of Birth</div>
-                                    <div class="field-value">{{ duplicate_client.dob|date:"M d, Y" }}</div>
-                                </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item">
+                                <div class="field-label text-xs">Client ID</div>
+                                <div class="field-value text-xs">{{ duplicate_client.client_id|default:"—" }}</div>
                             </div>
-                            <div class="field-comparison">
-                                <div>
-                                    <div class="field-label">Gender</div>
-                                    <div class="field-value">{{ duplicate_client.gender }}</div>
-                                </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Date of Birth</div>
+                                <div class="field-value text-xs">{{ duplicate_client.dob|date:"M d, Y"|default:"—" }}</div>
                             </div>
-                            {% if duplicate_client.preferred_name %}
-                            <div class="field-comparison">
-                                <div>
-                                    <div class="field-label">Preferred Name</div>
-                                    <div class="field-value">{{ duplicate_client.preferred_name }}</div>
-                                </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Age</div>
+                                <div class="field-value text-xs">{{ duplicate_client.age|default:"—" }}</div>
                             </div>
-                            {% endif %}
+                            <div class="field-item">
+                                <div class="field-label text-xs">Gender</div>
+                                <div class="field-value text-xs">{{ duplicate_client.gender|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Preferred Name</div>
+                                <div class="field-value text-xs">{{ duplicate_client.preferred_name|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Middle Name</div>
+                                <div class="field-value text-xs">{{ duplicate_client.middle_name|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Alias</div>
+                                <div class="field-value text-xs">{{ duplicate_client.alias|default:"—" }}</div>
+                                </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Gender Identity</div>
+                                <div class="field-value text-xs">{{ duplicate_client.gender_identity|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Pronoun</div>
+                                <div class="field-value text-xs">{{ duplicate_client.pronoun|default:"—" }}</div>
+                                </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Marital Status</div>
+                                <div class="field-value text-xs">{{ duplicate_client.marital_status|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Citizenship</div>
+                                <div class="field-value text-xs">{{ duplicate_client.citizenship_status|default:"—" }}</div>
+                                </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Country of Birth</div>
+                                <div class="field-value text-xs">{{ duplicate_client.country_of_birth|default:"—" }}</div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Contact Information -->
                     <div class="comparison-section">
                         <h4 class="text-sm font-semibold text-gray-700 mb-3">Contact Information</h4>
-                        <div class="space-y-2">
-                            {% if duplicate_client.email %}
-                            <div class="field-comparison">
-                                <div>
-                                    <div class="field-label">Email</div>
-                                    <div class="field-value">{{ duplicate_client.email }}</div>
-                                </div>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item">
+                                <div class="field-label text-xs">Email</div>
+                                <div class="field-value text-xs">{{ duplicate_client.email|default:"—" }}</div>
                             </div>
-                            {% endif %}
-                            {% if duplicate_client.phone %}
-                            <div class="field-comparison">
-                                <div>
-                                    <div class="field-label">Phone</div>
-                                    <div class="field-value">{{ duplicate_client.phone }}</div>
-                                </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Phone</div>
+                                <div class="field-value text-xs">{{ duplicate_client.phone|default:"—" }}</div>
                             </div>
-                            {% endif %}
+                            <div class="field-item">
+                                <div class="field-label text-xs">Work Phone</div>
+                                <div class="field-value text-xs">{{ duplicate_client.phone_work|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Alt Phone</div>
+                                <div class="field-value text-xs">{{ duplicate_client.phone_alt|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Address</div>
+                                <div class="field-value text-xs">{{ duplicate_client.address|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Address 2</div>
+                                <div class="field-value text-xs">{{ duplicate_client.address_2|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">City</div>
+                                <div class="field-value text-xs">{{ duplicate_client.city|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Province</div>
+                                <div class="field-value text-xs">{{ duplicate_client.province|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Postal Code</div>
+                                <div class="field-value text-xs">{{ duplicate_client.postal_code|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">County</div>
+                                <div class="field-value text-xs">{{ duplicate_client.location_county|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Permission to Phone</div>
+                                <div class="field-value text-xs">{{ duplicate_client.permission_to_phone|yesno:"Yes,No" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Permission to Email</div>
+                                <div class="field-value text-xs">{{ duplicate_client.permission_to_email|yesno:"Yes,No" }}</div>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Cultural & Demographic Information -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Cultural & Demographic</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item">
+                                <div class="field-label text-xs">Language</div>
+                                <div class="field-value text-xs">{{ duplicate_client.language|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Preferred Language</div>
+                                <div class="field-value text-xs">{{ duplicate_client.preferred_language|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Mother Tongue</div>
+                                <div class="field-value text-xs">{{ duplicate_client.mother_tongue|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Official Language</div>
+                                <div class="field-value text-xs">{{ duplicate_client.official_language|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Interpreter Required</div>
+                                <div class="field-value text-xs">{{ duplicate_client.language_interpreter_required|yesno:"Yes,No" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Race/Ethnicity</div>
+                                <div class="field-value text-xs">{{ duplicate_client.self_identification_race_ethnicity|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Aboriginal Status</div>
+                                <div class="field-value text-xs">{{ duplicate_client.aboriginal_status|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Indigenous Status</div>
+                                <div class="field-value text-xs">{{ duplicate_client.indigenous_status|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">LGBTQ+ Status</div>
+                                <div class="field-value text-xs">{{ duplicate_client.lgbtq_status|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Sexual Orientation</div>
+                                <div class="field-value text-xs">{{ duplicate_client.sexual_orientation|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Education Level</div>
+                                <div class="field-value text-xs">{{ duplicate_client.highest_level_education|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Children at Home</div>
+                                <div class="field-value text-xs">{{ duplicate_client.children_home|yesno:"Yes,No" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Number of Children</div>
+                                <div class="field-value text-xs">{{ duplicate_client.children_number|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">LHIN</div>
+                                <div class="field-value text-xs">{{ duplicate_client.lhin|default:"—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Medical & Health Information -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Medical & Health</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item">
+                                <div class="field-label text-xs">Medical Conditions</div>
+                                <div class="field-value text-xs">{{ duplicate_client.medical_conditions|default:"—"|truncatechars:50 }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Primary Diagnosis</div>
+                                <div class="field-value text-xs">{{ duplicate_client.primary_diagnosis|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Family Doctor</div>
+                                <div class="field-value text-xs">{{ duplicate_client.family_doctor|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">Health Card #</div>
+                                <div class="field-value text-xs">{{ duplicate_client.health_card_number|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">HC Version</div>
+                                <div class="field-value text-xs">{{ duplicate_client.health_card_version|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">HC Exp Date</div>
+                                <div class="field-value text-xs">{{ duplicate_client.health_card_exp_date|date:"M d, Y"|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">HC Province</div>
+                                <div class="field-value text-xs">{{ duplicate_client.health_card_issuing_province|default:"—" }}</div>
+                            </div>
+                            <div class="field-item">
+                                <div class="field-label text-xs">No HC Reason</div>
+                                <div class="field-value text-xs">{{ duplicate_client.no_health_card_reason|default:"—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
 
                     <!-- Enrollments -->
                     <div class="comparison-section">
@@ -405,7 +756,7 @@
                 <button onclick="closeConfirmationModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 mr-2">
                     Cancel
                 </button>
-                <button onclick="confirmResolution()" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                <button onclick="confirmResolutionFromModal()" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
                     Confirm
                 </button>
             </div>
@@ -476,6 +827,24 @@ function closeMarkDuplicateModal() {
             modal.classList.add('hidden');
         }
     }
+}
+
+function resolveDuplicate() {
+    if (!selectedClientId) {
+        alert('Please click on the client you want to KEEP');
+        return;
+    }
+    
+    const selectedClientName = document.querySelector(`[data-client-id="${selectedClientId}"] h3`).textContent;
+    const otherClientName = document.querySelector(`[data-client-id]:not([data-client-id="${selectedClientId}"]) h3`).textContent;
+    
+    document.getElementById('confirmation-message').innerHTML = 
+        `You are about to:<br><br>
+        <strong>✅ KEEP:</strong> ${selectedClientName}<br>
+        <strong>❌ DELETE:</strong> ${otherClientName}<br><br>
+        <strong>⚠️ WARNING:</strong> The other client will be permanently deleted and cannot be recovered!`;
+    
+    document.getElementById('confirmationModal').classList.remove('hidden');
 }
 
 function confirmResolution() {

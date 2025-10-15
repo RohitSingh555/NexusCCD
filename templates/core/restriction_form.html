@@ -113,7 +113,7 @@
                 </div>
                 
                 <div>
-                    <label for="{{ form.scope.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">SR Agency Wide *</label>
+                    <label for="{{ form.scope.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Scope *</label>
                     <select name="{{ form.scope.name }}" id="{{ form.scope.id_for_label }}" @change="updateProgramVisibility()" class="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
                         <option value="">Select Scope</option>
                         <option value="org" {% if form.scope.value == 'org' %}selected{% endif %}>Organization-wide</option>

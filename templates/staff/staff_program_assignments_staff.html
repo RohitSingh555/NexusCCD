@@ -1,7 +1,30 @@
 {% extends 'dashboard_base.html' %}
 {% load static %}
 
-{% block title %}Manage Program Service Assignments - {{ staff_member.first_name }} {{ staff_member.last_name }}{% endblock %}
+{% block extra_css %}
+<style>
+/* Custom scrollbar styling for programs container */
+#programs-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+#programs-container::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+
+#programs-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+#programs-container::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+</style>
+{% endblock %}
+
+{% block title %}Manage Program Assignments - {{ staff_member.first_name }} {{ staff_member.last_name }}{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -10,16 +33,16 @@
         <div class="flex items-center justify-between">
             <div>
                 <h1 class="text-3xl font-bold text-neutral-800 font-header">
-                    Manage Program Service Assignments
+                    Manage Program Assignments
                 </h1>
                 <p class="text-neutral-600 mt-2 font-body">
-                    {{ staff_member.first_name }} {{ staff_member.last_name }} - Manager
+                    {{ staff_member.first_name }} {{ staff_member.last_name }} - Staff Member
                 </p>
                 <div class="mt-2 flex items-center text-sm text-neutral-500">
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
-                    Assign program services that this program manager can access
+                    Assign programs that this staff member can access and manage
                 </div>
             </div>
             <a href="{% url 'staff:detail' staff_member.external_id %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
@@ -31,12 +54,12 @@
         </div>
     </div>
 
-    <!-- Current Service Assignments -->
+    <!-- Current Program Assignments -->
     <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
         <div class="flex items-center mb-6">
-            <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-4">
+            <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
                 <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                 </svg>
             </div>
             <div>
@@ -71,7 +94,7 @@
     <form method="post" class="space-y-8">
         {% csrf_token %}
         
-        <!-- Program Services Section -->
+        <!-- Program Assignments Section -->
         <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
             <div class="flex items-center mb-6">
                 <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
@@ -81,7 +104,7 @@
                 </div>
                 <div>
                     <h2 class="text-xl font-bold text-neutral-800 font-header">Assign Programs</h2>
-                    <p class="text-sm text-neutral-600 font-body">Select programs this manager can view and manage</p>
+                    <p class="text-sm text-neutral-600 font-body">Select programs this staff member can view and manage</p>
                 </div>
             </div>
             
@@ -117,13 +140,13 @@
             
             <!-- Programs grouped by department -->
             {% if programs_by_department %}
-                <div class="space-y-6" id="programs-container">
+                <div class="space-y-6 max-h-96 overflow-y-auto border border-neutral-200 rounded-lg p-4" id="programs-container">
                     {% for department, programs in programs_by_department.items %}
-                        <div class="department-section border border-neutral-200 rounded-lg p-4" 
+                        <div class="department-section bg-neutral-50 rounded-lg p-4" 
                              data-department="{{ department.name|lower }}"
                              data-searchable="{{ department.name|lower }}">
                             <h3 class="font-bold text-lg text-neutral-800 font-subheader mb-4 flex items-center">
-                                <svg class="w-5 h-5 mr-2 text-brand-sky" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg class="w-5 h-5 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                                 </svg>
                                 {{ department.name }}
@@ -139,7 +162,7 @@
                                             name="programs" 
                                             value="{{ program.id }}" 
                                             id="program_{{ program.id }}"
-                                            class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded mt-1"
+                                            class="h-4 w-4 text-green-600 focus:ring-green-500 border-neutral-300 rounded mt-1"
                                             {% for assignment in current_program_assignments %}{% if assignment.program.id == program.id %}checked{% endif %}{% endfor %}>
                                         <label for="program_{{ program.id }}" class="ml-3 block text-sm font-medium text-neutral-900">
                                             <div class="font-bold">{{ program.name }}</div>
@@ -173,16 +196,16 @@
         <!-- Form Actions -->
         <div class="bg-gradient-to-r from-neutral-50 to-neutral-100 rounded-xl p-6 flex justify-between items-center">
             <div class="flex items-start text-sm text-neutral-600">
-                <svg class="w-5 h-5 mr-2 text-brand-sky flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-5 h-5 mr-2 text-green-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                 </svg>
                 <div>
-                    <p class="font-bold mb-1">Manager Access Rights:</p>
+                    <p class="font-bold mb-1">Staff Access Rights:</p>
                     <ul class="list-disc list-inside space-y-1 text-xs">
-                        <li>View assigned program services and their programs</li>
-                        <li>Manage restrictions for assigned program services only</li>
-                        <li>Manage enrollments for assigned program services only</li>
-                        <li>View reports (read-only access)</li>
+                        <li>View assigned programs and their information</li>
+                        <li>Manage program enrollments for assigned programs only</li>
+                        <li>View program capacity and enrollment data</li>
+                        <li>Access program-related reports (read-only access)</li>
                     </ul>
                 </div>
             </div>
@@ -190,11 +213,11 @@
                 <a href="{% url 'staff:detail' staff_member.external_id %}" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                     Cancel
                 </a>
-                <button type="submit" class="px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <button type="submit" class="px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 shadow-sm">
                     <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                     </svg>
-                    Update Assignments
+                    Update Program Assignments
                 </button>
             </div>
         </div>

@@ -58,7 +58,7 @@ def program_manager_required(view_func):
         try:
             staff = request.user.staff_profile
             if not staff.is_program_manager():
-                messages.error(request, 'You must be a Program Manager to access this page.')
+                messages.error(request, 'You must be a Manager to access this page.')
                 return redirect('dashboard')
         except:
             messages.error(request, 'You do not have staff access.')

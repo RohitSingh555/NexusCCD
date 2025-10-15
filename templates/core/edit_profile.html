@@ -140,12 +140,12 @@
                         <!-- File Upload Area -->
                         <div class="relative">
                             <input type="file" 
-                                   id="profile-photo-upload" 
+                                   id="id_profile_photo" 
                                    name="profile_photo" 
                                    accept="image/*" 
                                    class="hidden">
                             
-                            <label for="profile-photo-upload" 
+                            <label for="id_profile_photo" 
                                    class="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-neutral-300 rounded-xl cursor-pointer hover:border-brand-sky hover:bg-neutral-50 transition-colors duration-200">
                                 <div class="flex flex-col items-center justify-center pt-5 pb-6">
                                     <svg class="w-8 h-8 mb-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -276,7 +276,9 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const fileInput = document.getElementById('profile-photo-upload');
+    console.log('Profile edit page loaded');
+    
+    const fileInput = document.getElementById('id_profile_photo');
     const imagePreview = document.getElementById('image-preview');
     const previewImage = document.getElementById('preview-image');
     const previewFilename = document.getElementById('preview-filename');
@@ -284,6 +286,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const removePreviewBtn = document.getElementById('remove-preview');
     const fileSizeWarning = document.getElementById('file-size-warning');
     const currentPhoto = document.getElementById('current-photo');
+    
+    console.log('Elements found:', {
+        fileInput: !!fileInput,
+        imagePreview: !!imagePreview,
+        previewImage: !!previewImage,
+        removePreviewBtn: !!removePreviewBtn,
+        fileSizeWarning: !!fileSizeWarning
+    });
     
     const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
     
@@ -296,84 +306,90 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function validateFile(file) {
-        // Check file size
         if (file.size > MAX_FILE_SIZE) {
-            fileSizeWarning.classList.remove('hidden');
+            if (fileSizeWarning) {
+                fileSizeWarning.classList.remove('hidden');
+            }
             return false;
         } else {
-            fileSizeWarning.classList.add('hidden');
+            if (fileSizeWarning) {
+                fileSizeWarning.classList.add('hidden');
+            }
             return true;
         }
     }
     
     function showPreview(file) {
+        console.log('Showing preview for file:', file.name);
         if (!validateFile(file)) {
             return;
         }
         
         const reader = new FileReader();
         reader.onload = function(e) {
-            previewImage.src = e.target.result;
-            previewFilename.textContent = file.name;
-            previewFilesize.textContent = formatFileSize(file.size);
-            imagePreview.classList.remove('hidden');
+            if (previewImage) previewImage.src = e.target.result;
+            if (previewFilename) previewFilename.textContent = file.name;
+            if (previewFilesize) previewFilesize.textContent = formatFileSize(file.size);
+            if (imagePreview) imagePreview.classList.remove('hidden');
+            
+            // Add visual feedback to the upload area
+            const uploadLabel = fileInput.parentElement.querySelector('label');
+            if (uploadLabel) {
+                uploadLabel.classList.add('border-green-400', 'bg-green-50');
+                uploadLabel.classList.remove('border-neutral-300');
+            }
         };
         reader.readAsDataURL(file);
     }
     
     function hidePreview() {
-        imagePreview.classList.add('hidden');
-        fileInput.value = '';
-        fileSizeWarning.classList.add('hidden');
+        console.log('Hiding preview');
+        if (imagePreview) imagePreview.classList.add('hidden');
+        if (fileInput) fileInput.value = '';
+        if (fileSizeWarning) fileSizeWarning.classList.add('hidden');
+        
+        // Reset upload area styling
+        const uploadLabel = fileInput.parentElement.querySelector('label');
+        if (uploadLabel) {
+            uploadLabel.classList.remove('border-green-400', 'bg-green-50');
+            uploadLabel.classList.add('border-neutral-300');
+        }
     }
     
     // File input change event
-    fileInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            showPreview(file);
-        }
-    });
-    
-    // Remove preview button
-    removePreviewBtn.addEventListener('click', hidePreview);
-    
-    // Drag and drop functionality
-    const dropZone = fileInput.parentElement;
-    
-    dropZone.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        dropZone.classList.add('border-brand-sky', 'bg-brand-sky/5');
-    });
-    
-    dropZone.addEventListener('dragleave', function(e) {
-        e.preventDefault();
-        dropZone.classList.remove('border-brand-sky', 'bg-brand-sky/5');
-    });
-    
-    dropZone.addEventListener('drop', function(e) {
-        e.preventDefault();
-        dropZone.classList.remove('border-brand-sky', 'bg-brand-sky/5');
-        
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            const file = files[0];
-            if (file.type.startsWith('image/')) {
-                fileInput.files = files;
+    if (fileInput) {
+        fileInput.addEventListener('change', function(e) {
+            console.log('File input changed');
+            const file = e.target.files[0];
+            if (file) {
                 showPreview(file);
             } else {
-                alert('Please select an image file.');
+                hidePreview();
             }
-        }
-    });
+        });
+    }
+    
+    // Remove preview button
+    if (removePreviewBtn) {
+        removePreviewBtn.addEventListener('click', function() {
+            console.log('Remove preview clicked');
+            hidePreview();
+        });
+    }
     
     // Remove photo button functionality
     const removePhotoBtn = document.getElementById('remove-photo-btn');
     const removePhotoFlag = document.querySelector('input[name="remove_profile_photo"]');
-    const currentPhoto = document.getElementById('current-photo');
     
-    if (removePhotoBtn) {
+    console.log('Remove photo elements:', {
+        removePhotoBtn: !!removePhotoBtn,
+        removePhotoFlag: !!removePhotoFlag
+    });
+    
+    if (removePhotoBtn && removePhotoFlag) {
         removePhotoBtn.addEventListener('click', function() {
+            console.log('Remove photo button clicked');
+            
             // Create a custom confirmation dialog
             const confirmDialog = document.createElement('div');
             confirmDialog.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
@@ -411,19 +427,21 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Handle confirm
             document.getElementById('confirm-remove').addEventListener('click', function() {
-                // Set the flag to remove photo (boolean true)
+                // Set the flag to remove photo
                 removePhotoFlag.checked = true;
                 
                 // Update the current photo display to show initials
                 const userFirstName = '{{ user.first_name.0 }}';
                 const userLastName = '{{ user.last_name.0 }}';
-                currentPhoto.innerHTML = `
-                    <div class="h-full w-full bg-gradient-to-br from-brand-sky to-brand-darkBlue flex items-center justify-center">
-                        <span class="text-white font-bold text-2xl">
-                            ${userFirstName}${userLastName}
-                        </span>
-                    </div>
-                `;
+                if (currentPhoto) {
+                    currentPhoto.innerHTML = `
+                        <div class="h-full w-full bg-gradient-to-br from-brand-sky to-brand-darkBlue flex items-center justify-center">
+                            <span class="text-white font-bold text-2xl">
+                                ${userFirstName}${userLastName}
+                            </span>
+                        </div>
+                    `;
+                }
                 
                 // Update the button text and disable it
                 removePhotoBtn.innerHTML = `
@@ -437,11 +455,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 removePhotoBtn.classList.add('text-green-600', 'bg-green-50', 'border-green-200');
                 
                 // Clear any file input
-                fileInput.value = '';
+                if (fileInput) fileInput.value = '';
                 hidePreview();
                 
                 // Remove the dialog
                 document.body.removeChild(confirmDialog);
+                
+                // Show success message
+                const successMessage = document.createElement('div');
+                successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+                successMessage.textContent = 'Photo will be removed when you save changes';
+                document.body.appendChild(successMessage);
+                
+                // Remove success message after 3 seconds
+                setTimeout(() => {
+                    if (document.body.contains(successMessage)) {
+                        document.body.removeChild(successMessage);
+                    }
+                }, 3000);
             });
             
             // Close dialog when clicking outside
@@ -455,14 +486,18 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Form submission validation
     const form = document.querySelector('form');
-    form.addEventListener('submit', function(e) {
-        const file = fileInput.files[0];
-        if (file && !validateFile(file)) {
-            e.preventDefault();
-            fileSizeWarning.classList.remove('hidden');
-            fileSizeWarning.scrollIntoView({ behavior: 'smooth' });
-        }
-    });
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const file = fileInput ? fileInput.files[0] : null;
+            if (file && !validateFile(file)) {
+                e.preventDefault();
+                if (fileSizeWarning) {
+                    fileSizeWarning.classList.remove('hidden');
+                    fileSizeWarning.scrollIntoView({ behavior: 'smooth' });
+                }
+            }
+        });
+    }
 });
 </script>
 {% endblock %}

@@ -3,11 +3,11 @@ from core.models import Role
 
 
 class Command(BaseCommand):
-    help = 'Creates or updates the Program Manager role'
+    help = 'Creates or updates the Manager role'
 
     def handle(self, *args, **kwargs):
         role, created = Role.objects.update_or_create(
-            name='Program Manager',
+            name='Manager',
             defaults={
                 'description': 'Can manage assigned programs and services with restricted access',
                 'permissions': [
@@ -22,9 +22,9 @@ class Command(BaseCommand):
         )
         
         if created:
-            self.stdout.write(self.style.SUCCESS('Successfully created Program Manager role'))
+            self.stdout.write(self.style.SUCCESS('Successfully created Manager role'))
         else:
-            self.stdout.write(self.style.SUCCESS('Successfully updated Program Manager role'))
+            self.stdout.write(self.style.SUCCESS('Successfully updated Manager role'))
         
         # Display role details
         self.stdout.write(self.style.SUCCESS(f'\nRole Details:'))

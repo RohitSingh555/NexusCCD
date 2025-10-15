@@ -21,9 +21,8 @@ class Command(BaseCommand):
         roles_data = [
             {'name': 'SuperAdmin', 'description': 'Full system access', 'permissions': ['all']},
             {'name': 'Admin', 'description': 'Administrative access', 'permissions': ['admin']},
-            {'name': 'Manager', 'description': 'Management access', 'permissions': ['manage']},
+            {'name': 'Manager', 'description': 'Program management access', 'permissions': ['program_management']},
             {'name': 'Staff', 'description': 'Basic staff access', 'permissions': ['read', 'write']},
-            {'name': 'Program Manager', 'description': 'Program management access', 'permissions': ['program_management']},
             {'name': 'Viewer', 'description': 'Read-only access', 'permissions': ['read']},
             {'name': 'Coordinator', 'description': 'Data coordination access', 'permissions': ['coordinate']},
             {'name': 'Analyst', 'description': 'Analytical access', 'permissions': ['analyze']},

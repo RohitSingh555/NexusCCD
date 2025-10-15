@@ -1,6 +1,7 @@
 from django import forms
-from core.models import Staff, Role, StaffRole
-from programs.models import ProgramService, Program
+from core.models import Role, StaffRole
+from programs.models import Program
+from .models import StaffProgramAssignment
 
 
 
@@ -71,6 +72,48 @@ class ProgramManagerAssignmentForm(forms.Form):
         # Create new assignments or reactivate existing ones
         for program in selected_programs:
             assignment, created = ProgramManagerAssignment.objects.update_or_create(
+                staff=staff,
+                program=program,
+                defaults={
+                    'is_active': True,
+                    'assigned_by': assigned_by
+                }
+            )
+
+
+
+
+class StaffProgramAssignmentForm(forms.Form):
+    """Form for assigning programs to staff members"""
+    programs = forms.ModelMultipleChoiceField(
+        queryset=Program.objects.filter(status='active'),
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label="Assign Programs"
+    )
+    
+    def __init__(self, *args, **kwargs):
+        staff = kwargs.pop('staff', None)
+        super().__init__(*args, **kwargs)
+        
+        if staff:
+            # Pre-select currently assigned programs
+            current_programs = StaffProgramAssignment.objects.filter(
+                staff=staff, 
+                is_active=True
+            ).values_list('program_id', flat=True)
+            self.fields['programs'].initial = list(current_programs)
+    
+    def save(self, staff, assigned_by):
+        """Save program assignments for the staff member"""
+        selected_programs = self.cleaned_data['programs']
+        
+        # Deactivate all current program assignments
+        StaffProgramAssignment.objects.filter(staff=staff, is_active=True).update(is_active=False)
+        
+        # Create new assignments or reactivate existing ones
+        for program in selected_programs:
+            assignment, created = StaffProgramAssignment.objects.update_or_create(
                 staff=staff,
                 program=program,
                 defaults={

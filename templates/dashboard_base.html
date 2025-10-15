@@ -680,6 +680,75 @@
                 }
             }
         }
+        
+        // Permission Error Handling
+        function handlePermissionError(errorType = 'access_denied', resourceType = 'resource', resourceName = '') {
+            const params = new URLSearchParams({
+                type: errorType,
+                resource: resourceType,
+                name: resourceName
+            });
+            
+            // Show a user-friendly modal instead of redirecting
+            showPermissionErrorModal(errorType, resourceType, resourceName);
+        }
+        
+        function showPermissionErrorModal(errorType, resourceType, resourceName) {
+            const messages = {
+                'access_denied': `You don't have permission to access this ${resourceType}.`,
+                'program_not_assigned': 'You don\'t have access to this program. Only programs assigned to you are accessible.',
+                'client_not_related': 'You don\'t have access to this client. You can only view clients you have a relationship with.',
+                'restriction_not_related': 'You don\'t have access to this restriction. You can only view restrictions for clients you manage.',
+                'enrollment_not_related': 'You don\'t have access to this enrollment. You can only view enrollments for clients you manage.',
+            };
+            
+            let message = messages[errorType] || messages['access_denied'];
+            
+            if (resourceName) {
+                message = `You don't have access to ${resourceName}. ${message}`;
+            }
+            
+            // Create and show modal
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+            modal.innerHTML = `
+                <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                    <div class="mt-3 text-center">
+                        <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                            <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
+                        <p class="text-sm text-gray-500 mb-6">${message}</p>
+                        <div class="flex justify-center space-x-3">
+                            <button onclick="this.closest('.fixed').remove()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                                Close
+                            </button>
+                            <button onclick="window.location.href='/dashboard/'" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                Go to Dashboard
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                if (modal.parentNode) {
+                    modal.remove();
+                }
+            }, 10000);
+        }
+        
+        // Global error handler for AJAX requests
+        window.addEventListener('unhandledrejection', function(event) {
+            if (event.reason && event.reason.status === 403) {
+                handlePermissionError('access_denied', 'resource');
+            }
+        });
     </script>
 </body>
 </html>

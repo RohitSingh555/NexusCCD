@@ -156,6 +156,28 @@ def login(request):
         }
         
         logger.info(f"Login successful for user: {user.email}")
+        
+        # Create audit log entry for successful login
+        try:
+            from core.models import create_audit_log
+            create_audit_log(
+                entity_name='User',
+                entity_id=user.external_id,
+                action='login',
+                changed_by=staff,
+                diff_data={
+                    'user_name': f"{user.first_name} {user.last_name}".strip() or user.username,
+                    'user_email': user.email,
+                    'user_username': user.username,
+                    'login_time': str(user.last_login) if user.last_login else 'First login',
+                    'ip_address': request.META.get('REMOTE_ADDR', 'Unknown'),
+                    'user_agent': request.META.get('HTTP_USER_AGENT', 'Unknown')[:100]  # Truncate for storage
+                }
+            )
+            logger.info(f"Audit log created for login: {user.email}")
+        except Exception as audit_error:
+            logger.error(f"Failed to create audit log for login: {audit_error}")
+        
         return Response(response_data, status=status.HTTP_200_OK)
         
     except Exception as e:
@@ -184,16 +206,94 @@ def refresh_token(request):
 
 
 @api_view(['POST'])
+@permission_classes([AllowAny])
 def logout(request):
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info("=== LOGOUT API CALLED ===")
+    logger.info(f"Request method: {request.method}")
+    logger.info(f"Request data: {request.data}")
+    logger.info(f"Request user: {request.user}")
+    logger.info(f"Request user authenticated: {request.user.is_authenticated}")
+    logger.info(f"Request headers: {dict(request.headers)}")
+    
     try:
+        # Get user information from the refresh token for audit logging
+        user = None
+        staff = None
         refresh_token = request.data.get('refresh')
-        if refresh_token:
-            token = RefreshToken(refresh_token)
-            token.blacklist()
         
+        logger.info(f"Refresh token received: {bool(refresh_token)}")
+        
+        if refresh_token:
+            try:
+                logger.info("Processing refresh token...")
+                # Extract user information from the refresh token
+                token = RefreshToken(refresh_token)
+                user_id = token['user_id']
+                logger.info(f"User ID from token: {user_id}")
+                
+                # Get the user object
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                user = User.objects.get(id=user_id)
+                logger.info(f"User found: {user.email}")
+                
+                # Get staff profile if it exists
+                try:
+                    staff = user.staff_profile
+                    logger.info(f"Staff profile found: {staff.id}")
+                except Staff.DoesNotExist:
+                    logger.info("No staff profile found")
+                    pass
+                
+                # Note: Token blacklisting is not configured, but we can still process logout
+                # The token will expire naturally based on its expiration time
+                logger.info("Token processing completed (blacklisting not configured)")
+                
+                # Create audit log entry for logout
+                try:
+                    logger.info("Creating audit log for logout...")
+                    from core.models import create_audit_log
+                    audit_log = create_audit_log(
+                        entity_name='User',
+                        entity_id=user.external_id,
+                        action='logout',
+                        changed_by=staff,
+                        diff_data={
+                            'user_name': f"{user.first_name} {user.last_name}".strip() or user.username,
+                            'user_email': user.email,
+                            'user_username': user.username,
+                            'logout_time': str(user.last_login) if user.last_login else 'Unknown',
+                            'ip_address': request.META.get('REMOTE_ADDR', 'Unknown'),
+                            'user_agent': request.META.get('HTTP_USER_AGENT', 'Unknown')[:100]  # Truncate for storage
+                        }
+                    )
+                    if audit_log:
+                        logger.info(f"Audit log created successfully for logout: {user.email} (ID: {audit_log.id})")
+                    else:
+                        logger.error("Audit log creation returned None")
+                except Exception as audit_error:
+                    logger.error(f"Failed to create audit log for logout: {audit_error}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
+                    
+            except Exception as token_error:
+                logger.error(f"Error processing logout token: {token_error}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                return Response({'error': 'Invalid refresh token'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            logger.warning("No refresh token provided in logout request")
+        
+        logger.info("Logout completed successfully")
         return Response({'message': 'Successfully logged out'}, status=status.HTTP_200_OK)
         
     except Exception as e:
+        logger.error(f"Unexpected error during logout: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 

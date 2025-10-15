@@ -23,13 +23,34 @@ from .forms import UserProfileForm, StaffProfileForm, PasswordChangeForm, Servic
 User = get_user_model()
 
 
+class AnalystAccessMixin:
+    """Mixin to block Analyst users from accessing individual pages"""
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user is Analyst and block access to individual pages"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Block Analyst users from accessing individual pages
+                if 'Analyst' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader', 'Staff'] for role in role_names):
+                    messages.error(request, 'Analyst users can only access Dashboard and Reports. Individual pages are not accessible.')
+                    return redirect('dashboard')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
+
+
 class ProgramManagerAccessMixin:
-    """Mixin to filter data for Program Managers based on their assigned programs"""
+    """Mixin to filter data for Managers based on their assigned programs"""
     
     def get_queryset(self):
         """Filter queryset based on user's assigned programs"""
         # Start with the base queryset with proper ordering and select_related
-        queryset = super().get_queryset().order_by('-created_at')
+        queryset = self.model.objects.all().order_by('-created_at')
         
         # Add appropriate select_related based on model
         if hasattr(self.model, 'department'):
@@ -50,41 +71,87 @@ class ProgramManagerAccessMixin:
         
         try:
             staff = self.request.user.staff_profile
+            user_roles = staff.staffrole_set.select_related('role').all()
+            role_names = [staff_role.role.name for staff_role in user_roles]
             
-            # Program Manager can only see assigned programs
+            # Manager can see all data - no filtering for managers
             if staff.is_program_manager():
-                assigned_programs = staff.get_assigned_programs()
-                # Filter based on model type
-                if hasattr(self.model, 'program'):
-                    # For models with program field (like ServiceRestriction)
+                # Managers see all restrictions without any filtering
+                if self.model.__name__ == 'ServiceRestriction':
+                    return queryset
+                else:
+                    # For other models, managers see only their assigned programs
+                    assigned_programs = staff.get_assigned_programs()
+                    if hasattr(self.model, 'program'):
+                        return queryset.filter(program__in=assigned_programs)
+                    else:
+                        return queryset.filter(id__in=assigned_programs)
+            
+            # Leader can see data for their assigned departments
+            elif staff.is_leader():
+                # Use direct queries since the methods aren't working
+                assigned_departments = Department.objects.filter(
+                    leader_assignments__staff=staff,
+                    leader_assignments__is_active=True
+                ).distinct()
+                assigned_programs = Program.objects.filter(
+                    department__in=assigned_departments
+                ).distinct()
+                
+                if self.model.__name__ == 'ServiceRestriction':
+                    # Leaders see ALL restrictions (like Staff users)
+                    return queryset
+                elif hasattr(self.model, 'program'):
                     return queryset.filter(program__in=assigned_programs)
+                elif hasattr(self.model, 'department'):
+                    return queryset.filter(department__in=assigned_departments)
+                elif hasattr(self.model, 'client'):
+                    # For client models, show clients enrolled in assigned programs
+                    assigned_clients = Client.objects.filter(
+                        clientprogramenrollment__program__in=assigned_programs
+                    ).distinct()
+                    return queryset.filter(id__in=assigned_clients)
+                else:
+                    return queryset.filter(id__in=assigned_programs)
+            
+            # Staff users (including those with multiple roles) see limited access to data
+            elif 'Staff' in role_names:
+                from staff.models import StaffClientAssignment, StaffProgramAssignment
+                assigned_programs = Program.objects.filter(
+                    staff_assignments__staff=staff,
+                    staff_assignments__is_active=True
+                ).distinct()
+                
+                # Filter based on model type - special handling for different models
+                if self.model.__name__ == 'ServiceRestriction':
+                    # Staff users see ALL restrictions regardless of program or client assignments
+                    return queryset
+                elif hasattr(self.model, 'program') and self.model.__name__ == 'ClientProgramEnrollment':
+                    # For ClientProgramEnrollment - Staff users see only enrollments for their assigned programs
+                    return queryset.filter(program__in=assigned_programs)
+                elif hasattr(self.model, 'program'):
+                    # For other models with program field (like ServiceRestriction) - show all
+                    return queryset
+                elif hasattr(self.model, 'client') and not hasattr(self.model, 'program'):
+                    # For models with only client field (like Client)
+                    # Staff users see only clients enrolled in their assigned programs
+                    assigned_clients = Client.objects.filter(
+                        clientprogramenrollment__program__in=assigned_programs
+                    ).distinct()
+                    return queryset.filter(id__in=assigned_clients)
                 else:
                     # For models without program field (like Program)
                     return queryset.filter(id__in=assigned_programs)
             
-            # Other roles see everything (Staff, etc.)
+            # Other roles see everything (SuperAdmin, etc.)
             return queryset
             
-        except Exception:
+        except Exception as e:
             # For superadmin, return all programs even if there's an exception
             if self.request.user.is_superuser:
                 return queryset
             return queryset.none()
     
-    def get_context_data(self, **kwargs):
-        """Add program manager context"""
-        context = super().get_context_data(**kwargs)
-        
-        if self.request.user.is_authenticated:
-            try:
-                staff = self.request.user.staff_profile
-                if staff.is_program_manager():
-                    context['assigned_programs'] = staff.get_assigned_programs()
-                    context['is_program_manager'] = True
-            except Exception:
-                pass
-        
-        return context
 
 def jwt_required(view_func):
     """Decorator to require authentication (JWT or Django session)"""
@@ -122,7 +189,7 @@ def dashboard(request):
         role_names = [staff_role.role.name for staff_role in user_roles]
         
         # Check if user has any meaningful permissions
-        has_permissions = any(role in ['SuperAdmin', 'Staff','Program Manager'] for role in role_names)
+        has_permissions = any(role in ['SuperAdmin', 'Staff', 'Manager', 'Leader', 'Analyst'] for role in role_names)
         
         if not has_permissions:
             # User doesn't have proper permissions, redirect to profile
@@ -133,19 +200,57 @@ def dashboard(request):
         return redirect('core:profile')
     
     # User has proper permissions, show dashboard
-    # Check if user is a program manager to filter data accordingly
+    # Check if user is a program manager, staff-only, leader, or analyst to filter data accordingly
     is_program_manager = False
+    is_staff_only = False
+    is_leader = False
+    is_analyst = False
     assigned_programs = None
+    assigned_clients = None
     
     try:
         staff_profile = request.user.staff_profile
+        user_roles = staff_profile.staffrole_set.select_related('role').all()
+        role_names = [staff_role.role.name for staff_role in user_roles]
+        
         if staff_profile.is_program_manager():
             is_program_manager = True
             assigned_programs = staff_profile.get_assigned_programs()
+        elif staff_profile.is_leader():
+            is_leader = True
+            # Get assigned programs for leader users via departments using direct queries
+            assigned_departments = Department.objects.filter(
+                leader_assignments__staff=staff_profile,
+                leader_assignments__is_active=True
+            ).distinct()
+            assigned_programs = Program.objects.filter(
+                department__in=assigned_departments
+            ).distinct()
+            # Get clients enrolled in assigned programs
+            assigned_clients = Client.objects.filter(
+                clientprogramenrollment__program__in=assigned_programs
+            ).distinct()
+        elif 'Analyst' in role_names:
+            is_analyst = True
+            # Analysts see all data - no filtering needed
+            assigned_programs = None
+            assigned_clients = None
+        elif staff_profile.is_staff_only():
+            is_staff_only = True
+            # Get assigned programs for staff users
+            from staff.models import StaffProgramAssignment
+            assigned_programs = Program.objects.filter(
+                staff_assignments__staff=staff_profile,
+                staff_assignments__is_active=True
+            ).distinct()
+            # Get clients enrolled in assigned programs
+            assigned_clients = Client.objects.filter(
+                clientprogramenrollment__program__in=assigned_programs
+            ).distinct()
     except Exception:
         pass
     
-    # Get basic statistics - filter for program managers
+    # Get basic statistics - filter for program managers and staff-only users
     if is_program_manager and assigned_programs:
         # Program managers see only clients enrolled in their assigned programs
         total_clients = Client.objects.filter(
@@ -154,13 +259,12 @@ def dashboard(request):
         active_programs = assigned_programs.count()
         total_staff = Staff.objects.count()  # Staff count is same for all
         
-        # Get active restrictions count for assigned programs
+        # Get active restrictions count - Managers see ALL restrictions
         from django.utils import timezone
         today = timezone.now().date()
         active_restrictions = ServiceRestriction.objects.filter(
             is_archived=False,
-            start_date__lte=today,
-            program__in=assigned_programs
+            start_date__lte=today
         ).filter(
             Q(end_date__isnull=True) | Q(end_date__gte=today)
         ).count()
@@ -170,16 +274,108 @@ def dashboard(request):
             clientprogramenrollment__program__in=assigned_programs
         ).distinct().order_by('-created_at')[:5]
         
-        # Get recent restrictions (last 5) for assigned programs
+        # Get recent restrictions (last 5) - Managers see ALL restrictions
         recent_restrictions = ServiceRestriction.objects.filter(
-            is_archived=False,
-            program__in=assigned_programs
+            is_archived=False
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
-        # Get restricted clients (Bill 168 and No Trespass) for assigned programs
+        # Get restricted clients (Bill 168 and No Trespass) - Managers see ALL restrictions
         restricted_clients = ServiceRestriction.objects.filter(
+            is_archived=False
+        ).filter(
+            Q(is_bill_168=True) | Q(is_no_trespass=True)
+        ).select_related('client', 'program').order_by('-created_at')[:10]
+    elif is_leader and assigned_programs:
+        # Leader users see data for their assigned departments
+        total_clients = Client.objects.filter(
+            clientprogramenrollment__program__in=assigned_programs
+        ).distinct().count()
+        active_programs = assigned_programs.count()
+        total_staff = Staff.objects.count()  # Staff count is same for all
+        
+        # Get active restrictions count - Leaders see ALL restrictions
+        from django.utils import timezone
+        today = timezone.now().date()
+        active_restrictions = ServiceRestriction.objects.filter(
             is_archived=False,
-            program__in=assigned_programs
+            start_date__lte=today
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=today)
+        ).count()
+        
+        # Get recent clients (last 5) from assigned programs
+        recent_clients = Client.objects.filter(
+            clientprogramenrollment__program__in=assigned_programs
+        ).distinct().order_by('-created_at')[:5]
+        
+        # Get recent restrictions (last 5) - Leaders see ALL restrictions
+        recent_restrictions = ServiceRestriction.objects.filter(
+            is_archived=False
+        ).select_related('client', 'program').order_by('-created_at')[:5]
+        
+        # Get restricted clients (Bill 168 and No Trespass) - Leaders see ALL restrictions
+        restricted_clients = ServiceRestriction.objects.filter(
+            is_archived=False
+        ).filter(
+            Q(is_bill_168=True) | Q(is_no_trespass=True)
+        ).select_related('client', 'program').order_by('-created_at')[:10]
+    elif is_analyst:
+        # Analysts see ALL data across all clients and programs
+        total_clients = Client.objects.count()
+        active_programs = Program.objects.count()
+        total_staff = Staff.objects.count()
+        
+        # Get active restrictions count - Analysts see ALL restrictions
+        from django.utils import timezone
+        today = timezone.now().date()
+        active_restrictions = ServiceRestriction.objects.filter(
+            is_archived=False,
+            start_date__lte=today
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=today)
+        ).count()
+        
+        # Get recent clients (last 5) - Analysts see ALL clients
+        recent_clients = Client.objects.all().order_by('-created_at')[:5]
+        
+        # Get recent restrictions (last 5) - Analysts see ALL restrictions
+        recent_restrictions = ServiceRestriction.objects.filter(
+            is_archived=False
+        ).select_related('client', 'program').order_by('-created_at')[:5]
+        
+        # Get restricted clients (Bill 168 and No Trespass) - Analysts see ALL restrictions
+        restricted_clients = ServiceRestriction.objects.filter(
+            is_archived=False
+        ).filter(
+            Q(is_bill_168=True) | Q(is_no_trespass=True)
+        ).select_related('client', 'program').order_by('-created_at')[:10]
+    elif is_staff_only and assigned_clients and assigned_programs:
+        # Staff-only users see all restrictions but limited access to other data
+        total_clients = assigned_clients.count()
+        active_programs = assigned_programs.count()
+        total_staff = Staff.objects.count()  # Staff count is same for all
+        
+        # Get active restrictions count - Staff users can now see ALL restrictions
+        from django.utils import timezone
+        today = timezone.now().date()
+        active_restrictions = ServiceRestriction.objects.filter(
+            is_archived=False,
+            start_date__lte=today
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=today)
+        ).count()
+        
+        # Get recent clients (last 5) from assigned clients
+        recent_clients = assigned_clients.order_by('-created_at')[:5]
+        
+        # Get recent restrictions (last 5) - Staff users can now see ALL restrictions
+        recent_restrictions = ServiceRestriction.objects.filter(
+            is_archived=False
+        ).select_related('client', 'program').order_by('-created_at')[:5]
+        
+        # Get restricted clients (Bill 168 and No Trespass) - Staff users can now see ALL restrictions
+        restricted_clients = ServiceRestriction.objects.filter(
+            is_archived=False
         ).filter(
             Q(is_bill_168=True) | Q(is_no_trespass=True)
         ).select_related('client', 'program').order_by('-created_at')[:10]
@@ -215,15 +411,18 @@ def dashboard(request):
         ).select_related('client', 'program').order_by('-created_at')[:10]
     
     # Get program status with enrollment counts and capacity information
-    # Filter programs for Program Managers
+    # Filter programs based on user role
     if request.user.is_authenticated:
         try:
             staff = request.user.staff_profile
             if staff.is_program_manager():
-                # Program Manager can only see their assigned programs
+                # Manager can only see their assigned programs
                 programs = staff.get_assigned_programs()
+            elif is_staff_only and assigned_programs:
+                # Staff-only users see only their assigned programs
+                programs = assigned_programs
             else:
-                # SuperAdmin and Staff can see all programs
+                # SuperAdmin and other roles can see all programs
                 programs = Program.objects.all()
         except Exception:
             programs = Program.objects.none()
@@ -261,6 +460,7 @@ def dashboard(request):
         'restricted_clients': restricted_clients,
         'program_status': program_status,
         'is_program_manager': is_program_manager,
+        'is_staff_only': is_staff_only,
         'assigned_programs': assigned_programs,
     }
     
@@ -270,13 +470,48 @@ def dashboard(request):
 @jwt_required
 def departments(request):
     """Departments management view"""
-    # Get departments - filter for Program Managers
+    # Check if user is Analyst and block access
+    if request.user.is_authenticated:
+        try:
+            staff = request.user.staff_profile
+            user_roles = staff.staffrole_set.select_related('role').all()
+            role_names = [staff_role.role.name for staff_role in user_roles]
+            
+            # Block Analyst users from accessing departments page
+            if 'Analyst' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader', 'Staff'] for role in role_names):
+                messages.error(request, 'Analyst users can only access Dashboard and Reports. Individual pages are not accessible.')
+                return redirect('dashboard')
+        except Exception:
+            pass
+    
+    # Get departments - filter for Managers and Leaders
     if request.user.is_authenticated:
         try:
             staff = request.user.staff_profile
             if staff.is_program_manager():
-                # Program Manager can only see departments of their assigned programs
-                departments = staff.get_assigned_departments()
+                # Manager can only see departments of their assigned programs
+                # Get assigned departments and add proper annotations
+                assigned_departments = staff.get_assigned_departments()
+                assigned_programs = staff.get_assigned_programs()
+                departments = Department.objects.filter(
+                    id__in=assigned_departments.values_list('id', flat=True)
+                ).annotate(
+                    program_count=Count('program', filter=Q(program__in=assigned_programs), distinct=True),
+                    staff_count=Count('program__programstaff__staff', distinct=True)
+                ).order_by('name')
+            elif staff.is_leader():
+                # Leader can only see their assigned departments
+                assigned_departments = Department.objects.filter(
+                    leader_assignments__staff=staff,
+                    leader_assignments__is_active=True
+                ).distinct()
+                assigned_programs = Program.objects.filter(
+                    department__in=assigned_departments
+                ).distinct()
+                departments = assigned_departments.annotate(
+                    program_count=Count('program', filter=Q(program__in=assigned_programs), distinct=True),
+                    staff_count=Count('program__programstaff__staff', distinct=True)
+                ).order_by('name')
             else:
                 # SuperAdmin and Staff can see all departments
                 departments = Department.objects.annotate(
@@ -288,10 +523,63 @@ def departments(request):
     else:
         departments = Department.objects.none()
     
-    # Get statistics
+    # Get statistics based on filtered departments
     total_departments = departments.count()
-    total_programs = Program.objects.count()
-    total_staff = Staff.objects.count()
+    
+    # Calculate total programs based on filtered departments
+    if request.user.is_authenticated:
+        try:
+            staff = request.user.staff_profile
+            if staff.is_program_manager():
+                # Manager sees only programs they are assigned to manage
+                total_programs = staff.get_assigned_programs().count()
+            elif staff.is_leader():
+                # Leader sees only programs from their assigned departments
+                assigned_departments = Department.objects.filter(
+                    leader_assignments__staff=staff,
+                    leader_assignments__is_active=True
+                ).distinct()
+                total_programs = Program.objects.filter(
+                    department__in=assigned_departments
+                ).distinct().count()
+            else:
+                # SuperAdmin and Staff see all programs
+                total_programs = Program.objects.count()
+        except Exception:
+            total_programs = Program.objects.count()
+    else:
+        total_programs = Program.objects.count()
+    
+    # Calculate total staff based on user role
+    if request.user.is_authenticated:
+        try:
+            staff = request.user.staff_profile
+            if staff.is_program_manager():
+                # Manager sees only staff from their assigned programs
+                total_staff = Staff.objects.filter(
+                    program_assignments__program__in=staff.get_assigned_programs(),
+                    program_assignments__is_active=True
+                ).distinct().count()
+            elif staff.is_leader():
+                # Leader sees only staff from their assigned departments
+                assigned_departments = Department.objects.filter(
+                    leader_assignments__staff=staff,
+                    leader_assignments__is_active=True
+                ).distinct()
+                assigned_programs = Program.objects.filter(
+                    department__in=assigned_departments
+                ).distinct()
+                total_staff = Staff.objects.filter(
+                    program_assignments__program__in=assigned_programs,
+                    program_assignments__is_active=True
+                ).distinct().count()
+            else:
+                # SuperAdmin and Staff see all staff
+                total_staff = Staff.objects.count()
+        except Exception:
+            total_staff = Staff.objects.count()
+    else:
+        total_staff = Staff.objects.count()
     
     context = {
         'departments': departments,
@@ -306,6 +594,20 @@ def departments(request):
 @jwt_required
 def enrollments(request):
     """Enrollments management view"""
+    # Check if user is Analyst and block access
+    if request.user.is_authenticated:
+        try:
+            staff = request.user.staff_profile
+            user_roles = staff.staffrole_set.select_related('role').all()
+            role_names = [staff_role.role.name for staff_role in user_roles]
+            
+            # Block Analyst users from accessing enrollments page
+            if 'Analyst' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader', 'Staff'] for role in role_names):
+                messages.error(request, 'Analyst users can only access Dashboard and Reports. Individual pages are not accessible.')
+                return redirect('dashboard')
+        except Exception:
+            pass
+    
     # Get all enrollments with related data
     enrollments = ClientProgramEnrollment.objects.select_related(
         'client', 'program', 'program__department'
@@ -349,7 +651,7 @@ def enrollments(request):
 
 
 @method_decorator(jwt_required, name='dispatch')
-class RestrictionListView(ProgramManagerAccessMixin, ListView):
+class RestrictionListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
     model = ServiceRestriction
     template_name = 'core/restrictions.html'
     context_object_name = 'restrictions'
@@ -449,12 +751,52 @@ class RestrictionListView(ProgramManagerAccessMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        print(f"DEBUG: Context keys after super(): {list(context.keys())}")
+        if 'restrictions' in context:
+            print(f"DEBUG: Restrictions in context: {len(context['restrictions'])}")
+        else:
+            print("DEBUG: No 'restrictions' key in context!")
         
         # Get the total count of filtered restrictions (not just current page)
         total_filtered_count = self.get_queryset().count()
         
-        # Get all restrictions for statistics (not paginated)
-        all_restrictions = ServiceRestriction.objects.select_related(
+        # Get filtered restrictions for statistics (not paginated)
+        # Use the same base queryset as the main queryset but without pagination
+        base_queryset = super().get_queryset()
+        
+        # Apply the same filters as the main queryset but without search filters
+        restriction_type_filter = self.request.GET.get('restriction_type', '')
+        scope_filter = self.request.GET.get('scope', '')
+        status_filter = self.request.GET.get('status', '')
+        bill_168_filter = self.request.GET.get('bill_168', '')
+        no_trespass_filter = self.request.GET.get('no_trespass', '')
+        
+        if restriction_type_filter:
+            base_queryset = base_queryset.filter(restriction_type=restriction_type_filter)
+        
+        if scope_filter:
+            base_queryset = base_queryset.filter(scope=scope_filter)
+        
+        if bill_168_filter:
+            if bill_168_filter == 'true':
+                base_queryset = base_queryset.filter(is_bill_168=True)
+            elif bill_168_filter == 'false':
+                base_queryset = base_queryset.filter(is_bill_168=False)
+        
+        if no_trespass_filter:
+            if no_trespass_filter == 'true':
+                base_queryset = base_queryset.filter(is_no_trespass=True)
+            elif no_trespass_filter == 'false':
+                base_queryset = base_queryset.filter(is_no_trespass=False)
+        
+        if status_filter:
+            if status_filter == 'active':
+                base_queryset = base_queryset.filter(end_date__isnull=True) | base_queryset.filter(end_date__gt=timezone.now().date())
+            elif status_filter == 'expired':
+                base_queryset = base_queryset.filter(end_date__lt=timezone.now().date())
+        
+        # Get all filtered restrictions for statistics
+        all_restrictions = base_queryset.select_related(
             'client', 'program', 'program__department'
         )
         
@@ -522,31 +864,35 @@ class RestrictionListView(ProgramManagerAccessMixin, ListView):
         context['per_page'] = str(self.get_paginate_by(self.get_queryset()))
         
         return context
-    
-    def get_paginate_by(self, queryset):
-        """Get the number of items to paginate by from request parameters"""
-        per_page = self.request.GET.get('per_page', '10')
-        try:
-            per_page = int(per_page)
-            # Limit to reasonable values
-            if per_page < 5:
-                per_page = 5
-            elif per_page > 100:
-                per_page = 100
-        except (ValueError, TypeError):
-            per_page = 10
-        return per_page
 
 
 
 
 @method_decorator(jwt_required, name='dispatch')
 class AuditLogListView(ListView):
-    """Audit log list view with pagination"""
+    """Audit log list view with pagination - SuperAdmin only"""
     model = AuditLog
     template_name = 'core/audit_log.html'
     context_object_name = 'audit_logs'
     paginate_by = 10  # Default: Show 10 audit logs per page
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to view audit logs"""
+        # Only SuperAdmin can view audit logs
+        if not request.user.is_superuser:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                if 'SuperAdmin' not in role_names:
+                    messages.error(request, 'You do not have permission to view audit logs.')
+                    return redirect('dashboard')
+            except:
+                messages.error(request, 'You do not have permission to view audit logs.')
+                return redirect('dashboard')
+        
+        return super().dispatch(request, *args, **kwargs)
     
     def get_paginate_by(self, queryset):
         """Get number of items to paginate by from request parameter"""
@@ -579,7 +925,7 @@ class AuditLogListView(ListView):
 
 
 # Department CRUD Views
-class DepartmentListView(ListView):
+class DepartmentListView(AnalystAccessMixin, ListView):
     model = Department
     template_name = 'core/departments.html'
     context_object_name = 'departments'
@@ -599,7 +945,7 @@ class DepartmentListView(ListView):
         return context
 
 
-class DepartmentDetailView(DetailView):
+class DepartmentDetailView(AnalystAccessMixin, DetailView):
     model = Department
     template_name = 'core/department_detail.html'
     context_object_name = 'department'
@@ -607,7 +953,7 @@ class DepartmentDetailView(DetailView):
     slug_url_kwarg = 'external_id'
 
 
-class DepartmentCreateView(CreateView):
+class DepartmentCreateView(AnalystAccessMixin, CreateView):
     model = Department
     template_name = 'core/department_form.html'
     fields = ['name', 'owner']
@@ -618,7 +964,7 @@ class DepartmentCreateView(CreateView):
         return super().form_valid(form)
 
 
-class DepartmentUpdateView(UpdateView):
+class DepartmentUpdateView(AnalystAccessMixin, UpdateView):
     model = Department
     template_name = 'core/department_form.html'
     fields = ['name', 'owner']
@@ -631,7 +977,7 @@ class DepartmentUpdateView(UpdateView):
         return super().form_valid(form)
 
 
-class DepartmentDeleteView(DeleteView):
+class DepartmentDeleteView(AnalystAccessMixin, DeleteView):
     model = Department
     template_name = 'core/department_confirm_delete.html'
     slug_field = 'external_id'
@@ -793,11 +1139,28 @@ class EnrollmentDetailView(ProgramManagerAccessMixin, DetailView):
 
 
 @method_decorator(jwt_required, name='dispatch')
-class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
+class EnrollmentCreateView(AnalystAccessMixin, ProgramManagerAccessMixin, CreateView):
     model = ClientProgramEnrollment
     form_class = EnrollmentForm
     template_name = 'core/enrollment_form.html'
     success_url = reverse_lazy('core:enrollments')
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to create enrollments"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot create enrollments
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    messages.error(request, 'You do not have permission to create enrollments. Contact your administrator.')
+                    return redirect('core:enrollments')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
     
     def post(self, request, *args, **kwargs):
         """Override post method to handle form validation"""
@@ -847,7 +1210,7 @@ class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
             return super().form_valid(form)
     
     def get_form_kwargs(self):
-        """Filter programs and clients to only assigned ones for Program Managers"""
+        """Filter programs and clients to only assigned ones for Managers"""
         kwargs = super().get_form_kwargs()
         if self.request.user.is_authenticated:
             try:
@@ -855,6 +1218,16 @@ class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
                 if staff.is_program_manager():
                     # Filter programs to only assigned ones
                     assigned_programs = staff.get_assigned_programs()
+                    kwargs['program_queryset'] = assigned_programs
+                elif staff.is_leader():
+                    # Filter programs to only assigned ones via departments
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    assigned_programs = Program.objects.filter(
+                        department__in=assigned_departments
+                    ).distinct()
                     kwargs['program_queryset'] = assigned_programs
                     
                     # For now, show all clients - program managers can enroll any client
@@ -898,7 +1271,7 @@ class EnrollmentCreateView(ProgramManagerAccessMixin, CreateView):
 
 
 @method_decorator(jwt_required, name='dispatch')
-class EnrollmentUpdateView(ProgramManagerAccessMixin, UpdateView):
+class EnrollmentUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, UpdateView):
     model = ClientProgramEnrollment
     form_class = EnrollmentForm
     template_name = 'core/enrollment_form.html'
@@ -906,8 +1279,25 @@ class EnrollmentUpdateView(ProgramManagerAccessMixin, UpdateView):
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:enrollments')
     
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to edit enrollments"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot edit enrollments
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    messages.error(request, 'You do not have permission to edit enrollments. Contact your administrator.')
+                    return redirect('core:enrollments')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
+    
     def get_form_kwargs(self):
-        """Filter programs and clients to only assigned ones for Program Managers"""
+        """Filter programs and clients to only assigned ones for Managers"""
         kwargs = super().get_form_kwargs()
         if self.request.user.is_authenticated:
             try:
@@ -915,6 +1305,16 @@ class EnrollmentUpdateView(ProgramManagerAccessMixin, UpdateView):
                 if staff.is_program_manager():
                     # Filter programs to only assigned ones
                     assigned_programs = staff.get_assigned_programs()
+                    kwargs['program_queryset'] = assigned_programs
+                elif staff.is_leader():
+                    # Filter programs to only assigned ones via departments
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    assigned_programs = Program.objects.filter(
+                        department__in=assigned_departments
+                    ).distinct()
                     kwargs['program_queryset'] = assigned_programs
                     
                     # For now, show all clients - program managers can enroll any client
@@ -981,6 +1381,23 @@ class EnrollmentDeleteView(ProgramManagerAccessMixin, DeleteView):
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:enrollments')
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to archive enrollments"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot archive enrollments
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    messages.error(request, 'You do not have permission to archive enrollments. Contact your administrator.')
+                    return redirect('core:enrollments')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
     
     def get_context_data(self, **kwargs):
         """Add enrollment object to context"""
@@ -1164,22 +1581,120 @@ def search_clients(request):
 # Note: RestrictionListView is defined earlier in the file (line 255) with full pagination support
 
 
-class RestrictionDetailView(ProgramManagerAccessMixin, DetailView):
+class RestrictionDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, DetailView):
     model = ServiceRestriction
     template_name = 'core/restriction_detail.html'
     context_object_name = 'restriction'
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
+    
+    def get(self, request, *args, **kwargs):
+        """Override get method to handle permission checks before rendering"""
+        try:
+            # First, try to get the object
+            self.object = self.get_object()
+        except Exception:
+            # If object doesn't exist, redirect to permission error
+            from django.shortcuts import redirect
+            from django.urls import reverse
+            return redirect(f"{reverse('core:permission_error')}?type=restriction_not_found&resource=restriction")
+        
+        # Check if user has access to this restriction
+        if not request.user.is_superuser:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                if staff.is_program_manager():
+                    # Managers can view ALL restrictions (no access restriction for viewing)
+                    pass
+                
+                elif 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
+                    # Staff users can view all restrictions (no additional filtering needed)
+                    pass
+                
+                elif staff.is_leader():
+                    # Leaders can view ALL restrictions (like Staff users)
+                    # They can only edit restrictions for their assigned clients
+                    pass
+                        
+            except Exception:
+                from django.shortcuts import redirect
+                from django.urls import reverse
+                return redirect(f"{reverse('core:permission_error')}?type=access_denied&resource=restriction")
+        
+        # If we get here, user has access, proceed with normal rendering
+        context = self.get_context_data(object=self.object)
+        return self.render_to_response(context)
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        restriction = self.get_object()
+        
+        # Check if user can edit this restriction
+        can_edit = False
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                if staff.is_program_manager():
+                    # Managers can edit restrictions for their assigned clients
+                    assigned_programs = staff.get_assigned_programs()
+                    assigned_clients = Client.objects.filter(
+                        clientprogramenrollment__program__in=assigned_programs
+                    ).distinct()
+                    can_edit = restriction.client in assigned_clients
+                elif staff.is_leader():
+                    # Leaders can edit restrictions for their assigned clients
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    assigned_programs = Program.objects.filter(
+                        department__in=assigned_departments
+                    ).distinct()
+                    assigned_clients = Client.objects.filter(
+                        clientprogramenrollment__program__in=assigned_programs
+                    ).distinct()
+                    can_edit = restriction.client in assigned_clients
+                elif staff.is_staff_only():
+                    # Staff users can view all restrictions but cannot edit them
+                    can_edit = False
+                elif self.request.user.is_superuser:
+                    # SuperAdmin can edit all restrictions
+                    can_edit = True
+            except Exception:
+                pass
+        
+        context['can_edit_restriction'] = can_edit
+        return context
 
 
-class RestrictionCreateView(ProgramManagerAccessMixin, CreateView):
+class RestrictionCreateView(AnalystAccessMixin, ProgramManagerAccessMixin, CreateView):
     model = ServiceRestriction
     template_name = 'core/restriction_form.html'
     form_class = ServiceRestrictionForm
     success_url = reverse_lazy('core:restrictions')
     
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to create restrictions"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot create restrictions
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    messages.error(request, 'You do not have permission to create restrictions. Contact your administrator.')
+                    return redirect('core:restrictions')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
+    
     def get_form_kwargs(self):
-        """Filter programs to only assigned ones for Program Managers"""
+        """Filter programs to only assigned ones for Managers"""
         kwargs = super().get_form_kwargs()
         if self.request.user.is_authenticated:
             try:
@@ -1187,6 +1702,16 @@ class RestrictionCreateView(ProgramManagerAccessMixin, CreateView):
                 if staff.is_program_manager():
                     # Filter programs to only assigned ones
                     assigned_programs = staff.get_assigned_programs()
+                    kwargs['program_queryset'] = assigned_programs
+                elif staff.is_leader():
+                    # Filter programs to only assigned ones via departments
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    assigned_programs = Program.objects.filter(
+                        department__in=assigned_departments
+                    ).distinct()
                     kwargs['program_queryset'] = assigned_programs
             except Exception:
                 pass
@@ -1244,7 +1769,7 @@ class RestrictionCreateView(ProgramManagerAccessMixin, CreateView):
         return super().form_invalid(form)
 
 
-class RestrictionUpdateView(ProgramManagerAccessMixin, UpdateView):
+class RestrictionUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, UpdateView):
     model = ServiceRestriction
     template_name = 'core/restriction_form.html'
     form_class = ServiceRestrictionForm
@@ -1252,8 +1777,25 @@ class RestrictionUpdateView(ProgramManagerAccessMixin, UpdateView):
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:restrictions')
     
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to edit restrictions"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot edit restrictions
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
+                    messages.error(request, 'You do not have permission to edit restrictions. Contact your administrator.')
+                    return redirect('core:restrictions')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
+    
     def get_form_kwargs(self):
-        """Filter programs to only assigned ones for Program Managers"""
+        """Filter programs to only assigned ones for Managers"""
         kwargs = super().get_form_kwargs()
         if self.request.user.is_authenticated:
             try:
@@ -1261,6 +1803,16 @@ class RestrictionUpdateView(ProgramManagerAccessMixin, UpdateView):
                 if staff.is_program_manager():
                     # Filter programs to only assigned ones
                     assigned_programs = staff.get_assigned_programs()
+                    kwargs['program_queryset'] = assigned_programs
+                elif staff.is_leader():
+                    # Filter programs to only assigned ones via departments
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    assigned_programs = Program.objects.filter(
+                        department__in=assigned_departments
+                    ).distinct()
                     kwargs['program_queryset'] = assigned_programs
             except Exception:
                 pass
@@ -1345,12 +1897,29 @@ class RestrictionUpdateView(ProgramManagerAccessMixin, UpdateView):
         return context
 
 
-class RestrictionDeleteView(ProgramManagerAccessMixin, DeleteView):
+class RestrictionDeleteView(AnalystAccessMixin, ProgramManagerAccessMixin, DeleteView):
     model = ServiceRestriction
     template_name = 'core/restriction_confirm_delete.html'
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:restrictions')
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to archive restrictions"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot archive restrictions
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
+                    messages.error(request, 'You do not have permission to archive restrictions. Contact your administrator.')
+                    return redirect('core:restrictions')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
     
     def get_context_data(self, **kwargs):
         """Add restriction object to context"""
@@ -1570,15 +2139,8 @@ def edit_profile(request):
         )
 
     if request.method == 'POST':
-        print(f"POST data: {request.POST}")
-        print(f"FILES data: {request.FILES}")
         user_form = UserProfileForm(request.POST, request.FILES, instance=request.user)
         staff_form = StaffProfileForm(request.POST, instance=staff_profile)
-        
-        print(f"User form is valid: {user_form.is_valid()}")
-        print(f"User form errors: {user_form.errors}")
-        print(f"Staff form is valid: {staff_form.is_valid()}")
-        print(f"Staff form errors: {staff_form.errors}")
         
         if user_form.is_valid() and staff_form.is_valid():
             user = user_form.save()

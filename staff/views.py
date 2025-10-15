@@ -3,8 +3,50 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.http import JsonResponse
-from core.models import Staff, Role, StaffRole, User, ProgramManagerAssignment, Program
-from .forms import StaffRoleForm, ProgramManagerAssignmentForm
+from django.contrib.auth.decorators import login_required
+from functools import wraps
+from core.models import Staff, Role, StaffRole, User, ProgramManagerAssignment, Program, Department, DepartmentLeaderAssignment
+from .forms import StaffRoleForm, ProgramManagerAssignmentForm, StaffProgramAssignmentForm
+from .models import StaffClientAssignment, StaffProgramAssignment
+
+
+def require_roles(*allowed_roles):
+    """
+    Decorator to require specific roles for access to views.
+    Usage: @require_roles('Staff', 'Manager', 'Leader')
+    """
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapper(request, *args, **kwargs):
+            if not request.user.is_authenticated:
+                messages.error(request, 'You must be logged in to access this page.')
+                return redirect('login')
+            
+            # Check if user is superuser (always allowed)
+            if request.user.is_superuser:
+                return view_func(request, *args, **kwargs)
+            
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Check if user has any of the allowed roles
+                has_allowed_role = any(role in allowed_roles for role in role_names)
+                
+                if not has_allowed_role:
+                    messages.error(request, f'You do not have permission to access this page. Required roles: {", ".join(allowed_roles)}')
+                    return redirect('staff:list')
+                
+                return view_func(request, *args, **kwargs)
+                
+            except Exception:
+                messages.error(request, 'You do not have permission to access this page.')
+                return redirect('staff:list')
+        
+        return wrapper
+    return decorator
+
 
 class StaffListView(ListView):
     model = Staff
@@ -104,15 +146,109 @@ class StaffDetailView(DetailView):
         staff = self.get_object()
         context['current_roles'] = staff.staffrole_set.select_related('role').all()
 
-        # Check if staff has program manager role
-        has_program_manager_role = staff.is_program_manager()
-        context['has_program_manager_role'] = has_program_manager_role
+        # Check the viewing user's role to determine which assignment sections to show
+        viewing_user_is_admin = False
+        viewing_user_is_superadmin = False
+        viewing_user_is_staff = False
+        viewing_user_is_manager = False
+        viewing_user_is_leader = False
+        
+        if self.request.user.is_authenticated:
+            try:
+                viewing_staff = self.request.user.staff_profile
+                user_roles = viewing_staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                viewing_user_is_admin = 'Admin' in role_names
+                viewing_user_is_superadmin = 'SuperAdmin' in role_names
+                viewing_user_is_staff = 'Staff' in role_names  # Staff role users can see assignments regardless of other roles
+                viewing_user_is_manager = 'Manager' in role_names
+                viewing_user_is_leader = 'Leader' in role_names
+            except Exception:
+                pass
+        
+        # Determine which assignment sections to show based on viewing user's role
+        # Client assignments are disabled for all roles
+        # SuperAdmin and Admin: Can assign programs to all staff types
+        # Leader and Manager: Can manage program assignments
+        # Staff: Cannot manage anything (sections hidden)
+        show_client_assignments = False  # Client assignments disabled for all roles
+        if viewing_user_is_superadmin or viewing_user_is_admin:
+            show_program_assignments = True  # Show program assignments for all staff
+        elif viewing_user_is_leader or viewing_user_is_manager:
+            show_program_assignments = True  # Leader and Manager users can manage program assignments
+        else:
+            show_program_assignments = False
+        
+        show_assignments = show_client_assignments or show_program_assignments  # Overall flag for any assignments
+        
+        context['show_assignments'] = show_assignments
+        context['show_client_assignments'] = show_client_assignments
+        context['show_program_assignments'] = show_program_assignments
+        
+        # Debug information (remove in production)
+        context['debug_viewing_user_roles'] = role_names if self.request.user.is_authenticated else []
+        context['debug_staff_roles'] = [role.role.name for role in staff.staffrole_set.select_related('role').all()]
+        context['debug_viewing_user_is_staff'] = viewing_user_is_staff
+        context['debug_viewing_user_is_manager'] = viewing_user_is_manager
+        context['debug_viewing_user_is_leader'] = viewing_user_is_leader
+        context['debug_viewing_user_is_admin'] = viewing_user_is_admin
+        context['debug_viewing_user_is_superadmin'] = viewing_user_is_superadmin
+        
 
-        if has_program_manager_role:
-            context['assigned_programs'] = ProgramManagerAssignment.objects.filter(
+        if show_assignments:
+            # Get staff client assignments
+            context['staff_client_assignments'] = StaffClientAssignment.objects.filter(
+                staff=staff, 
+                is_active=True
+            ).select_related('client')
+
+            # Get staff program assignments
+            context['staff_program_assignments'] = StaffProgramAssignment.objects.filter(
                 staff=staff, 
                 is_active=True
             ).select_related('program', 'program__department')
+
+            # Check if staff has program manager role
+            has_program_manager_role = staff.is_program_manager()
+            context['has_program_manager_role'] = has_program_manager_role
+
+            # Check if staff has only Staff role
+            has_staff_only_role = staff.is_staff_only()
+            context['has_staff_only_role'] = has_staff_only_role
+
+            # Check if staff has Leader role
+            has_leader_role = staff.is_leader()
+            context['has_leader_role'] = has_leader_role
+
+            if has_program_manager_role:
+                context['assigned_programs'] = ProgramManagerAssignment.objects.filter(
+                    staff=staff,
+                    is_active=True
+                ).select_related('program', 'program__department')
+
+            if has_staff_only_role:
+                context['staff_assigned_programs'] = StaffProgramAssignment.objects.filter(
+                    staff=staff,
+                    is_active=True
+                ).select_related('program', 'program__department')
+
+            if has_leader_role:
+                from core.models import DepartmentLeaderAssignment
+                context['department_assignments'] = DepartmentLeaderAssignment.objects.filter(
+                    staff=staff,
+                    is_active=True
+                ).select_related('department')
+        else:
+            # For Admin/SuperAdmin users, don't load assignment data
+            context['staff_client_assignments'] = []
+            context['staff_program_assignments'] = []
+            context['has_program_manager_role'] = False
+            context['has_staff_only_role'] = False
+            context['has_leader_role'] = False
+            context['assigned_programs'] = []
+            context['staff_assigned_programs'] = []
+            context['department_assignments'] = []
         
         return context
 
@@ -378,15 +514,17 @@ def toggle_staff_role(request, external_id):
 
 
 
+@login_required
+@require_roles('SuperAdmin', 'Admin', 'Manager', 'Leader')  # SuperAdmin, Admin, Manager, and Leader roles can manage program manager assignments
 def manage_program_assignments(request, external_id):
-    """View for managing program assignments for program managers"""
+    """View for managing program assignments for program managers - Manager and Leader roles only"""
     staff = get_object_or_404(Staff, external_id=external_id)
     
     # Check if staff has program manager role
     has_program_manager_role = staff.is_program_manager()
     
     if not has_program_manager_role:
-        messages.error(request, 'This staff member does not have the Program Manager role.')
+        messages.error(request, 'This staff member does not have the Manager role.')
         return redirect('staff:detail', external_id=staff.external_id)
     
     if request.method == 'POST':
@@ -424,3 +562,108 @@ def manage_program_assignments(request, external_id):
     }
     
     return render(request, 'staff/staff_program_assignments.html', context)
+
+
+
+
+@login_required
+@require_roles('SuperAdmin', 'Admin', 'Manager', 'Leader')  # SuperAdmin, Admin, Manager, and Leader roles can manage program assignments
+def manage_program_assignments_staff(request, external_id):
+    """View for managing program assignments for staff members - Staff, Manager, and Leader roles"""
+    staff = get_object_or_404(Staff, external_id=external_id)
+    
+    # Check if staff member has Manager role - redirect to existing manager assignment system
+    if staff.is_program_manager():
+        messages.info(request, 'Manager role users use the existing program assignment system.')
+        return redirect('staff:detail', external_id=staff.external_id)
+    
+    if request.method == 'POST':
+        form = StaffProgramAssignmentForm(request.POST, staff=staff)
+        if form.is_valid():
+            try:
+                # Get the current user's staff profile
+                assigned_by = request.user.staff_profile
+                form.save(staff, assigned_by)
+                messages.success(request, f'Program assignments updated successfully for {staff.first_name} {staff.last_name}')
+                return redirect('staff:detail', external_id=staff.external_id)
+            except Exception as e:
+                messages.error(request, f'Error updating program assignments: {str(e)}')
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = StaffProgramAssignmentForm(staff=staff)
+    
+    # Get current program assignments
+    current_program_assignments = StaffProgramAssignment.objects.filter(
+        staff=staff, 
+        is_active=True
+    ).select_related('program', 'program__department')
+    
+    # Get all available programs grouped by department
+    from collections import defaultdict
+    programs_by_department = defaultdict(list)
+    for program in Program.objects.filter(status='active').select_related('department'):
+        programs_by_department[program.department].append(program)
+    
+    context = {
+        'staff_member': staff,
+        'form': form,
+        'current_program_assignments': current_program_assignments,
+        'programs_by_department': dict(programs_by_department),
+    }
+    
+    return render(request, 'staff/staff_program_assignments_staff.html', context)
+
+
+@login_required
+@require_roles('Admin', 'SuperAdmin')
+def manage_department_assignments(request, external_id):
+    """Manage department assignments for Leader role users"""
+    staff = get_object_or_404(Staff, external_id=external_id)
+    
+    # Check if staff has Leader role
+    if not staff.is_leader():
+        messages.error(request, 'This staff member does not have Leader role.')
+        return redirect('staff:detail', external_id=external_id)
+    
+    if request.method == 'POST':
+        department_ids = request.POST.getlist('departments')
+        
+        # Remove existing assignments
+        DepartmentLeaderAssignment.objects.filter(staff=staff).update(is_active=False)
+        
+        # Add new assignments
+        for department_id in department_ids:
+            department = get_object_or_404(Department, id=department_id)
+            assignment, created = DepartmentLeaderAssignment.objects.get_or_create(
+                staff=staff,
+                department=department,
+                defaults={
+                    'assigned_by': request.user.staff_profile,
+                    'is_active': True
+                }
+            )
+            if not created:
+                assignment.is_active = True
+                assignment.assigned_by = request.user.staff_profile
+                assignment.save()
+        
+        messages.success(request, f'Department assignments updated for {staff.first_name} {staff.last_name}.')
+        return redirect('staff:detail', external_id=external_id)
+    
+    # Get current department assignments
+    current_department_assignments = DepartmentLeaderAssignment.objects.filter(
+        staff=staff,
+        is_active=True
+    ).select_related('department')
+    
+    # Get all available departments
+    available_departments = Department.objects.all().order_by('name')
+    
+    context = {
+        'staff_member': staff,
+        'current_department_assignments': current_department_assignments,
+        'available_departments': available_departments,
+    }
+    
+    return render(request, 'staff/manage_department_assignments.html', context)

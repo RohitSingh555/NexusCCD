@@ -44,7 +44,7 @@ class Command(BaseCommand):
                 ]
             },
             {
-                'role_name': 'Program Manager',
+                'role_name': 'Manager',
                 'users': [
                     {'username': 'progmanager1', 'email': 'progmanager1@example.com', 'password': 'progmanager123'},
                     {'username': 'progmanager2', 'email': 'progmanager2@example.com', 'password': 'progmanager123'},
@@ -148,7 +148,7 @@ class Command(BaseCommand):
         self.stdout.write('Admin: admin1, admin2, admin3 / admin123')
         self.stdout.write('Manager: manager1, manager2, manager3 / manager123')
         self.stdout.write('Staff: staff1, staff2, staff3 / staff123')
-        self.stdout.write('Program Manager: progmanager1, progmanager2, progmanager3 / progmanager123')
+        self.stdout.write('Manager: progmanager1, progmanager2, progmanager3 / progmanager123')
         self.stdout.write('Viewer: viewer1, viewer2, viewer3 / viewer123')
         self.stdout.write('Coordinator: coordinator1, coordinator2, coordinator3 / coordinator123')
         self.stdout.write('Analyst: analyst1, analyst2, analyst3 / analyst123')

@@ -1,0 +1,551 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Compare Clients - Not Duplicate{% endblock %}
+
+{% block extra_css %}
+<style>
+    .client-card {
+        transition: all 0.2s ease-in-out;
+    }
+    
+    .comparison-section {
+        border: 1px solid #e5e7eb;
+        border-radius: 0.75rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .field-item {
+        margin-bottom: 0.25rem;
+    }
+    
+    .field-item .field-label {
+        font-weight: 500;
+        color: #6b7280;
+        margin-bottom: 0.125rem;
+        font-size: 0.75rem;
+    }
+    
+    .field-item .field-value {
+        padding: 0.25rem 0.5rem;
+        background-color: #f9fafb;
+        border-radius: 0.25rem;
+        border: 1px solid #e5e7eb;
+        min-height: 1.5rem;
+        display: flex;
+        align-items: center;
+        font-size: 0.75rem;
+    }
+    
+    .field-item .field-value:empty::before {
+        content: "—";
+        color: #9ca3af;
+    }
+    
+    .field-item.different .field-value {
+        background-color: #fef3c7 !important;
+        border-color: #f59e0b !important;
+        color: #92400e !important;
+        font-weight: 600 !important;
+    }
+    
+    .field-item.different .field-label {
+        color: #d97706 !important;
+        font-weight: 600 !important;
+    }
+    
+    .field-item.same .field-value {
+        /* No highlighting for same fields */
+    }
+    
+    .field-item.same .field-label {
+        /* No highlighting for same fields */
+    }
+    
+    .client-card {
+        min-height: 600px !important;
+        height: auto !important;
+    }
+    
+    /* Make different fields stand out with subtle highlighting */
+    .field-item.different {
+        border-left: 4px solid #f59e0b !important;
+        padding-left: 0.75rem !important;
+        background-color: #fffbeb !important;
+        border-radius: 0.375rem !important;
+        margin-bottom: 0.5rem !important;
+    }
+    
+    .field-item.same {
+        /* No highlighting for same fields */
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- CSRF Token -->
+{% csrf_token %}
+<div class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <div class="flex items-center space-x-3">
+                        <div class="p-3 bg-green-100 rounded-xl">
+                            <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-900">Compare Clients - Not Duplicate</h1>
+                            <p class="mt-2 text-gray-600">Review the differences to confirm these are different people</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Match Information -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-900">Match Information</h3>
+                    <div class="mt-2 flex items-center space-x-6 text-sm text-gray-600">
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                            Similarity: {{ similarity_score|floatformat:1 }}%
+                        </span>
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Type: {{ match_type|title }}
+                        </span>
+                        <span class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Confidence: {{ confidence_level|title }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Client Comparison -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- Primary Client -->
+            <div class="client-card bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-sm">
+                            <span class="text-lg font-bold text-white">
+                                {{ primary_client.first_name|first|upper }}{{ primary_client.last_name|first|upper }}
+                            </span>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900">
+                                {{ primary_client.first_name }} {{ primary_client.last_name }}
+                            </h3>
+                            <p class="text-sm text-gray-600">Client A</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Client Details -->
+                <div class="space-y-4">
+                    <!-- Basic Information -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Basic Information</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item" style="{% if primary_client.client_id != duplicate_client.client_id and primary_client.client_id %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.client_id != duplicate_client.client_id and primary_client.client_id %}color: #d97706; font-weight: 600;{% endif %}">Client ID</div>
+                                <div class="field-value text-xs" style="{% if primary_client.client_id != duplicate_client.client_id and primary_client.client_id %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.client_id|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.dob != duplicate_client.dob and primary_client.dob %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.dob != duplicate_client.dob and primary_client.dob %}color: #d97706; font-weight: 600;{% endif %}">Date of Birth</div>
+                                <div class="field-value text-xs" style="{% if primary_client.dob != duplicate_client.dob and primary_client.dob %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.dob|date:"M d, Y"|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.age != duplicate_client.age and primary_client.age %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.age != duplicate_client.age and primary_client.age %}color: #d97706; font-weight: 600;{% endif %}">Age</div>
+                                <div class="field-value text-xs" style="{% if primary_client.age != duplicate_client.age and primary_client.age %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.age|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.gender != duplicate_client.gender and primary_client.gender %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.gender != duplicate_client.gender and primary_client.gender %}color: #d97706; font-weight: 600;{% endif %}">Gender</div>
+                                <div class="field-value text-xs" style="{% if primary_client.gender != duplicate_client.gender and primary_client.gender %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.gender|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.preferred_name != duplicate_client.preferred_name and primary_client.preferred_name %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.preferred_name != duplicate_client.preferred_name and primary_client.preferred_name %}color: #d97706; font-weight: 600;{% endif %}">Preferred Name</div>
+                                <div class="field-value text-xs" style="{% if primary_client.preferred_name != duplicate_client.preferred_name and primary_client.preferred_name %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.preferred_name|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.middle_name != duplicate_client.middle_name and primary_client.middle_name %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.middle_name != duplicate_client.middle_name and primary_client.middle_name %}color: #d97706; font-weight: 600;{% endif %}">Middle Name</div>
+                                <div class="field-value text-xs" style="{% if primary_client.middle_name != duplicate_client.middle_name and primary_client.middle_name %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.middle_name|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.alias != duplicate_client.alias and primary_client.alias %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.alias != duplicate_client.alias and primary_client.alias %}color: #d97706; font-weight: 600;{% endif %}">Alias</div>
+                                <div class="field-value text-xs" style="{% if primary_client.alias != duplicate_client.alias and primary_client.alias %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.alias|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.gender_identity != duplicate_client.gender_identity and primary_client.gender_identity %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.gender_identity != duplicate_client.gender_identity and primary_client.gender_identity %}color: #d97706; font-weight: 600;{% endif %}">Gender Identity</div>
+                                <div class="field-value text-xs" style="{% if primary_client.gender_identity != duplicate_client.gender_identity and primary_client.gender_identity %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.gender_identity|default:"—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contact Information -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Contact Information</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item" style="{% if primary_client.email != duplicate_client.email and primary_client.email %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.email != duplicate_client.email and primary_client.email %}color: #d97706; font-weight: 600;{% endif %}">Email</div>
+                                <div class="field-value text-xs" style="{% if primary_client.email != duplicate_client.email and primary_client.email %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.email|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.phone != duplicate_client.phone and primary_client.phone %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.phone != duplicate_client.phone and primary_client.phone %}color: #d97706; font-weight: 600;{% endif %}">Phone</div>
+                                <div class="field-value text-xs" style="{% if primary_client.phone != duplicate_client.phone and primary_client.phone %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.phone|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.phone_work != duplicate_client.phone_work and primary_client.phone_work %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.phone_work != duplicate_client.phone_work and primary_client.phone_work %}color: #d97706; font-weight: 600;{% endif %}">Work Phone</div>
+                                <div class="field-value text-xs" style="{% if primary_client.phone_work != duplicate_client.phone_work and primary_client.phone_work %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.phone_work|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.phone_alt != duplicate_client.phone_alt and primary_client.phone_alt %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.phone_alt != duplicate_client.phone_alt and primary_client.phone_alt %}color: #d97706; font-weight: 600;{% endif %}">Alt Phone</div>
+                                <div class="field-value text-xs" style="{% if primary_client.phone_alt != duplicate_client.phone_alt and primary_client.phone_alt %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.phone_alt|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.address != duplicate_client.address and primary_client.address %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.address != duplicate_client.address and primary_client.address %}color: #d97706; font-weight: 600;{% endif %}">Address</div>
+                                <div class="field-value text-xs" style="{% if primary_client.address != duplicate_client.address and primary_client.address %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.address|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.city != duplicate_client.city and primary_client.city %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.city != duplicate_client.city and primary_client.city %}color: #d97706; font-weight: 600;{% endif %}">City</div>
+                                <div class="field-value text-xs" style="{% if primary_client.city != duplicate_client.city and primary_client.city %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.city|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.province != duplicate_client.province and primary_client.province %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.province != duplicate_client.province and primary_client.province %}color: #d97706; font-weight: 600;{% endif %}">Province</div>
+                                <div class="field-value text-xs" style="{% if primary_client.province != duplicate_client.province and primary_client.province %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.province|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.postal_code != duplicate_client.postal_code and primary_client.postal_code %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.postal_code != duplicate_client.postal_code and primary_client.postal_code %}color: #d97706; font-weight: 600;{% endif %}">Postal Code</div>
+                                <div class="field-value text-xs" style="{% if primary_client.postal_code != duplicate_client.postal_code and primary_client.postal_code %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.postal_code|default:"—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cultural & Demographic -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Cultural & Demographic</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item" style="{% if primary_client.language != duplicate_client.language and primary_client.language %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.language != duplicate_client.language and primary_client.language %}color: #d97706; font-weight: 600;{% endif %}">Language</div>
+                                <div class="field-value text-xs" style="{% if primary_client.language != duplicate_client.language and primary_client.language %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.language|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.preferred_language != duplicate_client.preferred_language and primary_client.preferred_language %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.preferred_language != duplicate_client.preferred_language and primary_client.preferred_language %}color: #d97706; font-weight: 600;{% endif %}">Preferred Language</div>
+                                <div class="field-value text-xs" style="{% if primary_client.preferred_language != duplicate_client.preferred_language and primary_client.preferred_language %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.preferred_language|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.self_identification_race_ethnicity != duplicate_client.self_identification_race_ethnicity and primary_client.self_identification_race_ethnicity %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.self_identification_race_ethnicity != duplicate_client.self_identification_race_ethnicity and primary_client.self_identification_race_ethnicity %}color: #d97706; font-weight: 600;{% endif %}">Race/Ethnicity</div>
+                                <div class="field-value text-xs" style="{% if primary_client.self_identification_race_ethnicity != duplicate_client.self_identification_race_ethnicity and primary_client.self_identification_race_ethnicity %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.self_identification_race_ethnicity|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.aboriginal_status != duplicate_client.aboriginal_status and primary_client.aboriginal_status %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.aboriginal_status != duplicate_client.aboriginal_status and primary_client.aboriginal_status %}color: #d97706; font-weight: 600;{% endif %}">Aboriginal Status</div>
+                                <div class="field-value text-xs" style="{% if primary_client.aboriginal_status != duplicate_client.aboriginal_status and primary_client.aboriginal_status %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.aboriginal_status|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.lgbtq_status != duplicate_client.lgbtq_status and primary_client.lgbtq_status %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.lgbtq_status != duplicate_client.lgbtq_status and primary_client.lgbtq_status %}color: #d97706; font-weight: 600;{% endif %}">LGBTQ+ Status</div>
+                                <div class="field-value text-xs" style="{% if primary_client.lgbtq_status != duplicate_client.lgbtq_status and primary_client.lgbtq_status %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.lgbtq_status|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.highest_level_education != duplicate_client.highest_level_education and primary_client.highest_level_education %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.highest_level_education != duplicate_client.highest_level_education and primary_client.highest_level_education %}color: #d97706; font-weight: 600;{% endif %}">Education Level</div>
+                                <div class="field-value text-xs" style="{% if primary_client.highest_level_education != duplicate_client.highest_level_education and primary_client.highest_level_education %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.highest_level_education|default:"—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Medical & Health -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Medical & Health</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item" style="{% if primary_client.health_card_number != duplicate_client.health_card_number and primary_client.health_card_number %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.health_card_number != duplicate_client.health_card_number and primary_client.health_card_number %}color: #d97706; font-weight: 600;{% endif %}">Health Card #</div>
+                                <div class="field-value text-xs" style="{% if primary_client.health_card_number != duplicate_client.health_card_number and primary_client.health_card_number %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.health_card_number|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.primary_diagnosis != duplicate_client.primary_diagnosis and primary_client.primary_diagnosis %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.primary_diagnosis != duplicate_client.primary_diagnosis and primary_client.primary_diagnosis %}color: #d97706; font-weight: 600;{% endif %}">Primary Diagnosis</div>
+                                <div class="field-value text-xs" style="{% if primary_client.primary_diagnosis != duplicate_client.primary_diagnosis and primary_client.primary_diagnosis %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.primary_diagnosis|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.family_doctor != duplicate_client.family_doctor and primary_client.family_doctor %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.family_doctor != duplicate_client.family_doctor and primary_client.family_doctor %}color: #d97706; font-weight: 600;{% endif %}">Family Doctor</div>
+                                <div class="field-value text-xs" style="{% if primary_client.family_doctor != duplicate_client.family_doctor and primary_client.family_doctor %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.family_doctor|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.medical_conditions != duplicate_client.medical_conditions and primary_client.medical_conditions %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.medical_conditions != duplicate_client.medical_conditions and primary_client.medical_conditions %}color: #d97706; font-weight: 600;{% endif %}">Medical Conditions</div>
+                                <div class="field-value text-xs" style="{% if primary_client.medical_conditions != duplicate_client.medical_conditions and primary_client.medical_conditions %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ primary_client.medical_conditions|default:"—"|truncatechars:30 }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Program Enrollments -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Program Enrollments ({{ primary_client.clientprogramenrollment_set.count }})</h4>
+                        <div class="grid grid-cols-1 gap-2 text-xs">
+                            {% for enrollment in primary_client.clientprogramenrollment_set.all %}
+                                <div class="field-item" style="{% if enrollment not in duplicate_client.clientprogramenrollment_set.all %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                    <div class="field-label text-xs" style="{% if enrollment not in duplicate_client.clientprogramenrollment_set.all %}color: #d97706; font-weight: 600;{% endif %}">{{ enrollment.program.name|default:"Program" }}</div>
+                                    <div class="field-value text-xs" style="{% if enrollment not in duplicate_client.clientprogramenrollment_set.all %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">
+                                        {% if enrollment.sub_program %}
+                                            {{ enrollment.sub_program.name }} - 
+                                        {% endif %}
+                                        {{ enrollment.enrollment_date|date:"M d, Y"|default:"No date" }}
+                                        {% if enrollment.status %}
+                                            ({{ enrollment.status }})
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div class="field-item">
+                                    <div class="field-label text-xs">No enrollments</div>
+                                    <div class="field-value text-xs">—</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Restrictions -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Restrictions ({{ primary_client.servicerestriction_set.count }})</h4>
+                        <div class="grid grid-cols-1 gap-2 text-xs">
+                            {% for restriction in primary_client.servicerestriction_set.all %}
+                                <div class="field-item" style="{% if restriction not in duplicate_client.servicerestriction_set.all %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                    <div class="field-label text-xs" style="{% if restriction not in duplicate_client.servicerestriction_set.all %}color: #d97706; font-weight: 600;{% endif %}">{{ restriction.restriction_type|title }}</div>
+                                    <div class="field-value text-xs" style="{% if restriction not in duplicate_client.servicerestriction_set.all %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">
+                                        {% if restriction.description %}
+                                            {{ restriction.description|truncatechars:50 }}
+                                        {% else %}
+                                            Active Restriction
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div class="field-item">
+                                    <div class="field-label text-xs">No restrictions</div>
+                                    <div class="field-value text-xs">—</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Duplicate Client -->
+            <div class="client-card bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center shadow-sm">
+                            <span class="text-lg font-bold text-white">
+                                {{ duplicate_client.first_name|first|upper }}{{ duplicate_client.last_name|first|upper }}
+                            </span>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-900">
+                                {{ duplicate_client.first_name }} {{ duplicate_client.last_name }}
+                            </h3>
+                            <p class="text-sm text-gray-600">Client B</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Client Details -->
+                <div class="space-y-4">
+                    <!-- Basic Information -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Basic Information</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item" style="{% if primary_client.client_id != duplicate_client.client_id and duplicate_client.client_id %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.client_id != duplicate_client.client_id and duplicate_client.client_id %}color: #d97706; font-weight: 600;{% endif %}">Client ID</div>
+                                <div class="field-value text-xs" style="{% if primary_client.client_id != duplicate_client.client_id and duplicate_client.client_id %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.client_id|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.dob != duplicate_client.dob and duplicate_client.dob %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.dob != duplicate_client.dob and duplicate_client.dob %}color: #d97706; font-weight: 600;{% endif %}">Date of Birth</div>
+                                <div class="field-value text-xs" style="{% if primary_client.dob != duplicate_client.dob and duplicate_client.dob %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.dob|date:"M d, Y"|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.age != duplicate_client.age and duplicate_client.age %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.age != duplicate_client.age and duplicate_client.age %}color: #d97706; font-weight: 600;{% endif %}">Age</div>
+                                <div class="field-value text-xs" style="{% if primary_client.age != duplicate_client.age and duplicate_client.age %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.age|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.gender != duplicate_client.gender and duplicate_client.gender %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.gender != duplicate_client.gender and duplicate_client.gender %}color: #d97706; font-weight: 600;{% endif %}">Gender</div>
+                                <div class="field-value text-xs" style="{% if primary_client.gender != duplicate_client.gender and duplicate_client.gender %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.gender|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.preferred_name != duplicate_client.preferred_name and duplicate_client.preferred_name %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.preferred_name != duplicate_client.preferred_name and duplicate_client.preferred_name %}color: #d97706; font-weight: 600;{% endif %}">Preferred Name</div>
+                                <div class="field-value text-xs" style="{% if primary_client.preferred_name != duplicate_client.preferred_name and duplicate_client.preferred_name %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.preferred_name|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.middle_name != duplicate_client.middle_name and duplicate_client.middle_name %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.middle_name != duplicate_client.middle_name and duplicate_client.middle_name %}color: #d97706; font-weight: 600;{% endif %}">Middle Name</div>
+                                <div class="field-value text-xs" style="{% if primary_client.middle_name != duplicate_client.middle_name and duplicate_client.middle_name %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.middle_name|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.alias != duplicate_client.alias and duplicate_client.alias %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.alias != duplicate_client.alias and duplicate_client.alias %}color: #d97706; font-weight: 600;{% endif %}">Alias</div>
+                                <div class="field-value text-xs" style="{% if primary_client.alias != duplicate_client.alias and duplicate_client.alias %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.alias|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.gender_identity != duplicate_client.gender_identity and duplicate_client.gender_identity %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.gender_identity != duplicate_client.gender_identity and duplicate_client.gender_identity %}color: #d97706; font-weight: 600;{% endif %}">Gender Identity</div>
+                                <div class="field-value text-xs" style="{% if primary_client.gender_identity != duplicate_client.gender_identity and duplicate_client.gender_identity %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.gender_identity|default:"—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contact Information -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Contact Information</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item" style="{% if primary_client.email != duplicate_client.email and duplicate_client.email %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.email != duplicate_client.email and duplicate_client.email %}color: #d97706; font-weight: 600;{% endif %}">Email</div>
+                                <div class="field-value text-xs" style="{% if primary_client.email != duplicate_client.email and duplicate_client.email %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.email|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.phone != duplicate_client.phone and duplicate_client.phone %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.phone != duplicate_client.phone and duplicate_client.phone %}color: #d97706; font-weight: 600;{% endif %}">Phone</div>
+                                <div class="field-value text-xs" style="{% if primary_client.phone != duplicate_client.phone and duplicate_client.phone %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.phone|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.phone_work != duplicate_client.phone_work and duplicate_client.phone_work %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.phone_work != duplicate_client.phone_work and duplicate_client.phone_work %}color: #d97706; font-weight: 600;{% endif %}">Work Phone</div>
+                                <div class="field-value text-xs" style="{% if primary_client.phone_work != duplicate_client.phone_work and duplicate_client.phone_work %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.phone_work|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.phone_alt != duplicate_client.phone_alt and duplicate_client.phone_alt %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.phone_alt != duplicate_client.phone_alt and duplicate_client.phone_alt %}color: #d97706; font-weight: 600;{% endif %}">Alt Phone</div>
+                                <div class="field-value text-xs" style="{% if primary_client.phone_alt != duplicate_client.phone_alt and duplicate_client.phone_alt %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.phone_alt|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.address != duplicate_client.address and duplicate_client.address %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.address != duplicate_client.address and duplicate_client.address %}color: #d97706; font-weight: 600;{% endif %}">Address</div>
+                                <div class="field-value text-xs" style="{% if primary_client.address != duplicate_client.address and duplicate_client.address %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.address|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.city != duplicate_client.city and duplicate_client.city %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.city != duplicate_client.city and duplicate_client.city %}color: #d97706; font-weight: 600;{% endif %}">City</div>
+                                <div class="field-value text-xs" style="{% if primary_client.city != duplicate_client.city and duplicate_client.city %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.city|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.province != duplicate_client.province and duplicate_client.province %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.province != duplicate_client.province and duplicate_client.province %}color: #d97706; font-weight: 600;{% endif %}">Province</div>
+                                <div class="field-value text-xs" style="{% if primary_client.province != duplicate_client.province and duplicate_client.province %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.province|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.postal_code != duplicate_client.postal_code and duplicate_client.postal_code %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.postal_code != duplicate_client.postal_code and duplicate_client.postal_code %}color: #d97706; font-weight: 600;{% endif %}">Postal Code</div>
+                                <div class="field-value text-xs" style="{% if primary_client.postal_code != duplicate_client.postal_code and duplicate_client.postal_code %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.postal_code|default:"—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cultural & Demographic -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Cultural & Demographic</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item" style="{% if primary_client.language != duplicate_client.language and duplicate_client.language %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.language != duplicate_client.language and duplicate_client.language %}color: #d97706; font-weight: 600;{% endif %}">Language</div>
+                                <div class="field-value text-xs" style="{% if primary_client.language != duplicate_client.language and duplicate_client.language %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.language|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.preferred_language != duplicate_client.preferred_language and duplicate_client.preferred_language %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.preferred_language != duplicate_client.preferred_language and duplicate_client.preferred_language %}color: #d97706; font-weight: 600;{% endif %}">Preferred Language</div>
+                                <div class="field-value text-xs" style="{% if primary_client.preferred_language != duplicate_client.preferred_language and duplicate_client.preferred_language %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.preferred_language|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.self_identification_race_ethnicity != duplicate_client.self_identification_race_ethnicity and duplicate_client.self_identification_race_ethnicity %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.self_identification_race_ethnicity != duplicate_client.self_identification_race_ethnicity and duplicate_client.self_identification_race_ethnicity %}color: #d97706; font-weight: 600;{% endif %}">Race/Ethnicity</div>
+                                <div class="field-value text-xs" style="{% if primary_client.self_identification_race_ethnicity != duplicate_client.self_identification_race_ethnicity and duplicate_client.self_identification_race_ethnicity %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.self_identification_race_ethnicity|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.aboriginal_status != duplicate_client.aboriginal_status and duplicate_client.aboriginal_status %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.aboriginal_status != duplicate_client.aboriginal_status and duplicate_client.aboriginal_status %}color: #d97706; font-weight: 600;{% endif %}">Aboriginal Status</div>
+                                <div class="field-value text-xs" style="{% if primary_client.aboriginal_status != duplicate_client.aboriginal_status and duplicate_client.aboriginal_status %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.aboriginal_status|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.lgbtq_status != duplicate_client.lgbtq_status and duplicate_client.lgbtq_status %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.lgbtq_status != duplicate_client.lgbtq_status and duplicate_client.lgbtq_status %}color: #d97706; font-weight: 600;{% endif %}">LGBTQ+ Status</div>
+                                <div class="field-value text-xs" style="{% if primary_client.lgbtq_status != duplicate_client.lgbtq_status and duplicate_client.lgbtq_status %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.lgbtq_status|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.highest_level_education != duplicate_client.highest_level_education and duplicate_client.highest_level_education %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.highest_level_education != duplicate_client.highest_level_education and duplicate_client.highest_level_education %}color: #d97706; font-weight: 600;{% endif %}">Education Level</div>
+                                <div class="field-value text-xs" style="{% if primary_client.highest_level_education != duplicate_client.highest_level_education and duplicate_client.highest_level_education %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.highest_level_education|default:"—" }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Medical & Health -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Medical & Health</h4>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <div class="field-item" style="{% if primary_client.health_card_number != duplicate_client.health_card_number and duplicate_client.health_card_number %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.health_card_number != duplicate_client.health_card_number and duplicate_client.health_card_number %}color: #d97706; font-weight: 600;{% endif %}">Health Card #</div>
+                                <div class="field-value text-xs" style="{% if primary_client.health_card_number != duplicate_client.health_card_number and duplicate_client.health_card_number %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.health_card_number|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.primary_diagnosis != duplicate_client.primary_diagnosis and duplicate_client.primary_diagnosis %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.primary_diagnosis != duplicate_client.primary_diagnosis and duplicate_client.primary_diagnosis %}color: #d97706; font-weight: 600;{% endif %}">Primary Diagnosis</div>
+                                <div class="field-value text-xs" style="{% if primary_client.primary_diagnosis != duplicate_client.primary_diagnosis and duplicate_client.primary_diagnosis %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.primary_diagnosis|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.family_doctor != duplicate_client.family_doctor and duplicate_client.family_doctor %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.family_doctor != duplicate_client.family_doctor and duplicate_client.family_doctor %}color: #d97706; font-weight: 600;{% endif %}">Family Doctor</div>
+                                <div class="field-value text-xs" style="{% if primary_client.family_doctor != duplicate_client.family_doctor and duplicate_client.family_doctor %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.family_doctor|default:"—" }}</div>
+                            </div>
+                            <div class="field-item" style="{% if primary_client.medical_conditions != duplicate_client.medical_conditions and duplicate_client.medical_conditions %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                <div class="field-label text-xs" style="{% if primary_client.medical_conditions != duplicate_client.medical_conditions and duplicate_client.medical_conditions %}color: #d97706; font-weight: 600;{% endif %}">Medical Conditions</div>
+                                <div class="field-value text-xs" style="{% if primary_client.medical_conditions != duplicate_client.medical_conditions and duplicate_client.medical_conditions %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">{{ duplicate_client.medical_conditions|default:"—"|truncatechars:30 }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Program Enrollments -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Program Enrollments ({{ duplicate_client.clientprogramenrollment_set.count }})</h4>
+                        <div class="grid grid-cols-1 gap-2 text-xs">
+                            {% for enrollment in duplicate_client.clientprogramenrollment_set.all %}
+                                <div class="field-item" style="{% if enrollment not in primary_client.clientprogramenrollment_set.all %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                    <div class="field-label text-xs" style="{% if enrollment not in primary_client.clientprogramenrollment_set.all %}color: #d97706; font-weight: 600;{% endif %}">{{ enrollment.program.name|default:"Program" }}</div>
+                                    <div class="field-value text-xs" style="{% if enrollment not in primary_client.clientprogramenrollment_set.all %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">
+                                        {% if enrollment.sub_program %}
+                                            {{ enrollment.sub_program.name }} - 
+                                        {% endif %}
+                                        {{ enrollment.enrollment_date|date:"M d, Y"|default:"No date" }}
+                                        {% if enrollment.status %}
+                                            ({{ enrollment.status }})
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div class="field-item">
+                                    <div class="field-label text-xs">No enrollments</div>
+                                    <div class="field-value text-xs">—</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Restrictions -->
+                    <div class="comparison-section">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-3">Restrictions ({{ duplicate_client.servicerestriction_set.count }})</h4>
+                        <div class="grid grid-cols-1 gap-2 text-xs">
+                            {% for restriction in duplicate_client.servicerestriction_set.all %}
+                                <div class="field-item" style="{% if restriction not in primary_client.servicerestriction_set.all %}border-left: 4px solid #f59e0b; background-color: #fffbeb; padding-left: 0.75rem; border-radius: 0.375rem; margin-bottom: 0.5rem;{% endif %}">
+                                    <div class="field-label text-xs" style="{% if restriction not in primary_client.servicerestriction_set.all %}color: #d97706; font-weight: 600;{% endif %}">{{ restriction.restriction_type|title }}</div>
+                                    <div class="field-value text-xs" style="{% if restriction not in primary_client.servicerestriction_set.all %}background-color: #fef3c7; border-color: #f59e0b; color: #92400e; font-weight: 600;{% endif %}">
+                                        {% if restriction.description %}
+                                            {{ restriction.description|truncatechars:50 }}
+                                        {% else %}
+                                            Active Restriction
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% empty %}
+                                <div class="field-item">
+                                    <div class="field-label text-xs">No restrictions</div>
+                                    <div class="field-value text-xs">—</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

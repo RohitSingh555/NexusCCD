@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Manage Department Assignments - {{ staff_member.first_name }} {{ staff_member.last_name }}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-neutral-50 py-8">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-neutral-900 font-header">Manage Department Assignments</h1>
+                    <p class="mt-2 text-lg text-neutral-600 font-body">
+                        Assign departments to <span class="font-bold text-neutral-900">{{ staff_member.first_name }} {{ staff_member.last_name }}</span>
+                    </p>
+                </div>
+                <a href="{% url 'staff:detail' staff_member.external_id %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 rounded-lg text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Back to Staff Detail
+                </a>
+            </div>
+        </div>
+
+        <!-- Current Assignments -->
+        {% if current_department_assignments %}
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-6">
+            <div class="flex items-center mb-4">
+                <div class="w-8 h-8 bg-gradient-to-br from-purple-400 to-purple-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                    </svg>
+                </div>
+                <h2 class="text-lg font-bold text-neutral-800 font-header">Current Department Assignments</h2>
+            </div>
+            
+            <div class="space-y-3">
+                {% for assignment in current_department_assignments %}
+                    <div class="border border-neutral-200 rounded-lg p-3 hover:bg-neutral-50 transition-colors">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h4 class="font-bold text-neutral-900 font-subheader text-sm">{{ assignment.department.name }}</h4>
+                                <p class="text-xs text-neutral-600 font-body mt-1">Department Leader</p>
+                                {% if assignment.assigned_at %}
+                                    <p class="text-xs text-neutral-500 font-body">Assigned: {{ assignment.assigned_at|date:"M d, Y" }}</p>
+                                {% endif %}
+                            </div>
+                            <div class="text-right">
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                    Active
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Assignment Form -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-8 h-8 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-lg font-bold text-neutral-800 font-header">Assign Departments</h2>
+            </div>
+
+            <form method="post" class="space-y-6">
+                {% csrf_token %}
+                
+                <div class="space-y-4">
+                    <p class="text-sm text-neutral-600 font-body">
+                        Select the departments that <span class="font-bold">{{ staff_member.first_name }} {{ staff_member.last_name }}</span> should have leadership access to:
+                    </p>
+                    
+                    {% if available_departments %}
+                        <div class="max-h-96 overflow-y-auto border border-neutral-200 rounded-lg p-4">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {% for department in available_departments %}
+                                    <div class="flex items-center p-3 border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors">
+                                        <input 
+                                            type="checkbox" 
+                                            id="department_{{ department.id }}" 
+                                            name="departments" 
+                                            value="{{ department.id }}"
+                                            {% for assignment in current_department_assignments %}
+                                                {% if assignment.department.id == department.id %}checked{% endif %}
+                                            {% endfor %}
+                                            class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-neutral-300 rounded"
+                                        >
+                                        <label for="department_{{ department.id }}" class="ml-3 text-sm font-medium text-neutral-900 font-body cursor-pointer">
+                                            {{ department.name }}
+                                        </label>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-8">
+                            <svg class="mx-auto h-12 w-12 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                            </svg>
+                            <h3 class="mt-2 text-sm font-medium text-neutral-900 font-header">No departments available</h3>
+                            <p class="mt-1 text-sm text-neutral-500 font-body">There are no active departments to assign.</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="flex justify-end space-x-3 pt-6 border-t border-neutral-200">
+                    <a href="{% url 'staff:detail' staff_member.external_id %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 rounded-lg text-sm font-medium text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200">
+                        Cancel
+                    </a>
+                    <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-all duration-200">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        Save Assignments
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
