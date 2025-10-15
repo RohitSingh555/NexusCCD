@@ -136,10 +136,10 @@
       "permission to email", "permissiontoemail", "email permission"
     ],
     "phone_work": [
-      "phone (work)", "phone work", "work phone", "workphone"
+      "phone (work)", "phone work", "work phone", "workphone", "Phone (Work)"
     ],
     "phone_alt": [
-      "phone (alt)", "phone alt", "alternative phone", "alt phone"
+      "phone (alt)", "phone alt", "alternative phone", "alt phone","Phone (Alt)"
     ],
     "next_of_kin": [
       "next of kin", "nextofkin", "kin"

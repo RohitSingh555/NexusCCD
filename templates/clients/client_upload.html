@@ -180,6 +180,29 @@
                     </div>
                 </div>
 
+                <!-- Error Display -->
+                <div x-show="errorMessage" class="mt-8">
+                    <div class="bg-red-50 border border-red-200 rounded-xl p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                                <svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-lg font-bold text-red-800 font-header">Upload Failed</h3>
+                        </div>
+                        <div class="text-red-700 font-body" x-html="errorMessage"></div>
+                        <div class="mt-4">
+                            <button @click="errorMessage = ''" class="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-lg hover:bg-red-700 transition-colors duration-200">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                                Dismiss
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Upload Progress -->
                 <div x-show="isUploading" class="mt-8 space-y-4">
                     <div class="bg-blue-50 border border-blue-200 rounded-xl p-6">
@@ -647,6 +670,7 @@ function uploadManager() {
         isUploading: false,
         currentStep: 0,
         successMessage: '',
+        errorMessage: '',
         selectedSource: 'SMIMS', // Default to SMIMS
         
         handleFileDrop(event) {
@@ -670,12 +694,19 @@ function uploadManager() {
             const fileExtension = file.name.split('.').pop().toLowerCase();
             
             if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-                alert('Please select a CSV or Excel file.');
+                this.errorMessage = `
+                    <div class="space-y-2">
+                        <p class="font-semibold">Please select a CSV or Excel file.</p>
+                        <p class="text-sm text-red-600">Supported formats: .csv, .xlsx, .xls</p>
+                    </div>
+                `;
                 return;
             }
             
             this.selectedFile = file;
             this.fileSelected = true;
+            // Clear any existing error messages when file is selected
+            this.errorMessage = '';
         },
         
         openFileDialog() {
@@ -712,8 +743,17 @@ function uploadManager() {
         },
         
         async uploadFile() {
-            if (!this.selectedFile) return;
+            if (!this.selectedFile) {
+                this.errorMessage = `
+                    <div class="space-y-2">
+                        <p class="font-semibold">Please select a file first.</p>
+                    </div>
+                `;
+                return;
+            }
             
+            // Clear any existing error messages
+            this.errorMessage = '';
             this.isUploading = true;
             this.currentStep = 0;
             
@@ -832,11 +872,24 @@ function uploadManager() {
                     document.getElementById('successMessage').innerHTML = this.successMessage;
                     document.getElementById('successModal').style.display = 'block';
                 } else {
-                    alert(`Upload failed: ${result.error}`);
+                    this.errorMessage = `
+                        <div class="space-y-2">
+                            <p class="font-semibold">${result.error}</p>
+                            <div class="text-sm text-red-600">
+                                <p><strong>Required columns:</strong> client_id, first_name, last_name, phone, dob</p>
+                                <p><strong>Note:</strong> client_id is now required for all uploads (both new and updates)</p>
+                            </div>
+                        </div>
+                    `;
                 }
             } catch (error) {
                 console.error('Upload error:', error);
-                alert('Upload failed. Please try again.');
+                this.errorMessage = `
+                    <div class="space-y-2">
+                        <p class="font-semibold">Upload failed. Please try again.</p>
+                        <p class="text-sm text-red-600">If the problem persists, contact your system administrator.</p>
+                    </div>
+                `;
             } finally {
                 this.isUploading = false;
                 this.currentStep = 0;

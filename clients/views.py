@@ -1043,35 +1043,35 @@ def upload_clients(request):
             print(f"DEBUG: Available columns with 'client' in name: {[col for col in df.columns if 'client' in col.lower()]}")
         
         # Check for required fields using case-insensitive mapping
-        # Note: Required fields are only mandatory for NEW client creation, not for updates
-        required_fields = ['first_name', 'last_name', 'phone', 'dob']
+        # Note: client_id is now required for ALL uploads (both new and updates)
+        required_fields = ['client_id', 'first_name', 'last_name', 'phone', 'dob']
         missing_fields = []
         
-        # Debug: Check if we have client_id column (indicates updates vs new clients)
+        # Debug: Check if we have client_id column (now required for all uploads)
         has_client_id = 'client_id' in df.columns
         print(f"DEBUG: Has client_id column: {has_client_id}")
         if has_client_id:
-            print(f"DEBUG: This appears to be an UPDATE operation (has client_id column)")
+            print(f"DEBUG: client_id column found - will check for existing clients with matching client_id + source to determine if update or new creation")
         else:
-            print(f"DEBUG: This appears to be a NEW client creation (no client_id column)")
+            print(f"DEBUG: client_id column NOT found - this will cause validation error")
         
-        # Check if any row has a Client ID that exists in the database - if so, we'll allow updates with partial data
+        # Check if any row has a Client ID + Source combination that exists in the database - if so, we'll allow updates with partial data
         has_existing_client_ids = False
         for col in df.columns:
             if column_mapping.get(col) == 'client_id':
                 print(f"DEBUG: Found client_id column: '{col}'")
-                # Check if any of the client_ids in the CSV actually exist in the database
+                # Check if any of the client_ids + source combinations in the CSV actually exist in the database
                 for index, row in df.iterrows():
                     client_id_value = row[col]
-                    print(f"DEBUG: Row {index + 1}: Checking client_id value: '{client_id_value}'")
+                    print(f"DEBUG: Row {index + 1}: Checking client_id value: '{client_id_value}' with source: '{source}'")
                     if pd.notna(client_id_value) and str(client_id_value).strip():
                         client_id_clean = str(client_id_value).strip()
-                        print(f"DEBUG: Row {index + 1}: Looking up client_id '{client_id_clean}' in database")
+                        print(f"DEBUG: Row {index + 1}: Looking up client_id '{client_id_clean}' with source '{source}' in database")
                         existing_client = Client.objects.filter(client_id=client_id_clean, source=source).first()
                         print(f"DEBUG: Row {index + 1}: Database lookup result: {existing_client}")
                         if existing_client:
                             has_existing_client_ids = True
-                            print(f"DEBUG: Found existing client with ID '{client_id_value}' - will allow updates")
+                            print(f"DEBUG: Found existing client with ID '{client_id_value}' and source '{source}' - will allow updates")
                             break
                 if has_existing_client_ids:
                     break
@@ -1085,22 +1085,21 @@ def upload_clients(request):
             'df_columns': list(df.columns)
         }
         
-        # Only enforce required fields if no existing Client IDs are present (pure creation scenario)
-        if not has_existing_client_ids:
-            for required_field in required_fields:
-                found = False
-                for col in df.columns:
-                    if column_mapping.get(col) == required_field:
-                        found = True
-                        break
-                if not found:
-                    missing_fields.append(required_field)
-            
-            if missing_fields:
-                return JsonResponse({
-                    'success': False, 
-                    'error': f'Missing required columns for new client creation. Please include columns for: {", ".join(missing_fields)}. Note: If you have Client ID column, only the fields you want to update are required.'
-                }, status=400)
+        # Enforce required fields for all uploads (client_id is now required for both new and updates)
+        for required_field in required_fields:
+            found = False
+            for col in df.columns:
+                if column_mapping.get(col) == required_field:
+                    found = True
+                    break
+            if not found:
+                missing_fields.append(required_field)
+        
+        if missing_fields:
+            return JsonResponse({
+                'success': False, 
+                'error': f'Missing required columns. Please include columns for: {", ".join(missing_fields)}. Note: client_id is now required for all uploads.'
+            }, status=400)
         
         # Check for intake-related columns using case-insensitive mapping
         has_intake_data = False
@@ -1691,19 +1690,20 @@ def upload_clients(request):
                 
                 if client_data.get('client_id'):
                     try:
-                        # Debug: Log Client ID lookup
+                        # Debug: Log Client ID + Source lookup
                         client_id_to_find = client_data['client_id']
-                        print(f"Row {index + 1}: Looking for existing client with Client ID: '{client_id_to_find}'")
+                        print(f"Row {index + 1}: Looking for existing client with Client ID: '{client_id_to_find}' and Source: '{source}'")
                         
-                        # Use .first() to handle potential duplicate Client IDs - match by both client_id and source
+                        # Match by both client_id AND source - only update if both match
                         existing_client_id = Client.objects.filter(client_id=client_data['client_id'], source=source).first()
                         print(f"Row {index + 1}: Found existing client: {existing_client_id}")
                         
                         if existing_client_id:
-                            # Found existing client by Client ID - UPDATE instead of CREATE
+                            # Found existing client by Client ID + Source combination - UPDATE instead of CREATE
                             client = existing_client_id
                             is_update = True
                             updated_count += 1
+                            print(f"Row {index + 1}: Will UPDATE existing client (client_id + source match)")
                             
                             # Update the existing client with new data (only non-empty values)
                             # Filter out empty values to prevent overwriting existing data
@@ -1781,15 +1781,18 @@ def upload_clients(request):
                             # Save the updated client
                             client.save()
                             logger.info(f"Updated existing client by Client ID {client_data['client_id']}: {client.first_name} {client.last_name}")
+                        else:
+                            # Client ID exists but with different source - CREATE new client
+                            print(f"Row {index + 1}: Client ID '{client_id_to_find}' exists but with different source - will CREATE new client")
                         
                     except Exception as e:
                         logger.error(f"Error updating client with ID {client_data['client_id']}: {e}")
                         # Continue to create new client if update fails
                 
-                # If no existing client found by Client ID, check for other duplicates
+                # Validate required fields for all rows (client_id is now required for all uploads)
                 if not is_update:
-                    # For new client creation, validate required fields
-                    required_fields = ['first_name', 'last_name', 'phone_number', 'dob']
+                    # For new client creation, validate required fields (including client_id)
+                    required_fields = ['client_id', 'first_name', 'last_name', 'phone_number', 'dob']
                     missing_required = []
                     
                     for field in required_fields:
@@ -1822,7 +1825,7 @@ def upload_clients(request):
                     debug_info['row_debug'].append(debug_row_info)
                     
                     if missing_required:
-                        errors.append(f"Row {index + 1}: Missing required fields for new client creation: {', '.join(missing_required)}")
+                        errors.append(f"Row {index + 1}: Missing required fields for client creation: {', '.join(missing_required)}")
                         skipped_count += 1
                         continue
                     
