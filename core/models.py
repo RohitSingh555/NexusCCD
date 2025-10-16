@@ -478,6 +478,7 @@ class Client(BaseModel):
     program_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     reason_discharge = models.CharField(max_length=255, null=True, blank=True, help_text="Reason for Discharge/Program Status")
     receiving_services = models.BooleanField(default=False, db_index=True)
+    receiving_services_date = models.DateField(null=True, blank=True, db_index=True, help_text="Date when client actually started receiving services")
     referral_source = models.CharField(max_length=255, null=True, blank=True, db_index=True)
     
     # 🧾 ADMINISTRATIVE / SYSTEM FIELDS
@@ -1048,3 +1049,113 @@ class DepartmentLeaderAssignment(BaseModel):
     
     def __str__(self):
         return f"{self.staff} - Leader for {self.department.name}"
+
+
+class EmailRecipientManager(models.Manager):
+    """Custom manager for EmailRecipient with role-based filtering"""
+    
+    def for_user(self, user):
+        """Filter EmailRecipients based on user's role and permissions"""
+        if not user.is_authenticated:
+            return self.none()
+        
+        # Superuser and SuperAdmin can see all
+        if user.is_superuser:
+            return self.all()
+        
+        try:
+            from core.security import SecurityManager
+            user_roles = SecurityManager.get_user_roles(user)
+            
+            # SuperAdmin and Admin can see all
+            if any(role in ['SuperAdmin', 'Admin'] for role in user_roles):
+                return self.all()
+            
+            # Manager and Leader can see department recipients
+            if any(role in ['Manager', 'Leader'] for role in user_roles):
+                staff = user.staff_profile
+                return self.filter(
+                    Q(department__in=staff.departments.all()) | Q(department__isnull=True)
+                )
+            
+            # Staff and others cannot see any
+            return self.none()
+            
+        except Exception:
+            return self.none()
+
+
+class EmailRecipient(BaseModel):
+    """Stores email addresses that will receive daily client reports"""
+    FREQUENCY_CHOICES = [
+        ('daily', 'Daily (Last 24 Hours)'),
+        ('weekly', 'Weekly (Last 7 Days)'),
+        ('monthly', 'Monthly (Last 30 Days)'),
+    ]
+    
+    email = models.EmailField(unique=True, db_index=True)
+    name = models.CharField(max_length=255, help_text="Name of the recipient")
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, default='daily', help_text="How often to send reports")
+    is_active = models.BooleanField(default=True, db_index=True)
+    department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True, help_text="Optional: restrict to specific department")
+    notes = models.TextField(null=True, blank=True, help_text="Additional notes about this recipient")
+    
+    # Custom manager
+    objects = EmailRecipientManager()
+    
+    class Meta:
+        db_table = 'email_recipients'
+        indexes = [
+            models.Index(fields=['email', 'is_active']),
+            models.Index(fields=['department', 'is_active']),
+        ]
+        permissions = [
+            ('manage_email_subscriptions', 'Can manage email subscriptions'),
+        ]
+    
+    def __str__(self):
+        return f"{self.name} ({self.email})"
+
+
+class EmailLog(BaseModel):
+    """Stores information about sent emails for tracking and audit purposes"""
+    EMAIL_TYPE_CHOICES = [
+        ('daily_report', 'Daily Client Report'),
+        ('weekly_report', 'Weekly Client Report'),
+        ('monthly_report', 'Monthly Client Report'),
+        ('test_email', 'Test Email'),
+        ('custom', 'Custom Email'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('sent', 'Sent Successfully'),
+        ('failed', 'Failed to Send'),
+        ('pending', 'Pending'),
+    ]
+    
+    email_type = models.CharField(max_length=20, choices=EMAIL_TYPE_CHOICES, default='daily_report')
+    subject = models.CharField(max_length=255, help_text="Email subject line")
+    recipient_email = models.EmailField(help_text="Email address of the recipient")
+    recipient_name = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the recipient")
+    email_body = models.TextField(help_text="HTML content of the email")
+    csv_attachment = models.TextField(null=True, blank=True, help_text="CSV data that was attached")
+    csv_filename = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the CSV file attached")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='sent')
+    sent_at = models.DateTimeField(auto_now_add=True, help_text="When the email was sent")
+    error_message = models.TextField(null=True, blank=True, help_text="Error message if sending failed")
+    client_count = models.PositiveIntegerField(default=0, help_text="Number of clients included in the report")
+    report_date = models.DateField(help_text="Date the report covers")
+    frequency = models.CharField(max_length=20, choices=EmailRecipient.FREQUENCY_CHOICES, default='daily')
+    
+    class Meta:
+        db_table = 'email_logs'
+        indexes = [
+            models.Index(fields=['recipient_email', 'sent_at']),
+            models.Index(fields=['email_type', 'status']),
+            models.Index(fields=['report_date']),
+            models.Index(fields=['sent_at']),
+        ]
+        ordering = ['-sent_at']
+    
+    def __str__(self):
+        return f"{self.email_type} to {self.recipient_email} on {self.sent_at.strftime('%Y-%m-%d %H:%M')}"

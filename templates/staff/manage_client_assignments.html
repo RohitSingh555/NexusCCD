@@ -1,0 +1,287 @@
+{% extends 'dashboard_base.html' %}
+{% load static %}
+
+{% block extra_css %}
+<style>
+/* Custom scrollbar styling for clients container */
+#clients-container::-webkit-scrollbar {
+    width: 8px;
+}
+
+#clients-container::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+
+#clients-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+#clients-container::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+</style>
+{% endblock %}
+
+{% block title %}Manage Client Assignments - {{ staff_member.first_name }} {{ staff_member.last_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-neutral-800 font-header">
+                    Manage Client Assignments
+                </h1>
+                <p class="text-neutral-600 mt-2 font-body">
+                    {{ staff_member.first_name }} {{ staff_member.last_name }} - Staff Member
+                </p>
+                <div class="mt-2 flex items-center text-sm text-neutral-500">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Assign clients that this staff member can access and manage
+                </div>
+            </div>
+            <a href="{% url 'staff:detail' staff_member.external_id %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                </svg>
+                Back to Staff
+            </a>
+        </div>
+    </div>
+
+    <!-- Current Client Assignments -->
+    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
+        <div class="flex items-center mb-6">
+            <div class="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                </svg>
+            </div>
+            <div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">Assigned Clients</h2>
+                <p class="text-sm text-neutral-600 font-body">{{ current_client_assignments.count }} client(s)</p>
+            </div>
+        </div>
+        
+        {% if current_client_assignments %}
+            <div class="space-y-3 max-h-96 overflow-y-auto">
+                {% for assignment in current_client_assignments %}
+                    <div class="border border-neutral-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <h3 class="font-bold text-neutral-900 font-subheader">{{ assignment.client.first_name }} {{ assignment.client.last_name }}</h3>
+                                <p class="text-sm text-neutral-600 font-body mt-1">ID: {{ assignment.client.client_id }}</p>
+                                {% if assignment.client.program %}
+                                    <p class="text-xs text-neutral-500 font-body mt-1">Program: {{ assignment.client.program }}</p>
+                                {% endif %}
+                            </div>
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
+                                Active
+                            </span>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-neutral-500 font-body">No clients assigned yet</p>
+        {% endif %}
+    </div>
+
+    <!-- Assignment Form -->
+    <form method="post" class="space-y-8">
+        {% csrf_token %}
+        
+        <!-- Client Assignments Section -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h2 class="text-xl font-bold text-neutral-800 font-header">Assign Clients</h2>
+                    <p class="text-sm text-neutral-600 font-body">Select clients this staff member can view and manage</p>
+                </div>
+            </div>
+            
+            <!-- Search and Filter -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-neutral-800 font-subheader">Available Clients</h3>
+                    <div class="text-sm text-neutral-500 font-body">
+                        <span id="client-count">{{ available_clients.count }} client(s)</span>
+                    </div>
+                </div>
+                
+                <!-- Search Input -->
+                <div class="relative">
+                    <input type="text" 
+                           id="client-search" 
+                           placeholder="Search clients by name, ID, or program..." 
+                           class="w-full pl-10 pr-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </div>
+                    <button type="button" 
+                            id="clear-search" 
+                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-400 hover:text-neutral-600 hidden">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Clients list -->
+            {% if available_clients %}
+                <div class="space-y-3 max-h-96 overflow-y-auto border border-neutral-200 rounded-lg p-4" id="clients-container">
+                    {% for client in available_clients %}
+                        <div class="client-item flex items-start" 
+                             data-client-name="{{ client.first_name|lower }} {{ client.last_name|lower }}"
+                             data-client-id="{{ client.client_id|lower }}"
+                             data-client-program="{{ client.program|lower }}"
+                             data-searchable="{{ client.first_name|lower }} {{ client.last_name|lower }} {{ client.client_id|lower }} {{ client.program|lower }}">
+                            <input type="checkbox" 
+                                name="clients" 
+                                value="{{ client.id }}" 
+                                id="client_{{ client.id }}"
+                                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-neutral-300 rounded mt-1"
+                                {% for assignment in current_client_assignments %}{% if assignment.client.id == client.id %}checked{% endif %}{% endfor %}>
+                            <label for="client_{{ client.id }}" class="ml-3 block text-sm font-medium text-neutral-900">
+                                <div class="font-bold">{{ client.first_name }} {{ client.last_name }}</div>
+                                <div class="text-sm text-neutral-500">ID: {{ client.client_id }}</div>
+                                {% if client.program %}
+                                    <div class="text-xs text-neutral-400 mt-1">Program: {{ client.program }}</div>
+                                {% endif %}
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+                
+                <!-- No results message -->
+                <div id="no-results" class="hidden text-center py-12">
+                    <div class="mx-auto w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
+                        <svg class="w-8 h-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-neutral-600 font-header mb-2">No clients found</h3>
+                    <p class="text-neutral-500 font-body">Try adjusting your search terms or clear the search to see all clients.</p>
+                </div>
+            {% else %}
+                <p class="text-neutral-500 font-body">No active clients available</p>
+            {% endif %}
+        </div>
+
+        <!-- Form Actions -->
+        <div class="bg-gradient-to-r from-neutral-50 to-neutral-100 rounded-xl p-6 flex justify-between items-center">
+            <div class="flex items-start text-sm text-neutral-600">
+                <svg class="w-5 h-5 mr-2 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div>
+                    <p class="font-bold mb-1">Staff Access Rights:</p>
+                    <ul class="list-disc list-inside space-y-1 text-xs">
+                        <li>View assigned clients and their information</li>
+                        <li>Manage client enrollments for assigned clients only</li>
+                        <li>View client profile and contact information</li>
+                        <li>Access client-related reports (read-only access)</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="flex space-x-4">
+                <a href="{% url 'staff:detail' staff_member.external_id %}" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+                    Cancel
+                </a>
+                <button type="submit" class="px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 shadow-sm">
+                    <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    Update Client Assignments
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('client-search');
+    const clearButton = document.getElementById('clear-search');
+    const clientsContainer = document.getElementById('clients-container');
+    const clientCount = document.getElementById('client-count');
+    const noResults = document.getElementById('no-results');
+    
+    // Get all client items
+    const clientItems = document.querySelectorAll('.client-item');
+    
+    function updateSearch() {
+        const searchTerm = searchInput.value.toLowerCase().trim();
+        
+        if (searchTerm === '') {
+            // Show all clients
+            clientItems.forEach(item => {
+                item.style.display = 'flex';
+            });
+            
+            // Update count
+            clientCount.textContent = `${clientItems.length} client(s)`;
+            clearButton.classList.add('hidden');
+            noResults.classList.add('hidden');
+        } else {
+            let visibleClients = 0;
+            
+            clientItems.forEach(item => {
+                const searchableText = item.dataset.searchable;
+                if (searchableText.includes(searchTerm)) {
+                    item.style.display = 'flex';
+                    visibleClients++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+            
+            // Update count and show/hide no results message
+            if (visibleClients === 0) {
+                clientCount.textContent = 'No clients found';
+                noResults.classList.remove('hidden');
+            } else {
+                clientCount.textContent = `${visibleClients} client(s)`;
+                noResults.classList.add('hidden');
+            }
+            
+            clearButton.classList.remove('hidden');
+        }
+    }
+    
+    // Search input event
+    searchInput.addEventListener('input', updateSearch);
+    
+    // Clear search button
+    clearButton.addEventListener('click', function() {
+        searchInput.value = '';
+        updateSearch();
+        searchInput.focus();
+    });
+    
+    // Keyboard shortcuts
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            searchInput.value = '';
+            updateSearch();
+        }
+    });
+    
+    // Initial state
+    updateSearch();
+});
+</script>
+{% endblock %}

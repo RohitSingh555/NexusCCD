@@ -1,0 +1,2 @@
+# Daily Client Report - Runs at 11 PM every day
+0 23 * * * /home/agilemorph/Desktop/fredvictor/NexusCCD/scripts/send_daily_report.sh

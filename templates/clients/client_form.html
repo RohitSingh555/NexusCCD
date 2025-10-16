@@ -473,23 +473,47 @@
             </div>
         </div>
 
-        <!-- Support & Emergency Contacts Section -->
+        <!-- Client Services & Support Section -->
         <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
             <div class="flex items-center mb-6">
-                <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                <div class="w-10 h-10 bg-gradient-to-br from-purple-400 to-purple-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
                     <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                 </div>
-                <h2 class="text-xl font-bold text-neutral-800 font-header">Support & Emergency Contacts</h2>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">Client Services & Support</h2>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <label for="{{ form.support_workers.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Assigned Support Workers</label>
+                    <label for="{{ form.level_of_support.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Level of Support</label>
+                    <input type="text" name="{{ form.level_of_support.name }}" id="{{ form.level_of_support.id_for_label }}" value="{{ form.level_of_support.value|default:'' }}" placeholder="Enter level of support" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.level_of_support.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.level_of_support.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.client_type.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Client Type</label>
+                    <input type="text" name="{{ form.client_type.name }}" id="{{ form.client_type.id_for_label }}" value="{{ form.client_type.value|default:'' }}" placeholder="Enter client type" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.client_type.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.client_type.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.referral_source.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Referral Source</label>
+                    <input type="text" name="{{ form.referral_source.name }}" id="{{ form.referral_source.id_for_label }}" value="{{ form.referral_source.value|default:'' }}" placeholder="Enter referral source" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.referral_source.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.referral_source.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.support_workers.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Worker / Support Worker(s)</label>
                     <div class="space-y-2">
                         <div class="flex items-center space-x-2">
-                            <input type="text" x-model="newSupportWorker" @keydown.enter.prevent="addSupportWorker()" placeholder="Add a support worker" class="flex-1 px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            <input type="text" x-model="newSupportWorker" @keydown.enter.prevent="addSupportWorker()" placeholder="Enter support workers (comma-separated)" class="flex-1 px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                             <button type="button" @click="addSupportWorker()" class="px-4 py-2 bg-brand-sky text-white text-sm font-bold rounded-lg hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-brand-sky transition-all duration-200">
                                 Add
                             </button>
@@ -513,6 +537,59 @@
                     {% endif %}
                 </div>
                 
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Receiving Services</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.receiving_services.name }}" id="{{ form.receiving_services.id_for_label }}" {% if form.receiving_services.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.receiving_services.id_for_label }}" class="ml-2 block text-sm font-bold text-neutral-700 font-subheader">
+                            Yes
+                        </label>
+                    </div>
+                    {% if form.receiving_services.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.receiving_services.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.receiving_services_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Receiving Services Date</label>
+                    <input type="date" name="{{ form.receiving_services_date.name }}" id="{{ form.receiving_services_date.id_for_label }}" value="{% if form.receiving_services_date.value %}{{ form.receiving_services_date.value|date:'Y-m-d' }}{% endif %}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    <p class="mt-1 text-xs text-neutral-500 font-body">mm/dd/yyyy - Date when client actually started receiving services</p>
+                    {% if form.receiving_services_date.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.receiving_services_date.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.days_elapsed.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Days Elapsed</label>
+                    <input type="number" name="{{ form.days_elapsed.name }}" id="{{ form.days_elapsed.id_for_label }}" value="{{ form.days_elapsed.value|default:'' }}" placeholder="Auto-calculated" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body" readonly>
+                    <p class="mt-1 text-xs text-neutral-500 font-body">Auto-calculated - Auto-calculated based on start date</p>
+                    {% if form.days_elapsed.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.days_elapsed.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <label for="{{ form.reason_discharge.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Reason (for Discharge/Program Status)</label>
+                    <textarea name="{{ form.reason_discharge.name }}" id="{{ form.reason_discharge.id_for_label }}" rows="2" placeholder="Enter reason for discharge or program status change" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.reason_discharge.value|default:'' }}</textarea>
+                    {% if form.reason_discharge.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.reason_discharge.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Support & Emergency Contacts Section -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">Support & Emergency Contacts</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                     <label for="{{ form.next_of_kin.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Next of Kin</label>
                     <div class="space-y-4">

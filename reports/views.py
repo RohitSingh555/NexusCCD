@@ -46,15 +46,15 @@ def get_program_manager_filtering(request):
                 assigned_clients = None
             elif staff_profile.is_staff_only():
                 is_staff_only = True
-                # Get assigned programs for staff-only users
-                from staff.models import StaffProgramAssignment
-                assigned_programs = Program.objects.filter(
+                # Get directly assigned clients for staff users
+                from staff.models import StaffClientAssignment
+                assigned_clients = Client.objects.filter(
                     staff_assignments__staff=staff_profile,
                     staff_assignments__is_active=True
                 ).distinct()
-                # Get clients enrolled in assigned programs
-                assigned_clients = Client.objects.filter(
-                    clientprogramenrollment__program__in=assigned_programs
+                # Get programs where assigned clients are enrolled
+                assigned_programs = Program.objects.filter(
+                    clientprogramenrollment__client__in=assigned_clients
                 ).distinct()
         except Exception:
             pass
@@ -124,10 +124,10 @@ class ReportListView(ListView):
                 ).count()
                 
                 active_enrollments += program_active_enrollments
-        elif is_staff_only and assigned_clients and assigned_programs:
+        elif is_staff_only and assigned_clients:
             # Staff-only users see only data for their assigned clients and programs
             context['total_clients'] = assigned_clients.count()
-            context['active_programs'] = assigned_programs.count()
+            context['active_programs'] = assigned_programs.count() if assigned_programs else 0
             
             # Calculate enrollment rate for assigned programs only
             total_capacity = 0
@@ -204,13 +204,13 @@ class OrganizationalSummaryView(TemplateView):
             
             # Calculate active enrollments using date-based logic for assigned programs
             enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
-        elif is_staff_only and assigned_clients and assigned_programs:
+        elif is_staff_only and assigned_clients:
             # Staff-only users see only data for their assigned clients and programs
             context['total_clients'] = assigned_clients.count()
-            context['total_programs'] = assigned_programs.count()
+            context['total_programs'] = assigned_programs.count() if assigned_programs else 0
             
             # Calculate active enrollments using date-based logic for assigned programs
-            enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
+            enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs) if assigned_programs else ClientProgramEnrollment.objects.none()
         else:
             # SuperAdmin and Staff see all data
             context['total_clients'] = Client.objects.count()
@@ -268,8 +268,8 @@ class VacancyTrackerView(TemplateView):
             programs = Program.objects.all()
         elif (is_program_manager or is_leader) and assigned_programs:
             programs = assigned_programs
-        elif is_staff_only and assigned_programs:
-            programs = assigned_programs
+        elif is_staff_only:
+            programs = assigned_programs if assigned_programs else Program.objects.none()
         else:
             programs = Program.objects.all()
         
@@ -336,8 +336,8 @@ class ReportExportView(TemplateView):
             programs = Program.objects.all()
         elif (is_program_manager or is_leader) and assigned_programs:
             programs = assigned_programs
-        elif is_staff_only and assigned_programs:
-            programs = assigned_programs
+        elif is_staff_only:
+            programs = assigned_programs if assigned_programs else Program.objects.none()
         else:
             programs = Program.objects.all()
         
@@ -493,13 +493,19 @@ class ClientEnrollmentHistoryView(ListView):
         
         # Filter enrollments based on user role
         if (is_program_manager or is_leader) and assigned_programs:
-            return ClientProgramEnrollment.objects.filter(
-                program__in=assigned_programs
-            ).select_related('client', 'program', 'program__department').order_by('-start_date')
-        elif is_staff_only and assigned_programs:
-            return ClientProgramEnrollment.objects.filter(
-                program__in=assigned_programs
-            ).select_related('client', 'program', 'program__department').order_by('-start_date')
+            if assigned_programs:
+                return ClientProgramEnrollment.objects.filter(
+                    program__in=assigned_programs
+                ).select_related('client', 'program', 'program__department').order_by('-start_date')
+            else:
+                return ClientProgramEnrollment.objects.none()
+        elif is_staff_only:
+            if assigned_programs:
+                return ClientProgramEnrollment.objects.filter(
+                    program__in=assigned_programs
+                ).select_related('client', 'program', 'program__department').order_by('-start_date')
+            else:
+                return ClientProgramEnrollment.objects.none()
         else:
             return ClientProgramEnrollment.objects.select_related('client', 'program', 'program__department').order_by('-start_date')
     
@@ -513,7 +519,7 @@ class ClientEnrollmentHistoryView(ListView):
         # Get all enrollments for statistics (not just current page)
         if (is_program_manager or is_leader) and assigned_programs:
             all_enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
-        elif is_staff_only and assigned_programs:
+        elif is_staff_only:
             all_enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
         else:
             all_enrollments = ClientProgramEnrollment.objects.all()
@@ -559,13 +565,19 @@ class ClientEnrollmentHistoryExportView(ListView):
         
         # Filter enrollments based on user role
         if (is_program_manager or is_leader) and assigned_programs:
-            return ClientProgramEnrollment.objects.filter(
-                program__in=assigned_programs
-            ).select_related('client', 'program', 'program__department').order_by('-start_date')
-        elif is_staff_only and assigned_programs:
-            return ClientProgramEnrollment.objects.filter(
-                program__in=assigned_programs
-            ).select_related('client', 'program', 'program__department').order_by('-start_date')
+            if assigned_programs:
+                return ClientProgramEnrollment.objects.filter(
+                    program__in=assigned_programs
+                ).select_related('client', 'program', 'program__department').order_by('-start_date')
+            else:
+                return ClientProgramEnrollment.objects.none()
+        elif is_staff_only:
+            if assigned_programs:
+                return ClientProgramEnrollment.objects.filter(
+                    program__in=assigned_programs
+                ).select_related('client', 'program', 'program__department').order_by('-start_date')
+            else:
+                return ClientProgramEnrollment.objects.none()
         else:
             return ClientProgramEnrollment.objects.select_related('client', 'program', 'program__department').order_by('-start_date')
     
@@ -633,7 +645,7 @@ class ClientOutcomesView(TemplateView):
         # Filter enrollments based on user role
         if (is_program_manager or is_leader) and assigned_programs:
             enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
-        elif is_staff_only and assigned_programs:
+        elif is_staff_only:
             enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
         else:
             enrollments = ClientProgramEnrollment.objects.all()
@@ -710,8 +722,8 @@ class ProgramCapacityView(ListView):
             programs = Program.objects.all()
         elif (is_program_manager or is_leader) and assigned_programs:
             programs = assigned_programs
-        elif is_staff_only and assigned_programs:
-            programs = assigned_programs
+        elif is_staff_only:
+            programs = assigned_programs if assigned_programs else Program.objects.none()
         else:
             programs = Program.objects.all()
         
@@ -755,8 +767,8 @@ class ProgramCapacityExportView(ListView):
             programs = Program.objects.all()
         elif (is_program_manager or is_leader) and assigned_programs:
             programs = assigned_programs
-        elif is_staff_only and assigned_programs:
-            programs = assigned_programs
+        elif is_staff_only:
+            programs = assigned_programs if assigned_programs else Program.objects.none()
         else:
             programs = Program.objects.all()
         
@@ -862,8 +874,8 @@ class ProgramPerformanceView(ListView):
             programs = Program.objects.all()
         elif (is_program_manager or is_leader) and assigned_programs:
             programs = assigned_programs
-        elif is_staff_only and assigned_programs:
-            programs = assigned_programs
+        elif is_staff_only:
+            programs = assigned_programs if assigned_programs else Program.objects.none()
         else:
             programs = Program.objects.all()
         
@@ -925,8 +937,8 @@ class ProgramPerformanceExportView(ListView):
             programs = Program.objects.all()
         elif (is_program_manager or is_leader) and assigned_programs:
             programs = assigned_programs
-        elif is_staff_only and assigned_programs:
-            programs = assigned_programs
+        elif is_staff_only:
+            programs = assigned_programs if assigned_programs else Program.objects.none()
         else:
             programs = Program.objects.all()
         
@@ -1030,7 +1042,7 @@ class DepartmentSummaryView(TemplateView):
             # Get departments that have assigned programs
             department_ids = assigned_programs.values_list('department_id', flat=True).distinct()
             departments = Department.objects.filter(id__in=department_ids)
-        elif is_staff_only and assigned_programs:
+        elif is_staff_only:
             # Get departments that have assigned programs
             department_ids = assigned_programs.values_list('department_id', flat=True).distinct()
             departments = Department.objects.filter(id__in=department_ids)
@@ -1044,7 +1056,7 @@ class DepartmentSummaryView(TemplateView):
             # Filter programs based on user role
             if (is_program_manager or is_leader) and assigned_programs:
                 programs = programs.filter(id__in=assigned_programs.values_list('id', flat=True))
-            elif is_staff_only and assigned_programs:
+            elif is_staff_only:
                 programs = programs.filter(id__in=assigned_programs.values_list('id', flat=True))
             
             total_capacity = sum(p.capacity_current for p in programs)
@@ -1196,7 +1208,7 @@ class ClientOutcomesExportView(TemplateView):
         # Filter enrollments based on user role
         if (is_program_manager or is_leader) and assigned_programs:
             enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
-        elif is_staff_only and assigned_programs:
+        elif is_staff_only:
             enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
         else:
             enrollments = ClientProgramEnrollment.objects.all()
@@ -1312,10 +1324,10 @@ class OrganizationalSummaryExportView(TemplateView):
             ).distinct().count()
             total_programs = assigned_programs.count()
             enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
-        elif is_staff_only and assigned_clients and assigned_programs:
+        elif is_staff_only and assigned_clients:
             total_clients = assigned_clients.count()
-            total_programs = assigned_programs.count()
-            enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
+            total_programs = assigned_programs.count() if assigned_programs else 0
+            enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs) if assigned_programs else ClientProgramEnrollment.objects.none()
         else:
             total_clients = Client.objects.count()
             total_programs = Program.objects.count()

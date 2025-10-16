@@ -1,7 +1,7 @@
 from django import forms
-from core.models import Role, StaffRole
+from core.models import Role, StaffRole, Client
 from programs.models import Program
-from .models import StaffProgramAssignment
+from .models import StaffProgramAssignment, StaffClientAssignment
 
 
 
@@ -116,6 +116,46 @@ class StaffProgramAssignmentForm(forms.Form):
             assignment, created = StaffProgramAssignment.objects.update_or_create(
                 staff=staff,
                 program=program,
+                defaults={
+                    'is_active': True,
+                    'assigned_by': assigned_by
+                }
+            )
+
+
+class StaffClientAssignmentForm(forms.Form):
+    """Form for assigning clients to staff members"""
+    clients = forms.ModelMultipleChoiceField(
+        queryset=Client.objects.all(),
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label="Assign Clients"
+    )
+    
+    def __init__(self, *args, **kwargs):
+        staff = kwargs.pop('staff', None)
+        super().__init__(*args, **kwargs)
+        
+        if staff:
+            # Pre-select currently assigned clients
+            current_clients = StaffClientAssignment.objects.filter(
+                staff=staff, 
+                is_active=True
+            ).values_list('client_id', flat=True)
+            self.fields['clients'].initial = list(current_clients)
+    
+    def save(self, staff, assigned_by):
+        """Save client assignments for the staff member"""
+        selected_clients = self.cleaned_data['clients']
+        
+        # Deactivate all current client assignments
+        StaffClientAssignment.objects.filter(staff=staff, is_active=True).update(is_active=False)
+        
+        # Create new assignments or reactivate existing ones
+        for client in selected_clients:
+            assignment, created = StaffClientAssignment.objects.update_or_create(
+                staff=staff,
+                client=client,
                 defaults={
                     'is_active': True,
                     'assigned_by': assigned_by

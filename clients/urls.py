@@ -22,6 +22,9 @@ urlpatterns = [
     path('dedupe/merge/<int:duplicate_id>/process/', views.merge_clients, name='merge_clients'),
     path('dedupe/resolve/<int:duplicate_id>/', views.resolve_duplicate_selection, name='resolve_duplicate'),
     path('export/', views.export_clients, name='export'),
+    path('get-email-recipients/', views.get_email_recipients, name='get_email_recipients'),
+    path('save-email-subscriptions/', views.save_email_subscriptions, name='save_email_subscriptions'),
+    path('remove-email-recipient/<int:recipient_id>/', views.remove_email_recipient, name='remove_email_recipient'),
     path('<uuid:external_id>/update-profile-picture/', views.update_profile_picture, name='update_profile_picture'),
     path('<uuid:external_id>/remove-profile-picture/', views.remove_profile_picture, name='remove_profile_picture'),
 ]

@@ -75,7 +75,7 @@ class ClientForm(forms.ModelForm):
             # 🧑‍💼 PROGRAM / ENROLLMENT DETAILS
             'program', 'sub_program', 'support_workers', 'level_of_support', 'client_type', 
             'admission_date', 'discharge_date', 'days_elapsed', 'program_status', 
-            'reason_discharge', 'receiving_services', 'referral_source',
+            'reason_discharge', 'receiving_services', 'receiving_services_date', 'referral_source',
             
             # 🧾 ADMINISTRATIVE / SYSTEM FIELDS
             'chart_number', 'source',
@@ -90,6 +90,7 @@ class ClientForm(forms.ModelForm):
             'health_card_exp_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'admission_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'discharge_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'receiving_services_date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             
             # Language dropdowns
             'language': forms.Select(attrs={'class': 'form-control'}, choices=LANGUAGE_CHOICES),
@@ -152,7 +153,7 @@ class ClientForm(forms.ModelForm):
             'health_card_issuing_province', 'no_health_card_reason', 'phone_work', 'phone_alt', 
             'program', 'sub_program', 'level_of_support', 'client_type', 'admission_date', 
             'discharge_date', 'days_elapsed', 'program_status', 'reason_discharge', 
-            'referral_source', 'chart_number', 'source', 'image', 'profile_picture'
+            'receiving_services_date', 'referral_source', 'chart_number', 'source', 'image', 'profile_picture'
         ]
         
         for field in optional_fields:

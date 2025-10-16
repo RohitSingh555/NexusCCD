@@ -43,13 +43,22 @@ class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
-                    # Staff-only users see only their assigned programs
-                    from staff.models import StaffProgramAssignment
-                    assigned_program_ids = StaffProgramAssignment.objects.filter(
+                    # Staff-only users see ONLY programs where their assigned clients are enrolled
+                    from staff.models import StaffClientAssignment
+                    
+                    # Get programs where their assigned clients are enrolled
+                    assigned_client_ids = StaffClientAssignment.objects.filter(
                         staff=staff,
                         is_active=True
-                    ).values_list('program_id', flat=True)
-                    queryset = queryset.filter(id__in=assigned_program_ids)
+                    ).values_list('client_id', flat=True)
+                    
+                    if assigned_client_ids:
+                        queryset = queryset.filter(
+                            clientprogramenrollment__client_id__in=assigned_client_ids
+                        ).distinct()
+                    else:
+                        # If no client assignments, show no programs
+                        queryset = queryset.none()
             except Exception:
                 pass
         
@@ -756,6 +765,33 @@ class ProgramCSVExportView(ProgramManagerAccessMixin, ListView):
     def get_queryset(self):
         # Use the same filtering logic as ProgramListView
         queryset = super().get_queryset()
+        
+        # For staff-only users, apply the same filtering as ProgramListView
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                    # Staff-only users see ONLY programs where their assigned clients are enrolled
+                    from staff.models import StaffClientAssignment
+                    
+                    # Get programs where their assigned clients are enrolled
+                    assigned_client_ids = StaffClientAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('client_id', flat=True)
+                    
+                    if assigned_client_ids:
+                        queryset = queryset.filter(
+                            clientprogramenrollment__client_id__in=assigned_client_ids
+                        ).distinct()
+                    else:
+                        # If no client assignments, show no programs
+                        queryset = queryset.none()
+            except Exception:
+                pass
         
         # Apply additional filters
         department_filter = self.request.GET.get("department", "")

@@ -116,10 +116,14 @@ class ProgramManagerAccessMixin:
             
             # Staff users (including those with multiple roles) see limited access to data
             elif 'Staff' in role_names:
-                from staff.models import StaffClientAssignment, StaffProgramAssignment
+                from staff.models import StaffClientAssignment
+                # Get programs where assigned clients are enrolled
+                assigned_client_ids = StaffClientAssignment.objects.filter(
+                    staff=staff,
+                    is_active=True
+                ).values_list('client_id', flat=True)
                 assigned_programs = Program.objects.filter(
-                    staff_assignments__staff=staff,
-                    staff_assignments__is_active=True
+                    clientprogramenrollment__client_id__in=assigned_client_ids
                 ).distinct()
                 
                 # Filter based on model type - special handling for different models
@@ -207,6 +211,7 @@ def dashboard(request):
     is_analyst = False
     assigned_programs = None
     assigned_clients = None
+    staff_assigned_clients = None
     
     try:
         staff_profile = request.user.staff_profile
@@ -236,17 +241,19 @@ def dashboard(request):
             assigned_programs = None
             assigned_clients = None
         elif staff_profile.is_staff_only():
-            is_staff_only = True
-            # Get assigned programs for staff users
-            from staff.models import StaffProgramAssignment
-            assigned_programs = Program.objects.filter(
-                staff_assignments__staff=staff_profile,
-                staff_assignments__is_active=True
-            ).distinct()
-            # Get clients enrolled in assigned programs
-            assigned_clients = Client.objects.filter(
-                clientprogramenrollment__program__in=assigned_programs
-            ).distinct()
+                is_staff_only = True
+                # Get directly assigned clients for staff users
+                from staff.models import StaffClientAssignment
+                staff_assigned_clients = Client.objects.filter(
+                    staff_assignments__staff=staff_profile,
+                    staff_assignments__is_active=True
+                ).distinct()
+                # Get programs where assigned clients are enrolled
+                assigned_programs = Program.objects.filter(
+                    clientprogramenrollment__client__in=staff_assigned_clients
+                ).distinct()
+                # Get clients enrolled in assigned programs (same as staff_assigned_clients for staff users)
+                assigned_clients = staff_assigned_clients
     except Exception:
         pass
     
@@ -319,6 +326,38 @@ def dashboard(request):
         ).filter(
             Q(is_bill_168=True) | Q(is_no_trespass=True)
         ).select_related('client', 'program').order_by('-created_at')[:10]
+    elif is_staff_only:
+        # Staff-only users see all restrictions but limited access to other data
+        # Use directly assigned clients for staff users
+        all_assigned_clients = assigned_clients if assigned_clients else []
+        total_clients = all_assigned_clients.count() if all_assigned_clients else 0
+        active_programs = assigned_programs.count() if assigned_programs else 0
+        total_staff = Staff.objects.count()  # Staff count is same for all
+        
+        # Get active restrictions count - Staff users can now see ALL restrictions
+        from django.utils import timezone
+        today = timezone.now().date()
+        active_restrictions = ServiceRestriction.objects.filter(
+            is_archived=False,
+            start_date__lte=today
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=today)
+        ).count()
+        
+        # Get recent clients (last 5) from assigned clients
+        recent_clients = all_assigned_clients.order_by('-created_at')[:5] if all_assigned_clients else []
+        
+        # Get recent restrictions (last 5) - Staff users can now see ALL restrictions
+        recent_restrictions = ServiceRestriction.objects.filter(
+            is_archived=False
+        ).select_related('client', 'program').order_by('-created_at')[:5]
+        
+        # Get restricted clients (Bill 168 and No Trespass) - Staff users can now see ALL restrictions
+        restricted_clients = ServiceRestriction.objects.filter(
+            is_archived=False
+        ).filter(
+            Q(is_bill_168=True) | Q(is_no_trespass=True)
+        ).select_related('client', 'program').order_by('-created_at')[:10]
     elif is_analyst:
         # Analysts see ALL data across all clients and programs
         total_clients = Client.objects.count()
@@ -349,10 +388,12 @@ def dashboard(request):
         ).filter(
             Q(is_bill_168=True) | Q(is_no_trespass=True)
         ).select_related('client', 'program').order_by('-created_at')[:10]
-    elif is_staff_only and assigned_clients and assigned_programs:
+    elif is_staff_only:
         # Staff-only users see all restrictions but limited access to other data
-        total_clients = assigned_clients.count()
-        active_programs = assigned_programs.count()
+        # Use directly assigned clients for staff users
+        all_assigned_clients = assigned_clients if assigned_clients else []
+        total_clients = all_assigned_clients.count() if all_assigned_clients else 0
+        active_programs = assigned_programs.count() if assigned_programs else 0
         total_staff = Staff.objects.count()  # Staff count is same for all
         
         # Get active restrictions count - Staff users can now see ALL restrictions
@@ -366,7 +407,7 @@ def dashboard(request):
         ).count()
         
         # Get recent clients (last 5) from assigned clients
-        recent_clients = assigned_clients.order_by('-created_at')[:5]
+        recent_clients = all_assigned_clients.order_by('-created_at')[:5] if all_assigned_clients else []
         
         # Get recent restrictions (last 5) - Staff users can now see ALL restrictions
         recent_restrictions = ServiceRestriction.objects.filter(
@@ -380,7 +421,7 @@ def dashboard(request):
             Q(is_bill_168=True) | Q(is_no_trespass=True)
         ).select_related('client', 'program').order_by('-created_at')[:10]
     else:
-        # SuperAdmin and Staff see all data
+        # SuperAdmin and other roles see all data
         total_clients = Client.objects.count()
         active_programs = Program.objects.count()
         total_staff = Staff.objects.count()
@@ -418,9 +459,9 @@ def dashboard(request):
             if staff.is_program_manager():
                 # Manager can only see their assigned programs
                 programs = staff.get_assigned_programs()
-            elif is_staff_only and assigned_programs:
-                # Staff-only users see only their assigned programs
-                programs = assigned_programs
+            elif is_staff_only:
+                # Staff-only users see only programs where their assigned clients are enrolled
+                programs = assigned_programs if assigned_programs else Program.objects.none()
             else:
                 # SuperAdmin and other roles can see all programs
                 programs = Program.objects.all()
@@ -462,6 +503,7 @@ def dashboard(request):
         'is_program_manager': is_program_manager,
         'is_staff_only': is_staff_only,
         'assigned_programs': assigned_programs,
+        'staff_assigned_clients': staff_assigned_clients,
     }
     
     return render(request, 'dashboard.html', context)
@@ -991,7 +1033,7 @@ class DepartmentDeleteView(AnalystAccessMixin, DeleteView):
 
 # Enrollment CRUD Views
 @method_decorator(jwt_required, name='dispatch')
-class EnrollmentListView(ProgramManagerAccessMixin, ListView):
+class EnrollmentListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollments.html'
     context_object_name = 'enrollments'
@@ -1130,7 +1172,7 @@ class EnrollmentListView(ProgramManagerAccessMixin, ListView):
 
 
 @method_decorator(jwt_required, name='dispatch')
-class EnrollmentDetailView(ProgramManagerAccessMixin, DetailView):
+class EnrollmentDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, DetailView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollment_detail.html'
     context_object_name = 'enrollment'
@@ -1375,7 +1417,7 @@ class EnrollmentUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, Update
 
 
 @method_decorator(jwt_required, name='dispatch')
-class EnrollmentDeleteView(ProgramManagerAccessMixin, DeleteView):
+class EnrollmentDeleteView(AnalystAccessMixin, ProgramManagerAccessMixin, DeleteView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollment_confirm_delete.html'
     slug_field = 'external_id'
@@ -2377,7 +2419,7 @@ def search_programs(request):
 
 
 @method_decorator(jwt_required, name='dispatch')
-class EnrollmentCSVExportView(ProgramManagerAccessMixin, ListView):
+class EnrollmentCSVExportView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
     """Export enrollments to CSV with filtering support"""
     model = ClientProgramEnrollment
     template_name = 'core/enrollments.html'
@@ -2498,7 +2540,7 @@ class EnrollmentCSVExportView(ProgramManagerAccessMixin, ListView):
 
 
 @method_decorator(jwt_required, name='dispatch')
-class RestrictionCSVExportView(ProgramManagerAccessMixin, ListView):
+class RestrictionCSVExportView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
     """Export restrictions to CSV with filtering support"""
     model = ServiceRestriction
     template_name = 'core/restrictions.html'

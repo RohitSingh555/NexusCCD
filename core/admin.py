@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     Department, Role, Staff, StaffRole, Program, SubProgram, ProgramStaff,
     Client, ClientProgramEnrollment, Intake, Discharge, ServiceRestriction,
-    AuditLog
+    AuditLog, EmailRecipient, EmailLog
 )
 
 
@@ -172,4 +172,63 @@ class AuditLogAdmin(admin.ModelAdmin):
     list_filter = ['entity', 'action', 'changed_at']
     readonly_fields = ['external_id', 'created_at', 'updated_at', 'changed_at']
     date_hierarchy = 'changed_at'
+
+
+@admin.register(EmailRecipient)
+class EmailRecipientAdmin(admin.ModelAdmin):
+    list_display = ['name', 'email', 'department', 'is_active', 'created_at']
+    search_fields = ['name', 'email', 'notes']
+    list_filter = ['is_active', 'department', 'created_at']
+    readonly_fields = ['external_id', 'created_at', 'updated_at']
+    fieldsets = (
+        ('Recipient Information', {
+            'fields': ('name', 'email', 'is_active')
+        }),
+        ('Optional Settings', {
+            'fields': ('department', 'notes'),
+            'classes': ('collapse',)
+        }),
+        ('System Information', {
+            'fields': ('external_id', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+
+
+@admin.register(EmailLog)
+class EmailLogAdmin(admin.ModelAdmin):
+    list_display = ['email_type', 'recipient_email', 'recipient_name', 'status', 'client_count', 'report_date', 'sent_at']
+    list_filter = ['email_type', 'status', 'frequency', 'report_date', 'sent_at']
+    search_fields = ['recipient_email', 'recipient_name', 'subject']
+    readonly_fields = ['sent_at', 'created_at', 'updated_at']
+    date_hierarchy = 'sent_at'
+    ordering = ['-sent_at']
+    
+    fieldsets = (
+        ('Email Details', {
+            'fields': ('email_type', 'subject', 'status', 'sent_at')
+        }),
+        ('Recipient', {
+            'fields': ('recipient_email', 'recipient_name')
+        }),
+        ('Report Information', {
+            'fields': ('report_date', 'frequency', 'client_count')
+        }),
+        ('Content', {
+            'fields': ('email_body', 'csv_filename'),
+            'classes': ('collapse',)
+        }),
+        ('CSV Data', {
+            'fields': ('csv_attachment',),
+            'classes': ('collapse',)
+        }),
+        ('Error Information', {
+            'fields': ('error_message',),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
 

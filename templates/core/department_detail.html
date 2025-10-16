@@ -8,144 +8,262 @@
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- Header -->
-    <div class="flex justify-between items-center mb-8">
-        <div class="flex items-center">
-            <div class="w-16 h-16 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-xl flex items-center justify-center shadow-sm mr-6">
-                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                </svg>
+    <div class="mb-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-16 h-16 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-lg flex items-center justify-center shadow-sm">
+                    <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">
+                        {{ department.name }}
+                    </h1>
+                    {% if department.owner %}
+                    <p class="text-sm text-gray-600">Owner: {{ department.owner }}</p>
+                    {% endif %}
+                </div>
             </div>
-            <div>
-                <h1 class="text-3xl font-bold text-neutral-800 font-header">{{ department.name }}</h1>
-                {% if department.owner %}
-                <p class="text-lg text-neutral-600 font-body">Owner: {{ department.owner }}</p>
-                {% endif %}
+            <div class="flex items-center space-x-2">
+                <a href="{% url 'core:departments_edit' department.external_id %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    </svg>
+                    Edit Department
+                </a>
+                <a href="{% url 'core:departments_delete' department.external_id %}" class="inline-flex items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                    Delete Department
+                </a>
+                <a href="{% url 'core:departments' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Back to Departments
+                </a>
             </div>
-        </div>
-        <div class="flex space-x-3">
-            <a href="{% url 'core:departments_edit' department.external_id %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                </svg>
-                Edit Department
-            </a>
-            <a href="{% url 'core:departments' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                </svg>
-                Back to Departments
-            </a>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <!-- Main Content -->
-        <div class="lg:col-span-2 space-y-8">
+    <div class="space-y-6">
+        <!-- Comprehensive Information Cards -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Department Information -->
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <div class="flex items-center mb-6">
-                    <div class="w-10 h-10 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-lg flex items-center justify-center shadow-sm mr-4">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                    </div>
-                    <h2 class="text-xl font-bold text-neutral-800 font-header">Department Information</h2>
-                </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Department Name</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ department.name }}</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Owner</label>
-                        <p class="text-lg text-neutral-900 font-body">{{ department.owner|default:"—" }}</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Programs in this Department -->
-            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <div class="flex items-center mb-6">
-                    <div class="w-10 h-10 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-4">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                         </svg>
                     </div>
-                    <h2 class="text-xl font-bold text-neutral-800 font-header">Programs</h2>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Department Information</h2>
                 </div>
                 
-                {% if department.program_set.all %}
-                <div class="space-y-4">
-                    {% for program in department.program_set.all %}
-                    <div class="flex items-center justify-between p-4 bg-neutral-50 rounded-lg">
-                        <div>
-                            <h3 class="text-sm font-bold text-neutral-900 font-body">{{ program.name }}</h3>
-                            <p class="text-sm text-neutral-600 font-body">{{ program.location }}</p>
-                        </div>
-                        <div class="text-right">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-sky text-white">
-                                Capacity: {{ program.capacity_current }}
-                            </span>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p class="text-neutral-500 font-body">No programs assigned to this department.</p>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Sidebar -->
-        <div class="space-y-8">
-            <!-- System Information -->
-            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <div class="flex items-center mb-6">
-                    <div class="w-10 h-10 bg-gradient-to-br from-neutral-500 to-neutral-700 rounded-lg flex items-center justify-center shadow-sm mr-4">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        </svg>
-                    </div>
-                    <h2 class="text-xl font-bold text-neutral-800 font-header">System Information</h2>
-                </div>
-                
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Department ID</label>
-                        <p class="text-sm text-neutral-900 font-mono font-body">{{ department.external_id }}</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Created</label>
-                        <p class="text-sm text-neutral-900 font-body">{{ department.created_at|date:"M d, Y g:i A" }}</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-bold text-neutral-500 mb-1 font-subheader">Last Updated</label>
-                        <p class="text-sm text-neutral-900 font-body">{{ department.updated_at|date:"M d, Y g:i A" }}</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Quick Actions -->
-            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <h3 class="text-lg font-bold text-neutral-800 font-header mb-4">Quick Actions</h3>
                 <div class="space-y-3">
-                    <a href="{% url 'core:departments_edit' department.external_id %}" class="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Department Name:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ department.name }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Owner:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ department.owner|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Department ID:</span>
+                        <span class="text-sm text-neutral-900 font-body font-mono">{{ department.external_id }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Created:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ department.created_at|date:"M d, Y H:i" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Last Updated:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ department.updated_at|date:"M d, Y H:i" }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Department Statistics -->
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                         </svg>
-                        Edit Department
-                    </a>
-                    <a href="{% url 'core:departments_delete' department.external_id %}" class="w-full inline-flex items-center justify-center px-4 py-2 border border-red-300 text-sm font-bold rounded-xl text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-sm">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                        </svg>
-                        Delete Department
-                    </a>
+                    </div>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Department Statistics</h2>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Total Programs:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ department.program_set.count }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Total Staff:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% with total_staff=0 %}
+                                {% for program in department.program_set.all %}
+                                    {% with total_staff=total_staff|add:program.programstaff_set.count %}{% endwith %}
+                                {% endfor %}
+                                {{ total_staff }}
+                            {% endwith %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Total Capacity:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% with total_capacity=0 %}
+                                {% for program in department.program_set.all %}
+                                    {% with total_capacity=total_capacity|add:program.capacity_current %}{% endwith %}
+                                {% endfor %}
+                                {{ total_capacity }}
+                            {% endwith %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Active Programs:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% with active_programs=0 %}
+                                {% for program in department.program_set.all %}
+                                    {% if program.is_active %}
+                                        {% with active_programs=active_programs|add:1 %}{% endwith %}
+                                    {% endif %}
+                                {% endfor %}
+                                {{ active_programs }}
+                            {% endwith %}
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- Programs & Staff Information -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Programs in this Department -->
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 h-96 flex flex-col">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Programs</h2>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto">
+                    {% if department.program_set.all %}
+                        <div class="space-y-3">
+                            {% for program in department.program_set.all %}
+                                <div class="border border-neutral-200 rounded-lg p-3 bg-neutral-50">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="flex items-center space-x-2">
+                                            <h4 class="text-sm font-bold text-neutral-800">{{ program.name }}</h4>
+                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium
+                                                {% if program.is_active %}bg-green-100 text-green-800
+                                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                                {% if program.is_active %}Active{% else %}Inactive{% endif %}
+                                            </span>
+                                        </div>
+                                        <a href="{% url 'programs:detail' program.external_id %}" class="text-xs text-brand-sky hover:text-brand-darkBlue font-medium">
+                                            View
+                                        </a>
+                                    </div>
+                                    
+                                    <div class="text-sm text-neutral-600 space-y-1">
+                                        <div><span class="font-medium">Location:</span> {{ program.location|default:"—" }}</div>
+                                        <div><span class="font-medium">Capacity:</span> {{ program.capacity_current|default:"—" }}</div>
+                                        {% if program.description %}
+                                        <div class="pt-1 border-t border-neutral-200 mt-1">
+                                            <span class="font-medium">Description:</span> {{ program.description|truncatechars:50 }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <div class="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <svg class="w-6 h-6 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                </svg>
+                            </div>
+                            <p class="text-sm text-neutral-500">No programs assigned to this department.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Department Leaders (Visible only to Super Admin and Staff) -->
+            {% if user_permissions.is_superadmin or user_permissions.can_manage_staff %}
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 h-96 flex flex-col">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-secondary-400 to-secondary-700 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Department Leaders</h2>
+                </div>
+                
+                <div class="flex-1 overflow-y-auto">
+                    {% if department.leader_assignments.all %}
+                        <div class="space-y-3">
+                            {% for assignment in department.leader_assignments.all %}
+                                {% if assignment.is_active %}
+                                <div class="border border-neutral-200 rounded-lg p-3 bg-neutral-50">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="flex items-center space-x-2">
+                                            <h4 class="text-sm font-bold text-neutral-800">{{ assignment.staff.first_name }} {{ assignment.staff.last_name }}</h4>
+                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                                Leader
+                                            </span>
+                                        </div>
+                                        <a href="{% url 'staff:detail' assignment.staff.external_id %}" class="text-xs text-brand-sky hover:text-brand-darkBlue font-medium">
+                                            View
+                                        </a>
+                                    </div>
+                                    
+                                    <div class="text-sm text-neutral-600 space-y-1">
+                                        {% if assignment.staff.email %}
+                                        <div><span class="font-medium">Email:</span> {{ assignment.staff.email }}</div>
+                                        {% endif %}
+                                        {% if assignment.staff.phone %}
+                                        <div><span class="font-medium">Phone:</span> {{ assignment.staff.phone }}</div>
+                                        {% endif %}
+                                        <div><span class="font-medium">Assigned:</span> {{ assignment.assigned_at|date:"M d, Y" }}</div>
+                                        {% if assignment.assigned_by %}
+                                        <div><span class="font-medium">Assigned By:</span> {{ assignment.assigned_by.first_name }} {{ assignment.assigned_by.last_name }}</div>
+                                        {% endif %}
+                                        {% if assignment.notes %}
+                                        <div class="pt-1 border-t border-neutral-200 mt-1">
+                                            <span class="font-medium">Notes:</span> {{ assignment.notes|truncatechars:50 }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <div class="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <svg class="w-6 h-6 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                </svg>
+                            </div>
+                            <p class="text-sm text-neutral-500">No leaders assigned to this department.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
     </div>
 </div>
 {% endblock %}

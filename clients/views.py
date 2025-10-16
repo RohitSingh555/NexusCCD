@@ -27,8 +27,32 @@ from datetime import datetime
 import logging
 from django.http import HttpResponse, JsonResponse
 from django.views.decorators.http import require_http_methods
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.conf import settings
+from django.utils import timezone
+from datetime import timedelta
+import csv
+import io
+from django.contrib.auth.decorators import user_passes_test
+from functools import wraps
+from core.security import require_permission, SecurityManager
 
 logger = logging.getLogger(__name__)
+
+
+def admin_or_superuser_required(view_func):
+    """Decorator to require admin or superuser access"""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
+        
+        if not (request.user.is_staff or request.user.is_superuser):
+            return JsonResponse({'success': False, 'error': 'Admin or superuser access required'}, status=403)
+        
+        return view_func(request, *args, **kwargs)
+    return wrapper
 
 @method_decorator(jwt_required, name='dispatch')
 class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
@@ -98,15 +122,38 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
                     # Apply the combined filter
                     queryset = queryset.filter(relationship_filters).distinct()
                 elif 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
-                    # Staff-only users see only clients enrolled in their assigned programs
-                    from staff.models import StaffProgramAssignment
+                    # Staff-only users see clients from both assigned programs AND directly assigned clients
+                    from staff.models import StaffProgramAssignment, StaffClientAssignment
+                    
+                    # Create a Q object to combine both types of assignments
+                    relationship_filters = Q()
+                    
+                    # 1. Clients enrolled in their assigned programs
                     assigned_program_ids = StaffProgramAssignment.objects.filter(
                         staff=staff,
                         is_active=True
                     ).values_list('program_id', flat=True)
-                    queryset = queryset.filter(
-                        clientprogramenrollment__program_id__in=assigned_program_ids
-                    ).distinct()
+                    if assigned_program_ids:
+                        relationship_filters |= Q(
+                            clientprogramenrollment__program_id__in=assigned_program_ids
+                        )
+                    
+                    # 2. Directly assigned clients
+                    assigned_client_ids = StaffClientAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('client_id', flat=True)
+                    if assigned_client_ids:
+                        relationship_filters |= Q(
+                            id__in=assigned_client_ids
+                        )
+                    
+                    # Apply the combined filter
+                    if relationship_filters:
+                        queryset = queryset.filter(relationship_filters).distinct()
+                    else:
+                        # If no assignments, show no clients
+                        queryset = queryset.none()
                 
                 elif staff.is_leader():
                     # Leader users see only clients enrolled in programs from their assigned departments
@@ -269,6 +316,7 @@ class ClientDetailView(AnalystAccessMixin, DetailView):
                 user_roles = staff.staffrole_set.select_related('role').all()
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
+                
                 if staff.is_program_manager():
                     # Check if this client is in the filtered queryset from ClientListView
                     from django.db.models import Q
@@ -292,18 +340,44 @@ class ClientDetailView(AnalystAccessMixin, DetailView):
                         return redirect(f"{reverse('core:permission_error')}?type=client_not_related&resource=client&name={self.object.first_name} {self.object.last_name}")
                 
                 elif 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
-                    # Staff users can only access clients enrolled in their assigned programs
-                    from staff.models import StaffProgramAssignment
+                    # Staff users can access clients from both assigned programs AND directly assigned clients
+                    from staff.models import StaffProgramAssignment, StaffClientAssignment
+                    from django.db.models import Q
+                    
+                    # Create a Q object to combine both types of assignments
+                    relationship_filters = Q()
+                    
+                    # 1. Clients enrolled in their assigned programs
                     assigned_program_ids = StaffProgramAssignment.objects.filter(
                         staff=staff,
                         is_active=True
                     ).values_list('program_id', flat=True)
+                    if assigned_program_ids:
+                        relationship_filters |= Q(
+                            clientprogramenrollment__program_id__in=assigned_program_ids
+                        )
                     
-                    # Check if this client is enrolled in any of their assigned programs
-                    if not Client.objects.filter(
-                        pk=self.object.pk,
-                        clientprogramenrollment__program_id__in=assigned_program_ids
-                    ).exists():
+                    # 2. Directly assigned clients
+                    assigned_client_ids = StaffClientAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('client_id', flat=True)
+                    if assigned_client_ids:
+                        relationship_filters |= Q(
+                            id__in=assigned_client_ids
+                        )
+                    
+                    # Check if this client matches any of the relationship filters
+                    if relationship_filters:
+                        # If we have filters, check if this client matches them
+                        if not Client.objects.filter(
+                            pk=self.object.pk
+                        ).filter(relationship_filters).exists():
+                            from django.shortcuts import redirect
+                            from django.urls import reverse
+                            return redirect(f"{reverse('core:permission_error')}?type=client_not_assigned&resource=client&name={self.object.first_name} {self.object.last_name}")
+                    else:
+                        # If no filters (no assignments), deny access
                         from django.shortcuts import redirect
                         from django.urls import reverse
                         return redirect(f"{reverse('core:permission_error')}?type=client_not_assigned&resource=client&name={self.object.first_name} {self.object.last_name}")
@@ -2824,40 +2898,95 @@ def client_merge_view(request, duplicate_id):
         
         # Define all possible fields to check
         all_fields = {
-            # Basic Information
+            # 🧍 CLIENT PERSONAL DETAILS
+            'client_id': 'Client ID',
             'first_name': 'First Name',
             'last_name': 'Last Name',
+            'middle_name': 'Middle Name',
             'preferred_name': 'Preferred Name',
             'alias': 'Alias',
             'dob': 'Date of Birth',
+            'age': 'Age',
             'gender': 'Gender',
-            'sexual_orientation': 'Sexual Orientation',
+            'gender_identity': 'Gender Identity',
+            'pronoun': 'Pronoun',
+            'marital_status': 'Marital Status',
             'citizenship_status': 'Citizenship Status',
-            'indigenous_status': 'Indigenous Status',
-            'country_of_birth': 'Country of Birth',
-            'languages_spoken': 'Languages Spoken',
-            'ethnicity': 'Ethnicity',
+            'location_county': 'Location/County',
+            'province': 'Province',
+            'city': 'City',
+            'postal_code': 'Postal Code',
+            'address': 'Address',
+            'address_2': 'Address Line 2',
             
-            # Contact Information
-            'email': 'Email',
+            # 🌍 CULTURAL & DEMOGRAPHIC INFO
+            'language': 'Language',
+            'preferred_language': 'Preferred Language',
+            'mother_tongue': 'Mother Tongue',
+            'official_language': 'Official Language',
+            'language_interpreter_required': 'Language Interpreter Required',
+            'self_identification_race_ethnicity': 'Self-Identification as Race/Ethnicity',
+            'ethnicity': 'Ethnicity',
+            'aboriginal_status': 'Aboriginal Status',
+            'lgbtq_status': 'LGBTQ+ Status',
+            'highest_level_education': 'Highest Level of Education',
+            'children_home': 'Children at Home',
+            'children_number': 'Number of Children',
+            'lhin': 'LHIN (Local Health Integration Network)',
+            
+            # 💊 MEDICAL & HEALTH INFORMATION
+            'medical_conditions': 'Medical Conditions',
+            'primary_diagnosis': 'Primary Diagnosis',
+            'family_doctor': 'Family Doctor',
+            'health_card_number': 'Health Card Number',
+            'health_card_version': 'Health Card Version',
+            'health_card_exp_date': 'Health Card Exp Date',
+            'health_card_issuing_province': 'Health Card Issuing Province',
+            'no_health_card_reason': 'No Health Card Reason',
+            
+            # 👥 CONTACT & PERMISSIONS
+            'permission_to_phone': 'Permission to Phone',
+            'permission_to_email': 'Permission to Email',
             'phone': 'Phone',
             'phone_work': 'Work Phone',
             'phone_alt': 'Alternative Phone',
-            'addresses': 'Addresses',
-            
-            # Medical Information
-            'primary_diagnosis': 'Primary Diagnosis',
-            'medical_conditions': 'Medical Conditions',
-            'support_workers': 'Support Workers',
-            
-            # Emergency Contacts
+            'email': 'Email',
             'next_of_kin': 'Next of Kin',
             'emergency_contact': 'Emergency Contact',
-            
-            # Additional Information
-            'permission_to_phone': 'Permission to Phone',
-            'permission_to_email': 'Permission to Email',
             'comments': 'Comments',
+            
+            # 🧑‍💼 PROGRAM / ENROLLMENT DETAILS
+            'program': 'Program',
+            'sub_program': 'Sub Program',
+            'support_workers': 'Support Workers',
+            'level_of_support': 'Level of Support',
+            'client_type': 'Client Type',
+            'admission_date': 'Admission Date',
+            'discharge_date': 'Discharge Date',
+            'days_elapsed': 'Days Elapsed',
+            'program_status': 'Program Status',
+            'reason_discharge': 'Reason for Discharge/Program Status',
+            'receiving_services': 'Receiving Services',
+            'receiving_services_date': 'Receiving Services Date',
+            'referral_source': 'Referral Source',
+            
+            # 🧾 ADMINISTRATIVE / SYSTEM FIELDS
+            'chart_number': 'Chart Number',
+            'source': 'Source System',
+            
+            # Legacy fields
+            'image': 'Image URL',
+            'profile_picture': 'Profile Picture',
+            'contact_information': 'Contact Information',
+            'addresses': 'Addresses',
+            'uid_external': 'External UID',
+            'languages_spoken': 'Languages Spoken',
+            'indigenous_status': 'Indigenous Status',
+            'country_of_birth': 'Country of Birth',
+            'sexual_orientation': 'Sexual Orientation',
+            
+            # Audit fields
+            'updated_by': 'Updated By',
         }
         
         # Check which fields have values in either client
@@ -2884,7 +3013,13 @@ def client_merge_view(request, duplicate_id):
             has_duplicate_value = has_value(duplicate_value)
             
             # Always include the field if either client has a value
-            if has_primary_value or has_duplicate_value:
+            # Also always include important fields even if empty
+            important_fields = [
+                'level_of_support', 'client_type', 'referral_source', 'receiving_services',
+                'receiving_services_date', 'days_elapsed', 'reason_discharge', 'support_workers'
+            ]
+            
+            if has_primary_value or has_duplicate_value or field_name in important_fields:
                 fields_with_values[field_name] = {
                     'label': field_label,
                     'primary_value': primary_value,
@@ -2892,6 +3027,25 @@ def client_merge_view(request, duplicate_id):
                     'has_primary': has_primary_value,
                     'has_duplicate': has_duplicate_value,
                 }
+        
+        # Debug: Print field information
+        print(f"DEBUG: Total fields in all_fields: {len(all_fields)}")
+        print(f"DEBUG: Fields with values: {len(fields_with_values)}")
+        print(f"DEBUG: Important fields check:")
+        for field_name in ['level_of_support', 'client_type', 'referral_source', 'receiving_services', 'receiving_services_date', 'days_elapsed', 'reason_discharge']:
+            if field_name in fields_with_values:
+                print(f"  {field_name}: FOUND in fields_with_values")
+            else:
+                print(f"  {field_name}: NOT FOUND in fields_with_values")
+                # Check if field exists in all_fields
+                if field_name in all_fields:
+                    print(f"    - Field exists in all_fields")
+                    primary_val = getattr(primary_client, field_name, None)
+                    duplicate_val = getattr(duplicate_client, field_name, None)
+                    print(f"    - Primary value: {primary_val}")
+                    print(f"    - Duplicate value: {duplicate_val}")
+                else:
+                    print(f"    - Field NOT in all_fields")
         
         context = {
             'duplicate': duplicate,
@@ -3016,6 +3170,49 @@ def export_clients(request):
     try:
         # Get the same queryset as the list view
         queryset = Client.objects.all()
+        
+        # Apply role-based filtering (same as ClientListView)
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
+                    # Staff-only users see clients from both assigned programs AND directly assigned clients
+                    from staff.models import StaffProgramAssignment, StaffClientAssignment
+                    
+                    # Create a Q object to combine both types of assignments
+                    relationship_filters = Q()
+                    
+                    # 1. Clients enrolled in their assigned programs
+                    assigned_program_ids = StaffProgramAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('program_id', flat=True)
+                    if assigned_program_ids:
+                        relationship_filters |= Q(
+                            clientprogramenrollment__program_id__in=assigned_program_ids
+                        )
+                    
+                    # 2. Directly assigned clients
+                    assigned_client_ids = StaffClientAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('client_id', flat=True)
+                    if assigned_client_ids:
+                        relationship_filters |= Q(
+                            id__in=assigned_client_ids
+                        )
+                    
+                    # Apply the combined filter
+                    if relationship_filters:
+                        queryset = queryset.filter(relationship_filters).distinct()
+                    else:
+                        # If no assignments, show no clients
+                        queryset = queryset.none()
+            except Exception:
+                pass
         
         # Apply the same filters as the list view
         search_query = request.GET.get('search', '')
@@ -3177,4 +3374,175 @@ def export_clients(request):
     except Exception as e:
         print(f"Error in export_clients: {str(e)}")
         return HttpResponse(f"Error exporting clients: {str(e)}", status=500)
+
+
+@require_http_methods(["GET"])
+@csrf_protect
+@require_permission('manage_email_subscriptions')
+def get_email_recipients(request):
+    """Get all active email recipients"""
+    try:
+        from core.models import EmailRecipient
+        
+        recipients = EmailRecipient.objects.for_user(request.user).filter(is_active=True).values(
+            'id', 'email', 'name', 'frequency', 'created_at'
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'recipients': list(recipients)
+        })
+        
+    except Exception as e:
+        logger.error(f'Error in get_email_recipients: {str(e)}')
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["POST"])
+@csrf_protect
+@require_permission('manage_email_subscriptions')
+def save_email_subscriptions(request):
+    """Save new email subscriptions"""
+    try:
+        from core.models import EmailRecipient
+        
+        data = json.loads(request.body)
+        frequency = data.get('frequency', 'daily')
+        recipients = data.get('recipients', [])
+        
+        if not recipients:
+            return JsonResponse({'success': False, 'error': 'No recipients specified'})
+        
+        added_count = 0
+        for email in recipients:
+            # Check if recipient already exists
+            recipient, created = EmailRecipient.objects.get_or_create(
+                email=email,
+                defaults={
+                    'name': email.split('@')[0],  # Use email prefix as name
+                    'frequency': frequency,
+                    'is_active': True
+                }
+            )
+            
+            if created:
+                added_count += 1
+            else:
+                # Update existing recipient
+                recipient.frequency = frequency
+                recipient.is_active = True
+                recipient.save()
+        
+        return JsonResponse({
+            'success': True,
+            'added_count': added_count,
+            'total_recipients': len(recipients)
+        })
+        
+    except Exception as e:
+        logger.error(f'Error in save_email_subscriptions: {str(e)}')
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+@require_http_methods(["DELETE"])
+@csrf_protect
+@require_permission('manage_email_subscriptions')
+def remove_email_recipient(request, recipient_id):
+    """Remove an email recipient"""
+    try:
+        from core.models import EmailRecipient
+        
+        recipient = get_object_or_404(EmailRecipient.objects.for_user(request.user), id=recipient_id)
+        recipient.is_active = False
+        recipient.save()
+        
+        return JsonResponse({
+            'success': True,
+            'message': 'Recipient removed successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f'Error in remove_email_recipient: {str(e)}')
+        return JsonResponse({'success': False, 'error': str(e)})
+
+
+def generate_csv_data(clients):
+    """Generate CSV data for the clients"""
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # CSV headers
+    headers = [
+        'Client ID', 'First Name', 'Last Name', 'Preferred Name', 'Date of Birth', 'Age',
+        'Gender', 'Phone', 'Email', 'Address', 'City', 'Province', 'Postal Code',
+        'Program', 'Program Status', 'Admission Date', 'Discharge Date',
+        'Health Card Number', 'Referral Source', 'Created At', 'Created By'
+    ]
+    writer.writerow(headers)
+    
+    # CSV data rows
+    for client in clients:
+        row = [
+            client.client_id or '',
+            client.first_name or '',
+            client.last_name or '',
+            client.preferred_name or '',
+            client.dob.strftime('%Y-%m-%d') if client.dob else '',
+            client.age or client.calculated_age or '',
+            client.gender or '',
+            client.phone or '',
+            client.email or '',
+            client.address or '',
+            client.city or '',
+            client.province or '',
+            client.postal_code or '',
+            client.program or '',
+            client.program_status or '',
+            client.admission_date.strftime('%Y-%m-%d') if client.admission_date else '',
+            client.discharge_date.strftime('%Y-%m-%d') if client.discharge_date else '',
+            client.health_card_number or '',
+            client.referral_source or '',
+            client.created_at.strftime('%Y-%m-%d %H:%M:%S') if client.created_at else '',
+            client.updated_by or ''
+        ]
+        writer.writerow(row)
+    
+    return output.getvalue()
+
+
+def generate_html_content(clients, start_date, end_date, custom_message=''):
+    """Generate HTML content for the email"""
+    context = {
+        'clients': clients,
+        'start_date': start_date,
+        'end_date': end_date,
+        'client_count': clients.count(),
+        'report_date': timezone.now().date(),
+        'custom_message': custom_message
+    }
+    
+    return render_to_string('emails/daily_client_report.html', context)
+
+
+def send_single_email(recipient_email, clients, csv_data, html_content, start_date, end_date, custom_message=''):
+    """Send email to a specific recipient"""
+    subject = f'Daily New Client Report - {timezone.now().strftime("%B %d, %Y")}'
+    
+    # Create email message
+    msg = EmailMultiAlternatives(
+        subject=subject,
+        body=f'Daily new client report for {start_date} to {end_date}. Please see attached CSV file.',
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[recipient_email]
+    )
+    
+    # Attach HTML content
+    msg.attach_alternative(html_content, "text/html")
+    
+    # Attach CSV file
+    csv_filename = f'new_clients_report_{start_date}_{end_date}.csv'
+    msg.attach(csv_filename, csv_data, 'text/csv')
+    
+    # Send email
+    msg.send()
 

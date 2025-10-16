@@ -4,9 +4,10 @@ from django.urls import reverse_lazy
 from django.contrib import messages
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
 from functools import wraps
-from core.models import Staff, Role, StaffRole, User, ProgramManagerAssignment, Program, Department, DepartmentLeaderAssignment
-from .forms import StaffRoleForm, ProgramManagerAssignmentForm, StaffProgramAssignmentForm
+from core.models import Staff, Role, StaffRole, User, ProgramManagerAssignment, Program, Department, DepartmentLeaderAssignment, Client
+from .forms import StaffRoleForm, ProgramManagerAssignmentForm, StaffProgramAssignmentForm, StaffClientAssignmentForm
 from .models import StaffClientAssignment, StaffProgramAssignment
 
 
@@ -48,6 +49,7 @@ def require_roles(*allowed_roles):
     return decorator
 
 
+@method_decorator(require_roles('SuperAdmin', 'Admin'), name='dispatch')
 class StaffListView(ListView):
     model = Staff
     template_name = 'staff/staff_list.html'
@@ -134,6 +136,7 @@ class StaffListView(ListView):
         
         return context
 
+@method_decorator(require_roles('SuperAdmin', 'Admin'), name='dispatch')
 class StaffDetailView(DetailView):
     model = Staff
     template_name = 'staff/staff_detail.html'
@@ -167,18 +170,24 @@ class StaffDetailView(DetailView):
             except Exception:
                 pass
         
-        # Determine which assignment sections to show based on viewing user's role
-        # Client assignments are disabled for all roles
-        # SuperAdmin and Admin: Can assign programs to all staff types
-        # Leader and Manager: Can manage program assignments
-        # Staff: Cannot manage anything (sections hidden)
-        show_client_assignments = False  # Client assignments disabled for all roles
-        if viewing_user_is_superadmin or viewing_user_is_admin:
-            show_program_assignments = True  # Show program assignments for all staff
-        elif viewing_user_is_leader or viewing_user_is_manager:
-            show_program_assignments = True  # Leader and Manager users can manage program assignments
+        # Determine which assignment sections to show based on the staff member being viewed
+        # Client assignments are shown for staff members who have the Staff role
+        # Program assignments are shown for staff members who have Manager/Leader roles
+        staff_has_staff_role = staff.is_staff_only()
+        staff_has_manager_role = staff.is_program_manager()
+        staff_has_leader_role = staff.is_leader()
+        
+        show_client_assignments = staff_has_staff_role  # Show client assignments for staff members with Staff role
+        
+        # Only show program assignments for staff members who have Manager or Leader roles
+        # AND the viewing user has appropriate permissions
+        if staff_has_manager_role or staff_has_leader_role:
+            if viewing_user_is_superadmin or viewing_user_is_admin or viewing_user_is_leader or viewing_user_is_manager:
+                show_program_assignments = True
+            else:
+                show_program_assignments = False
         else:
-            show_program_assignments = False
+            show_program_assignments = False  # Don't show program assignments for Staff role users
         
         show_assignments = show_client_assignments or show_program_assignments  # Overall flag for any assignments
         
@@ -186,14 +195,11 @@ class StaffDetailView(DetailView):
         context['show_client_assignments'] = show_client_assignments
         context['show_program_assignments'] = show_program_assignments
         
-        # Debug information (remove in production)
-        context['debug_viewing_user_roles'] = role_names if self.request.user.is_authenticated else []
-        context['debug_staff_roles'] = [role.role.name for role in staff.staffrole_set.select_related('role').all()]
-        context['debug_viewing_user_is_staff'] = viewing_user_is_staff
-        context['debug_viewing_user_is_manager'] = viewing_user_is_manager
-        context['debug_viewing_user_is_leader'] = viewing_user_is_leader
-        context['debug_viewing_user_is_admin'] = viewing_user_is_admin
-        context['debug_viewing_user_is_superadmin'] = viewing_user_is_superadmin
+        
+        # Add context for template to check if user can manage client assignments
+        # SuperAdmin, Admin, and Staff role users can manage client assignments
+        context['can_manage_client_assignments'] = viewing_user_is_superadmin or viewing_user_is_admin or viewing_user_is_staff
+        
         
 
         if show_assignments:
@@ -252,6 +258,7 @@ class StaffDetailView(DetailView):
         
         return context
 
+@method_decorator(require_roles('SuperAdmin', 'Admin'), name='dispatch')
 class StaffCreateView(CreateView):
     model = Staff
     template_name = 'staff/staff_form.html'
@@ -306,6 +313,7 @@ class StaffCreateView(CreateView):
             messages.error(self.request, f'Error creating staff member: {str(e)}')
             return self.form_invalid(form)
 
+@method_decorator(require_roles('SuperAdmin', 'Admin'), name='dispatch')
 class StaffUpdateView(UpdateView):
     model = Staff
     template_name = 'staff/staff_form.html'
@@ -339,6 +347,7 @@ class StaffUpdateView(UpdateView):
             messages.error(self.request, f'Error updating staff member: {str(e)}')
             return self.form_invalid(form)
 
+@method_decorator(require_roles('SuperAdmin', 'Admin'), name='dispatch')
 class StaffDeleteView(DeleteView):
     model = Staff
     template_name = 'staff/staff_confirm_delete.html'
@@ -383,6 +392,8 @@ class StaffDeleteView(DeleteView):
             messages.error(self.request, f'Error deleting staff member: {str(e)}')
             return redirect(self.success_url)
 
+@login_required
+@require_roles('SuperAdmin', 'Admin')
 def upgrade_user_to_staff(request, external_id):
     """Upgrade a regular user to staff status"""
     if request.method == 'POST':
@@ -417,6 +428,7 @@ def upgrade_user_to_staff(request, external_id):
     return redirect('staff:list')
 
     
+@method_decorator(require_roles('SuperAdmin', 'Admin'), name='dispatch')
 class StaffRoleManageView(DetailView):
     """View for managing staff roles"""
     model = Staff
@@ -446,6 +458,8 @@ class StaffRoleManageView(DetailView):
             return self.get(request, *args, **kwargs)
 
 
+@login_required
+@require_roles('SuperAdmin', 'Admin')
 def update_staff_roles(request, external_id):
     """AJAX endpoint for updating staff roles"""
     if request.method == 'POST':
@@ -468,6 +482,8 @@ def update_staff_roles(request, external_id):
     return JsonResponse({'success': False, 'message': 'Invalid request method'})
 
 
+@login_required
+@require_roles('SuperAdmin', 'Admin')
 def toggle_staff_role(request, external_id):
     """AJAX endpoint for toggling staff roles - supports multiple roles"""
     if request.method == 'POST':
@@ -616,7 +632,7 @@ def manage_program_assignments_staff(request, external_id):
 
 
 @login_required
-@require_roles('Admin', 'SuperAdmin')
+@require_roles('SuperAdmin', 'Admin')
 def manage_department_assignments(request, external_id):
     """Manage department assignments for Leader role users"""
     staff = get_object_or_404(Staff, external_id=external_id)
@@ -667,3 +683,49 @@ def manage_department_assignments(request, external_id):
     }
     
     return render(request, 'staff/manage_department_assignments.html', context)
+
+
+@login_required
+@require_roles('Staff')  # Only Staff role users can manage client assignments
+def manage_client_assignments(request, external_id):
+    """Manage client assignments for Staff role users"""
+    staff = get_object_or_404(Staff, external_id=external_id)
+    
+    # Check if staff has Staff role
+    if not staff.is_staff_only():
+        messages.error(request, 'This staff member does not have Staff role.')
+        return redirect('staff:detail', external_id=external_id)
+    
+    if request.method == 'POST':
+        form = StaffClientAssignmentForm(request.POST, staff=staff)
+        if form.is_valid():
+            try:
+                # Get the current user's staff profile
+                assigned_by = request.user.staff_profile
+                form.save(staff, assigned_by)
+                messages.success(request, f'Client assignments updated successfully for {staff.first_name} {staff.last_name}')
+                return redirect('staff:detail', external_id=staff.external_id)
+            except Exception as e:
+                messages.error(request, f'Error updating client assignments: {str(e)}')
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = StaffClientAssignmentForm(staff=staff)
+    
+    # Get current client assignments
+    current_client_assignments = StaffClientAssignment.objects.filter(
+        staff=staff, 
+        is_active=True
+    ).select_related('client')
+    
+    # Get all available clients (showing all clients for now to debug)
+    available_clients = Client.objects.all().order_by('first_name', 'last_name')
+    
+    context = {
+        'staff_member': staff,
+        'form': form,
+        'current_client_assignments': current_client_assignments,
+        'available_clients': available_clients,
+    }
+    
+    return render(request, 'staff/manage_client_assignments.html', context)
