@@ -53,6 +53,132 @@
                 </div>
             </div>
         {% endif %}
+
+        <!-- 📸 PROFILE PICTURE SECTION -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold text-neutral-800 font-header">Profile Picture</h2>
+                <span class="text-xs text-neutral-500">PNG, JPG, GIF • Max 5MB</span>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <!-- Profile Picture Display -->
+                <div class="flex-shrink-0">
+                    <div class="relative">
+                        <div class="w-20 h-20 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm border-2 border-white overflow-hidden cursor-pointer" 
+                             @click="$refs.profileFileInput.click()">
+                            <!-- Current Profile Picture or Initials -->
+                            <div x-show="!profilePicture.preview && !profilePicture.current" class="text-xl font-bold text-white">
+                                <span x-text="getInitials()"></span>
+                            </div>
+                            <img x-show="profilePicture.current && !profilePicture.preview" 
+                                 :src="profilePicture.current" 
+                                 :alt="getClientName()" 
+                                 class="w-full h-full object-cover">
+                            <img x-show="profilePicture.preview" 
+                                 :src="profilePicture.preview" 
+                                 :alt="getClientName()" 
+                                 class="w-full h-full object-cover">
+                        </div>
+                        
+                        <!-- Edit Overlay -->
+                        <div class="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 rounded-xl transition-all duration-200 flex items-center justify-center group" 
+                             @click="$refs.profileFileInput.click()">
+                            <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                <div class="bg-white bg-opacity-90 rounded-full p-2 shadow-lg">
+                                    <svg class="w-4 h-4 text-neutral-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Upload Area -->
+                <div class="flex-1">
+                    <div class="space-y-3">
+                        <!-- Drag and Drop Area -->
+                        <div class="border-2 border-dashed border-neutral-300 rounded-lg p-4 text-center hover:border-brand-sky hover:bg-brand-sky hover:bg-opacity-5 transition-all duration-200 cursor-pointer"
+                             @click="$refs.profileFileInput.click()"
+                             @dragover.prevent
+                             @drop.prevent="handleFileDrop($event)"
+                             :class="{'border-brand-sky bg-brand-sky bg-opacity-10': isDragOver}"
+                             @dragenter="isDragOver = true"
+                             @dragleave="isDragOver = false">
+                            
+                            <div class="flex items-center justify-center space-x-3">
+                                <svg class="w-5 h-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                                </svg>
+                                <div class="text-left">
+                                    <p class="text-sm font-bold text-neutral-700">
+                                        <span class="text-brand-sky">Click to upload</span> or drag and drop
+                                    </p>
+                                    <p class="text-xs text-neutral-500">PNG, JPG, GIF up to 5MB</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- File Input (Hidden) -->
+                        <input type="file" 
+                               x-ref="profileFileInput"
+                               name="{{ form.profile_picture.name }}" 
+                               id="{{ form.profile_picture.id_for_label }}" 
+                               accept="image/png,image/jpeg,image/jpg,image/gif" 
+                               @change="handleFileSelect($event)"
+                               class="hidden">
+                        
+                        <!-- Status Messages -->
+                        <div x-show="profilePicture.preview" class="flex items-center justify-between p-2 bg-green-50 border border-green-200 rounded-lg">
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                <span class="text-sm text-green-800 font-medium">Ready to upload</span>
+                                <span class="text-xs text-green-600" x-text="profilePicture.fileName"></span>
+                            </div>
+                            <button type="button" 
+                                    @click="removeProfilePicture()"
+                                    class="text-red-600 hover:text-red-800 transition-colors duration-200">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        <div x-show="profilePicture.current && !profilePicture.preview" class="flex items-center justify-between p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div class="flex items-center space-x-2">
+                                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                </svg>
+                                <span class="text-sm text-blue-800 font-medium">Current profile picture</span>
+                            </div>
+                            <button type="button" 
+                                    @click="removeCurrentProfilePicture()"
+                                    class="text-red-600 hover:text-red-800 transition-colors duration-200">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        
+                        <!-- Error Display -->
+                        {% if form.profile_picture.errors %}
+                            <div class="p-2 bg-red-50 border border-red-200 rounded-lg">
+                                <div class="flex items-center space-x-2">
+                                    <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                                    </svg>
+                                    <p class="text-sm text-red-600">{{ form.profile_picture.errors.0 }}</p>
+                                </div>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
         
         <!-- 🧍 CLIENT PERSONAL DETAILS -->
         <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
@@ -181,12 +307,118 @@
                     {% endif %}
                 </div>
 
+                <!-- Gender Identity -->
+                <div>
+                    <label for="{{ form.gender_identity.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Gender Identity</label>
+                    <input type="text" name="{{ form.gender_identity.name }}" id="{{ form.gender_identity.id_for_label }}" value="{{ form.gender_identity.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.gender_identity.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.gender_identity.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
                 <!-- Citizenship Status -->
                 <div>
                     <label for="{{ form.citizenship_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Citizenship Status</label>
-                    <input type="text" name="{{ form.citizenship_status.name }}" id="{{ form.citizenship_status.id_for_label }}" value="{{ form.citizenship_status.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    <select name="{{ form.citizenship_status.name }}" id="{{ form.citizenship_status.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Citizenship Status</option>
+                        <option value="Citizen" {% if form.citizenship_status.value == 'Citizen' %}selected{% endif %}>Citizen</option>
+                        <option value="Permanent Resident" {% if form.citizenship_status.value == 'Permanent Resident' %}selected{% endif %}>Permanent Resident</option>
+                        <option value="Refugee Claimant" {% if form.citizenship_status.value == 'Refugee Claimant' %}selected{% endif %}>Refugee Claimant</option>
+                        <option value="Temporary Resident" {% if form.citizenship_status.value == 'Temporary Resident' %}selected{% endif %}>Temporary Resident</option>
+                        <option value="Other" {% if form.citizenship_status.value == 'Other' %}selected{% endif %}>Other</option>
+                    </select>
                     {% if form.citizenship_status.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.citizenship_status.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Indigenous Status -->
+                <div>
+                    <label for="{{ form.indigenous_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Indigenous Status</label>
+                    <select name="{{ form.indigenous_status.name }}" id="{{ form.indigenous_status.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Indigenous Status</option>
+                        <option value="First Nations" {% if form.indigenous_status.value == 'First Nations' %}selected{% endif %}>First Nations</option>
+                        <option value="Métis" {% if form.indigenous_status.value == 'Métis' %}selected{% endif %}>Métis</option>
+                        <option value="Inuit" {% if form.indigenous_status.value == 'Inuit' %}selected{% endif %}>Inuit</option>
+                        <option value="Other Indigenous" {% if form.indigenous_status.value == 'Other Indigenous' %}selected{% endif %}>Other Indigenous</option>
+                        <option value="Not Indigenous" {% if form.indigenous_status.value == 'Not Indigenous' %}selected{% endif %}>Not Indigenous</option>
+                        <option value="Prefer not to say" {% if form.indigenous_status.value == 'Prefer not to say' %}selected{% endif %}>Prefer not to say</option>
+                    </select>
+                    {% if form.indigenous_status.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.indigenous_status.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Country of Birth -->
+                <div>
+                    <label for="{{ form.country_of_birth.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Country of Birth</label>
+                    <input type="text" name="{{ form.country_of_birth.name }}" id="{{ form.country_of_birth.id_for_label }}" value="{{ form.country_of_birth.value|default:'' }}" placeholder="e.g., Canada, United States, etc." class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.country_of_birth.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.country_of_birth.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Preferred Official Language -->
+                <div>
+                    <label for="{{ form.preferred_official_language.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Preferred Official Language</label>
+                    <select name="{{ form.preferred_official_language.name }}" id="{{ form.preferred_official_language.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Preferred Official Language</option>
+                        <option value="English" {% if form.preferred_official_language.value == 'English' %}selected{% endif %}>English</option>
+                        <option value="French" {% if form.preferred_official_language.value == 'French' %}selected{% endif %}>French</option>
+                        <option value="Both" {% if form.preferred_official_language.value == 'Both' %}selected{% endif %}>Both</option>
+                    </select>
+                    {% if form.preferred_official_language.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.preferred_official_language.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Primary Language Spoken -->
+                <div>
+                    <label for="{{ form.primary_language_spoken.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Primary Language Spoken</label>
+                    <select name="{{ form.primary_language_spoken.name }}" id="{{ form.primary_language_spoken.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Primary Language</option>
+                        <option value="English" {% if form.primary_language_spoken.value == 'English' %}selected{% endif %}>English</option>
+                        <option value="Spanish" {% if form.primary_language_spoken.value == 'Spanish' %}selected{% endif %}>Spanish</option>
+                        <option value="Chinese (Mandarin)" {% if form.primary_language_spoken.value == 'Chinese (Mandarin)' %}selected{% endif %}>Chinese (Mandarin)</option>
+                        <option value="Chinese (Cantonese)" {% if form.primary_language_spoken.value == 'Chinese (Cantonese)' %}selected{% endif %}>Chinese (Cantonese)</option>
+                        <option value="Tagalog" {% if form.primary_language_spoken.value == 'Tagalog' %}selected{% endif %}>Tagalog</option>
+                        <option value="Vietnamese" {% if form.primary_language_spoken.value == 'Vietnamese' %}selected{% endif %}>Vietnamese</option>
+                        <option value="Arabic" {% if form.primary_language_spoken.value == 'Arabic' %}selected{% endif %}>Arabic</option>
+                        <option value="French" {% if form.primary_language_spoken.value == 'French' %}selected{% endif %}>French</option>
+                        <option value="Korean" {% if form.primary_language_spoken.value == 'Korean' %}selected{% endif %}>Korean</option>
+                        <option value="Russian" {% if form.primary_language_spoken.value == 'Russian' %}selected{% endif %}>Russian</option>
+                        <option value="Portuguese" {% if form.primary_language_spoken.value == 'Portuguese' %}selected{% endif %}>Portuguese</option>
+                        <option value="Hindi" {% if form.primary_language_spoken.value == 'Hindi' %}selected{% endif %}>Hindi</option>
+                        <option value="Urdu" {% if form.primary_language_spoken.value == 'Urdu' %}selected{% endif %}>Urdu</option>
+                        <option value="Bengali" {% if form.primary_language_spoken.value == 'Bengali' %}selected{% endif %}>Bengali</option>
+                        <option value="Punjabi" {% if form.primary_language_spoken.value == 'Punjabi' %}selected{% endif %}>Punjabi</option>
+                        <option value="Gujarati" {% if form.primary_language_spoken.value == 'Gujarati' %}selected{% endif %}>Gujarati</option>
+                        <option value="Tamil" {% if form.primary_language_spoken.value == 'Tamil' %}selected{% endif %}>Tamil</option>
+                        <option value="Telugu" {% if form.primary_language_spoken.value == 'Telugu' %}selected{% endif %}>Telugu</option>
+                        <option value="Marathi" {% if form.primary_language_spoken.value == 'Marathi' %}selected{% endif %}>Marathi</option>
+                        <option value="Haitian Creole" {% if form.primary_language_spoken.value == 'Haitian Creole' %}selected{% endif %}>Haitian Creole</option>
+                        <option value="Amharic" {% if form.primary_language_spoken.value == 'Amharic' %}selected{% endif %}>Amharic</option>
+                        <option value="Somali" {% if form.primary_language_spoken.value == 'Somali' %}selected{% endif %}>Somali</option>
+                        <option value="Swahili" {% if form.primary_language_spoken.value == 'Swahili' %}selected{% endif %}>Swahili</option>
+                        <option value="Yoruba" {% if form.primary_language_spoken.value == 'Yoruba' %}selected{% endif %}>Yoruba</option>
+                        <option value="Igbo" {% if form.primary_language_spoken.value == 'Igbo' %}selected{% endif %}>Igbo</option>
+                        <option value="Farsi/Persian" {% if form.primary_language_spoken.value == 'Farsi/Persian' %}selected{% endif %}>Farsi/Persian</option>
+                        <option value="Turkish" {% if form.primary_language_spoken.value == 'Turkish' %}selected{% endif %}>Turkish</option>
+                        <option value="Polish" {% if form.primary_language_spoken.value == 'Polish' %}selected{% endif %}>Polish</option>
+                        <option value="Italian" {% if form.primary_language_spoken.value == 'Italian' %}selected{% endif %}>Italian</option>
+                        <option value="German" {% if form.primary_language_spoken.value == 'German' %}selected{% endif %}>German</option>
+                        <option value="Japanese" {% if form.primary_language_spoken.value == 'Japanese' %}selected{% endif %}>Japanese</option>
+                        <option value="Thai" {% if form.primary_language_spoken.value == 'Thai' %}selected{% endif %}>Thai</option>
+                        <option value="Burmese" {% if form.primary_language_spoken.value == 'Burmese' %}selected{% endif %}>Burmese</option>
+                        <option value="Nepali" {% if form.primary_language_spoken.value == 'Nepali' %}selected{% endif %}>Nepali</option>
+                        <option value="Sinhala" {% if form.primary_language_spoken.value == 'Sinhala' %}selected{% endif %}>Sinhala</option>
+                        <option value="Khmer" {% if form.primary_language_spoken.value == 'Khmer' %}selected{% endif %}>Khmer</option>
+                        <option value="Lao" {% if form.primary_language_spoken.value == 'Lao' %}selected{% endif %}>Lao</option>
+                        <option value="Hmong" {% if form.primary_language_spoken.value == 'Hmong' %}selected{% endif %}>Hmong</option>
+                        <option value="Other" {% if form.primary_language_spoken.value == 'Other' %}selected{% endif %}>Other</option>
+                    </select>
+                    {% if form.primary_language_spoken.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.primary_language_spoken.errors.0 }}</div>
                     {% endif %}
                 </div>
 
@@ -470,6 +702,16 @@
                     {% endif %}
                 </div>
 
+                <!-- Ethnicity -->
+                <div>
+                    <label for="{{ form.ethnicity.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Ethnicity</label>
+                    <input type="text" name="{{ form.ethnicity.name }}" id="{{ form.ethnicity.id_for_label }}" value="{{ form.ethnicity.value|default:'' }}" placeholder="Enter ethnicity (comma-separated for multiple)" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    <p class="mt-1 text-xs text-neutral-500 font-body">Enter multiple ethnicities separated by commas</p>
+                    {% if form.ethnicity.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.ethnicity.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
                 <!-- Self-Identification as Race/Ethnicity -->
                 <div>
                     <label for="{{ form.self_identification_race_ethnicity.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Self-Identification as Race/Ethnicity</label>
@@ -533,6 +775,25 @@
                     <input type="text" name="{{ form.lhin.name }}" id="{{ form.lhin.id_for_label }}" value="{{ form.lhin.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                     {% if form.lhin.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.lhin.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Sexual Orientation -->
+                <div>
+                    <label for="{{ form.sexual_orientation.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Sexual Orientation</label>
+                    <input type="text" name="{{ form.sexual_orientation.name }}" id="{{ form.sexual_orientation.id_for_label }}" value="{{ form.sexual_orientation.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.sexual_orientation.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.sexual_orientation.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Languages Spoken -->
+                <div>
+                    <label for="{{ form.languages_spoken.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Languages Spoken</label>
+                    <input type="text" name="{{ form.languages_spoken.name }}" id="{{ form.languages_spoken.id_for_label }}" value="{{ form.languages_spoken.value|default:'' }}" placeholder="Enter languages (comma-separated for multiple)" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    <p class="mt-1 text-xs text-neutral-500 font-body">Enter multiple languages separated by commas</p>
+                    {% if form.languages_spoken.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.languages_spoken.errors.0 }}</div>
                     {% endif %}
                 </div>
             </div>
@@ -662,7 +923,7 @@
 
                 <!-- Phone -->
                 <div>
-                    <label for="{{ form.phone.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Phone</label>
+                    <label for="{{ form.phone.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Phone #</label>
                     <input type="tel" name="{{ form.phone.name }}" id="{{ form.phone.id_for_label }}" value="{{ form.phone.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                     {% if form.phone.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.phone.errors.0 }}</div>
@@ -689,10 +950,27 @@
 
                 <!-- Email -->
                 <div>
-                    <label for="{{ form.email.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Email</label>
+                    <label for="{{ form.email.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Email Address</label>
                     <input type="email" name="{{ form.email.name }}" id="{{ form.email.id_for_label }}" value="{{ form.email.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                     {% if form.email.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.email.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Preferred Method of Communication -->
+                <div>
+                    <label for="{{ form.preferred_communication_method.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Preferred Method of Communication</label>
+                    <select name="{{ form.preferred_communication_method.name }}" id="{{ form.preferred_communication_method.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Preferred Method</option>
+                        <option value="Phone" {% if form.preferred_communication_method.value == 'Phone' %}selected{% endif %}>Phone</option>
+                        <option value="Email" {% if form.preferred_communication_method.value == 'Email' %}selected{% endif %}>Email</option>
+                        <option value="Text Message" {% if form.preferred_communication_method.value == 'Text Message' %}selected{% endif %}>Text Message</option>
+                        <option value="Mail" {% if form.preferred_communication_method.value == 'Mail' %}selected{% endif %}>Mail</option>
+                        <option value="In Person" {% if form.preferred_communication_method.value == 'In Person' %}selected{% endif %}>In Person</option>
+                        <option value="Other" {% if form.preferred_communication_method.value == 'Other' %}selected{% endif %}>Other</option>
+                    </select>
+                    {% if form.preferred_communication_method.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.preferred_communication_method.errors.0 }}</div>
                     {% endif %}
                 </div>
 
@@ -700,7 +978,7 @@
                 <div>
                     <label for="next_of_kin_name" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Next of Kin</label>
                     <input type="text" id="next_of_kin_name" placeholder="Name" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body mb-2">
-                    <input type="text" id="next_of_kin_phone" placeholder="Phone" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body mb-2">
+                    <input type="text" id="next_of_kin_phone" placeholder="Phone #" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body mb-2">
                     <input type="text" id="next_of_kin_relationship" placeholder="Relationship" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                     <input type="hidden" name="{{ form.next_of_kin.name }}" id="{{ form.next_of_kin.id_for_label }}" value="{{ form.next_of_kin.value|default:'{}' }}">
                 </div>
@@ -709,7 +987,7 @@
                 <div>
                     <label for="emergency_contact_name" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Emergency Contact</label>
                     <input type="text" id="emergency_contact_name" placeholder="Name" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body mb-2">
-                    <input type="text" id="emergency_contact_phone" placeholder="Phone" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body mb-2">
+                    <input type="text" id="emergency_contact_phone" placeholder="Phone #" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body mb-2">
                     <input type="text" id="emergency_contact_relationship" placeholder="Relationship" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                     <input type="hidden" name="{{ form.emergency_contact.name }}" id="{{ form.emergency_contact.id_for_label }}" value="{{ form.emergency_contact.value|default:'{}' }}">
                 </div>
@@ -831,35 +1109,6 @@
             </div>
         </div>
 
-        <!-- PROGRAM / ENROLLMENT DETAILS -->
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-            <div class="flex items-center mb-6">
-                <div class="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
-                    </svg>
-                </div>
-                <h2 class="text-xl font-bold text-neutral-800 font-header">Program / Enrollment Details</h2>
-            </div>
-            
-            <!-- Program Enrollments Section -->
-            <div class="space-y-4">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-semibold text-neutral-800">Program Enrollments</h3>
-                    <button type="button" id="add-program-btn" onclick="document.getElementById('program-modal').classList.remove('hidden')" class="inline-flex items-center px-4 py-2 bg-brand-sky text-white text-sm font-medium rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200">
-                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        Add Program
-                    </button>
-                </div>
-                
-                <div id="program-enrollments-container" class="space-y-4">
-                    <!-- Programs will be displayed here -->
-                </div>
-            </div>
-            
-        </div>
 
         <!-- 🧾 ADMINISTRATIVE / SYSTEM FIELDS -->
         <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
@@ -882,12 +1131,805 @@
                     {% endif %}
                 </div>
 
-                <!-- Profile Picture -->
+                <!-- Source -->
                 <div>
-                    <label for="{{ form.profile_picture.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Profile Picture</label>
-                    <input type="file" name="{{ form.profile_picture.name }}" id="{{ form.profile_picture.id_for_label }}" accept="image/*" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.profile_picture.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.profile_picture.errors.0 }}</div>
+                    <label for="{{ form.source.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Source System</label>
+                    <select name="{{ form.source.name }}" id="{{ form.source.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Source System</option>
+                        <option value="SMIMS" {% if form.source.value == 'SMIMS' %}selected{% endif %}>SMIMS</option>
+                        <option value="EMHware" {% if form.source.value == 'EMHware' %}selected{% endif %}>EMHware</option>
+                    </select>
+                    {% if form.source.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.source.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- External UID -->
+                <div>
+                    <label for="{{ form.uid_external.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">External UID</label>
+                    <input type="text" name="{{ form.uid_external.name }}" id="{{ form.uid_external.id_for_label }}" value="{{ form.uid_external.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.uid_external.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.uid_external.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Program -->
+                <div>
+                    <label for="{{ form.program.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Program</label>
+                    <input type="text" name="{{ form.program.name }}" id="{{ form.program.id_for_label }}" value="{{ form.program.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.program.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.program.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Sub Program -->
+                <div>
+                    <label for="{{ form.sub_program.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Sub Program</label>
+                    <input type="text" name="{{ form.sub_program.name }}" id="{{ form.sub_program.id_for_label }}" value="{{ form.sub_program.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.sub_program.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.sub_program.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Admission Date -->
+                <div>
+                    <label for="{{ form.admission_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Admission Date</label>
+                    <input type="date" name="{{ form.admission_date.name }}" id="{{ form.admission_date.id_for_label }}" value="{% if form.admission_date.value %}{{ form.admission_date.value|date:'Y-m-d' }}{% endif %}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.admission_date.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.admission_date.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Discharge Date -->
+                <div>
+                    <label for="{{ form.discharge_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Discharge Date</label>
+                    <input type="date" name="{{ form.discharge_date.name }}" id="{{ form.discharge_date.id_for_label }}" value="{% if form.discharge_date.value %}{{ form.discharge_date.value|date:'Y-m-d' }}{% endif %}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.discharge_date.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.discharge_date.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Program Status -->
+                <div>
+                    <label for="{{ form.program_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Program Status</label>
+                    <select name="{{ form.program_status.name }}" id="{{ form.program_status.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Program Status</option>
+                        <option value="active" {% if form.program_status.value == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if form.program_status.value == 'inactive' %}selected{% endif %}>Inactive</option>
+                        <option value="pending" {% if form.program_status.value == 'pending' %}selected{% endif %}>Pending</option>
+                        <option value="completed" {% if form.program_status.value == 'completed' %}selected{% endif %}>Completed</option>
+                        <option value="cancelled" {% if form.program_status.value == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                        <option value="suspended" {% if form.program_status.value == 'suspended' %}selected{% endif %}>Suspended</option>
+                    </select>
+                    {% if form.program_status.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.program_status.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Healthcare Coverage -->
+                <div>
+                    <label for="{{ form.healthcare_coverage.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Healthcare Coverage</label>
+                    <select name="{{ form.healthcare_coverage.name }}" id="{{ form.healthcare_coverage.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <option value="">Select Healthcare Coverage</option>
+                        <option value="OHIP" {% if form.healthcare_coverage.value == 'OHIP' %}selected{% endif %}>OHIP</option>
+                        <option value="Student" {% if form.healthcare_coverage.value == 'Student' %}selected{% endif %}>Student</option>
+                        <option value="Refugee" {% if form.healthcare_coverage.value == 'Refugee' %}selected{% endif %}>Refugee</option>
+                        <option value="Other" {% if form.healthcare_coverage.value == 'Other' %}selected{% endif %}>Other</option>
+                    </select>
+                    {% if form.healthcare_coverage.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.healthcare_coverage.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 🏠 CLIENT EXTENDED INFORMATION -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">🏠 Client Extended Information</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Indigenous Identity -->
+                <div>
+                    <label for="{{ form.extended.indigenous_identity.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Indigenous Identity</label>
+                    <input type="text" name="{{ form.extended.indigenous_identity.name }}" id="{{ form.extended.indigenous_identity.id_for_label }}" value="{{ form.extended.indigenous_identity.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.indigenous_identity.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.indigenous_identity.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Military Status -->
+                <div>
+                    <label for="{{ form.extended.military_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Military Status</label>
+                    <input type="text" name="{{ form.extended.military_status.name }}" id="{{ form.extended.military_status.id_for_label }}" value="{{ form.extended.military_status.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.military_status.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.military_status.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Refugee Status -->
+                <div>
+                    <label for="{{ form.extended.refugee_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Refugee Status</label>
+                    <input type="text" name="{{ form.extended.refugee_status.name }}" id="{{ form.extended.refugee_status.id_for_label }}" value="{{ form.extended.refugee_status.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.refugee_status.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.refugee_status.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Household Size -->
+                <div>
+                    <label for="{{ form.extended.household_size.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Household Size</label>
+                    <input type="number" name="{{ form.extended.household_size.name }}" id="{{ form.extended.household_size.id_for_label }}" value="{{ form.extended.household_size.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.household_size.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.household_size.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Family Head Client No -->
+                <div>
+                    <label for="{{ form.extended.family_head_client_no.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Family Head Client No</label>
+                    <input type="text" name="{{ form.extended.family_head_client_no.name }}" id="{{ form.extended.family_head_client_no.id_for_label }}" value="{{ form.extended.family_head_client_no.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.family_head_client_no.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.family_head_client_no.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Primary Worker -->
+                <div>
+                    <label for="{{ form.extended.primary_worker.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Primary Worker</label>
+                    <input type="text" name="{{ form.extended.primary_worker.name }}" id="{{ form.extended.primary_worker.id_for_label }}" value="{{ form.extended.primary_worker.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.primary_worker.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.primary_worker.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Chronically Homeless -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Chronically Homeless</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.chronically_homeless.name }}" id="{{ form.extended.chronically_homeless.id_for_label }}" {% if form.extended.chronically_homeless.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.chronically_homeless.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.chronically_homeless.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.chronically_homeless.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Number of Bednights Current Stay -->
+                <div>
+                    <label for="{{ form.extended.num_bednights_current_stay.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Number of Bednights Current Stay</label>
+                    <input type="number" name="{{ form.extended.num_bednights_current_stay.name }}" id="{{ form.extended.num_bednights_current_stay.id_for_label }}" value="{{ form.extended.num_bednights_current_stay.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.num_bednights_current_stay.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.num_bednights_current_stay.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Length Homeless 3 Years -->
+                <div>
+                    <label for="{{ form.extended.length_homeless_3yrs.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Length Homeless 3 Years</label>
+                    <input type="number" name="{{ form.extended.length_homeless_3yrs.name }}" id="{{ form.extended.length_homeless_3yrs.id_for_label }}" value="{{ form.extended.length_homeless_3yrs.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.length_homeless_3yrs.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.length_homeless_3yrs.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Income Source -->
+                <div>
+                    <label for="{{ form.extended.income_source.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Income Source</label>
+                    <input type="text" name="{{ form.extended.income_source.name }}" id="{{ form.extended.income_source.id_for_label }}" value="{{ form.extended.income_source.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.income_source.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.income_source.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Taxation Year Filed -->
+                <div>
+                    <label for="{{ form.extended.taxation_year_filed.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Taxation Year Filed</label>
+                    <input type="text" name="{{ form.extended.taxation_year_filed.name }}" id="{{ form.extended.taxation_year_filed.id_for_label }}" value="{{ form.extended.taxation_year_filed.value|default:'' }}" placeholder="YYYY" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.taxation_year_filed.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.taxation_year_filed.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Status ID -->
+                <div>
+                    <label for="{{ form.extended.status_id.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Status ID</label>
+                    <input type="text" name="{{ form.extended.status_id.name }}" id="{{ form.extended.status_id.id_for_label }}" value="{{ form.extended.status_id.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.status_id.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.status_id.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Picture ID -->
+                <div>
+                    <label for="{{ form.extended.picture_id.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Picture ID</label>
+                    <input type="text" name="{{ form.extended.picture_id.name }}" id="{{ form.extended.picture_id.id_for_label }}" value="{{ form.extended.picture_id.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.picture_id.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.picture_id.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Other ID -->
+                <div>
+                    <label for="{{ form.extended.other_id.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Other ID</label>
+                    <input type="text" name="{{ form.extended.other_id.name }}" id="{{ form.extended.other_id.id_for_label }}" value="{{ form.extended.other_id.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.other_id.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.other_id.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- BNL Consent -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">BNL Consent</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.bnl_consent.name }}" id="{{ form.extended.bnl_consent.id_for_label }}" {% if form.extended.bnl_consent.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.bnl_consent.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.bnl_consent.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.bnl_consent.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Allergies -->
+                <div class="md:col-span-2">
+                    <label for="{{ form.extended.allergies.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Allergies</label>
+                    <textarea name="{{ form.extended.allergies.name }}" id="{{ form.extended.allergies.id_for_label }}" rows="3" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.extended.allergies.value|default:'' }}</textarea>
+                    {% if form.extended.allergies.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.allergies.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 🏥 HEALTH SUPPORT SERVICES -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">🏥 Health Support Services</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Harm Reduction Support -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Harm Reduction Support</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.harm_reduction_support.name }}" id="{{ form.extended.harm_reduction_support.id_for_label }}" {% if form.extended.harm_reduction_support.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.harm_reduction_support.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.harm_reduction_support.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.harm_reduction_support.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Medication Support -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Medication Support</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.medication_support.name }}" id="{{ form.extended.medication_support.id_for_label }}" {% if form.extended.medication_support.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.medication_support.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.medication_support.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.medication_support.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Pregnancy Support -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Pregnancy Support</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.pregnancy_support.name }}" id="{{ form.extended.pregnancy_support.id_for_label }}" {% if form.extended.pregnancy_support.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.pregnancy_support.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.pregnancy_support.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.pregnancy_support.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Mental Health Support -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Mental Health Support</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.mental_health_support.name }}" id="{{ form.extended.mental_health_support.id_for_label }}" {% if form.extended.mental_health_support.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.mental_health_support.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.mental_health_support.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.mental_health_support.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Physical Health Support -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Physical Health Support</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.physical_health_support.name }}" id="{{ form.extended.physical_health_support.id_for_label }}" {% if form.extended.physical_health_support.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.physical_health_support.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.physical_health_support.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.physical_health_support.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Daily Activities Support -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Daily Activities Support</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.daily_activities_support.name }}" id="{{ form.extended.daily_activities_support.id_for_label }}" {% if form.extended.daily_activities_support.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.daily_activities_support.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.daily_activities_support.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.daily_activities_support.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Other Health Supports -->
+                <div class="md:col-span-2">
+                    <label for="{{ form.extended.other_health_supports.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Other Health Supports</label>
+                    <textarea name="{{ form.extended.other_health_supports.name }}" id="{{ form.extended.other_health_supports.id_for_label }}" rows="3" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.extended.other_health_supports.value|default:'' }}</textarea>
+                    {% if form.extended.other_health_supports.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.other_health_supports.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- ♿ ACCESSIBILITY SUPPORT -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-purple-400 to-purple-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">♿ Accessibility Support</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Cannot Use Stairs -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Cannot Use Stairs</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.cannot_use_stairs.name }}" id="{{ form.extended.cannot_use_stairs.id_for_label }}" {% if form.extended.cannot_use_stairs.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.cannot_use_stairs.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.cannot_use_stairs.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.cannot_use_stairs.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Limited Mobility -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Limited Mobility</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.limited_mobility.name }}" id="{{ form.extended.limited_mobility.id_for_label }}" {% if form.extended.limited_mobility.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.limited_mobility.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.limited_mobility.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.limited_mobility.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Wheelchair Accessibility -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Wheelchair Accessibility</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.wheelchair_accessibility.name }}" id="{{ form.extended.wheelchair_accessibility.id_for_label }}" {% if form.extended.wheelchair_accessibility.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.wheelchair_accessibility.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.wheelchair_accessibility.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.wheelchair_accessibility.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Vision Hearing Speech Supports -->
+                <div class="md:col-span-2">
+                    <label for="{{ form.extended.vision_hearing_speech_supports.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Vision, Hearing, Speech Supports</label>
+                    <textarea name="{{ form.extended.vision_hearing_speech_supports.name }}" id="{{ form.extended.vision_hearing_speech_supports.id_for_label }}" rows="3" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.extended.vision_hearing_speech_supports.value|default:'' }}</textarea>
+                    {% if form.extended.vision_hearing_speech_supports.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.vision_hearing_speech_supports.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- English Translator -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">English Translator</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.english_translator.name }}" id="{{ form.extended.english_translator.id_for_label }}" {% if form.extended.english_translator.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.english_translator.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.english_translator.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.english_translator.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Reading Supports -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Reading Supports</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.reading_supports.name }}" id="{{ form.extended.reading_supports.id_for_label }}" {% if form.extended.reading_supports.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.reading_supports.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.reading_supports.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.reading_supports.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Other Accessibility Supports -->
+                <div class="md:col-span-2">
+                    <label for="{{ form.extended.other_accessibility_supports.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Other Accessibility Supports</label>
+                    <textarea name="{{ form.extended.other_accessibility_supports.name }}" id="{{ form.extended.other_accessibility_supports.id_for_label }}" rows="3" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.extended.other_accessibility_supports.value|default:'' }}</textarea>
+                    {% if form.extended.other_accessibility_supports.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.other_accessibility_supports.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 🏠 HOUSING & APPLICATION INFORMATION -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">🏠 Housing & Application Information</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Access to Housing Application -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Access to Housing Application</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.access_to_housing_application.name }}" id="{{ form.extended.access_to_housing_application.id_for_label }}" {% if form.extended.access_to_housing_application.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.access_to_housing_application.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.access_to_housing_application.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.access_to_housing_application.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Access to Housing No -->
+                <div>
+                    <label for="{{ form.extended.access_to_housing_no.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Access to Housing No</label>
+                    <input type="text" name="{{ form.extended.access_to_housing_no.name }}" id="{{ form.extended.access_to_housing_no.id_for_label }}" value="{{ form.extended.access_to_housing_no.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.access_to_housing_no.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.access_to_housing_no.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Access Point Application -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Access Point Application</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.access_point_application.name }}" id="{{ form.extended.access_point_application.id_for_label }}" {% if form.extended.access_point_application.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.access_point_application.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.access_point_application.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.access_point_application.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Access Point No -->
+                <div>
+                    <label for="{{ form.extended.access_point_no.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Access Point No</label>
+                    <input type="text" name="{{ form.extended.access_point_no.name }}" id="{{ form.extended.access_point_no.id_for_label }}" value="{{ form.extended.access_point_no.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.access_point_no.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.access_point_no.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Cars -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Cars</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.cars.name }}" id="{{ form.extended.cars.id_for_label }}" {% if form.extended.cars.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.cars.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.cars.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.cars.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Number of Cars -->
+                <div>
+                    <label for="{{ form.extended.cars_no.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Number of Cars</label>
+                    <input type="number" name="{{ form.extended.cars_no.name }}" id="{{ form.extended.cars_no.id_for_label }}" value="{{ form.extended.cars_no.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.cars_no.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.cars_no.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 📋 SERVICE & INTAKE INFORMATION -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-teal-400 to-teal-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">📋 Service & Intake Information</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Discharge Disposition -->
+                <div>
+                    <label for="{{ form.extended.discharge_disposition.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Discharge Disposition</label>
+                    <input type="text" name="{{ form.extended.discharge_disposition.name }}" id="{{ form.extended.discharge_disposition.id_for_label }}" value="{{ form.extended.discharge_disposition.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.discharge_disposition.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.discharge_disposition.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Intake Status -->
+                <div>
+                    <label for="{{ form.extended.intake_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Intake Status</label>
+                    <input type="text" name="{{ form.extended.intake_status.name }}" id="{{ form.extended.intake_status.id_for_label }}" value="{{ form.extended.intake_status.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.intake_status.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.intake_status.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Lived Last 12 Months -->
+                <div>
+                    <label for="{{ form.extended.lived_last_12_months.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Lived Last 12 Months</label>
+                    <input type="text" name="{{ form.extended.lived_last_12_months.name }}" id="{{ form.extended.lived_last_12_months.id_for_label }}" value="{{ form.extended.lived_last_12_months.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.lived_last_12_months.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.lived_last_12_months.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Reason for Service -->
+                <div>
+                    <label for="{{ form.extended.reason_for_service.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Reason for Service</label>
+                    <input type="text" name="{{ form.extended.reason_for_service.name }}" id="{{ form.extended.reason_for_service.id_for_label }}" value="{{ form.extended.reason_for_service.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.reason_for_service.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.reason_for_service.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Intake Date -->
+                <div>
+                    <label for="{{ form.extended.intake_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Intake Date</label>
+                    <input type="date" name="{{ form.extended.intake_date.name }}" id="{{ form.extended.intake_date.id_for_label }}" value="{% if form.extended.intake_date.value %}{{ form.extended.intake_date.value|date:'Y-m-d' }}{% endif %}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.intake_date.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.intake_date.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Service End Date -->
+                <div>
+                    <label for="{{ form.extended.service_end_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Service End Date</label>
+                    <input type="date" name="{{ form.extended.service_end_date.name }}" id="{{ form.extended.service_end_date.id_for_label }}" value="{% if form.extended.service_end_date.value %}{{ form.extended.service_end_date.value|date:'Y-m-d' }}{% endif %}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.service_end_date.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.service_end_date.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Rejection Date -->
+                <div>
+                    <label for="{{ form.extended.rejection_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Rejection Date</label>
+                    <input type="date" name="{{ form.extended.rejection_date.name }}" id="{{ form.extended.rejection_date.id_for_label }}" value="{% if form.extended.rejection_date.value %}{{ form.extended.rejection_date.value|date:'Y-m-d' }}{% endif %}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.rejection_date.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.rejection_date.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Rejection Reason -->
+                <div class="md:col-span-2">
+                    <label for="{{ form.extended.rejection_reason.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Rejection Reason</label>
+                    <textarea name="{{ form.extended.rejection_reason.name }}" id="{{ form.extended.rejection_reason.id_for_label }}" rows="3" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.extended.rejection_reason.value|default:'' }}</textarea>
+                    {% if form.extended.rejection_reason.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.rejection_reason.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 🏠 ACCOMMODATION & RESTRICTIONS -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">🏠 Accommodation & Restrictions</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Room -->
+                <div>
+                    <label for="{{ form.extended.room.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Room</label>
+                    <input type="text" name="{{ form.extended.room.name }}" id="{{ form.extended.room.id_for_label }}" value="{{ form.extended.room.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.room.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.room.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Bed -->
+                <div>
+                    <label for="{{ form.extended.bed.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Bed</label>
+                    <input type="text" name="{{ form.extended.bed.name }}" id="{{ form.extended.bed.id_for_label }}" value="{{ form.extended.bed.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.bed.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.bed.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Occupancy Status -->
+                <div>
+                    <label for="{{ form.extended.occupancy_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Occupancy Status</label>
+                    <input type="text" name="{{ form.extended.occupancy_status.name }}" id="{{ form.extended.occupancy_status.id_for_label }}" value="{{ form.extended.occupancy_status.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.occupancy_status.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.occupancy_status.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Bed Nights Historical -->
+                <div>
+                    <label for="{{ form.extended.bed_nights_historical.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Bed Nights Historical</label>
+                    <input type="number" name="{{ form.extended.bed_nights_historical.name }}" id="{{ form.extended.bed_nights_historical.id_for_label }}" value="{{ form.extended.bed_nights_historical.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.bed_nights_historical.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.bed_nights_historical.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Restriction Reason -->
+                <div class="md:col-span-2">
+                    <label for="{{ form.extended.restriction_reason.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Restriction Reason</label>
+                    <textarea name="{{ form.extended.restriction_reason.name }}" id="{{ form.extended.restriction_reason.id_for_label }}" rows="3" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.extended.restriction_reason.value|default:'' }}</textarea>
+                    {% if form.extended.restriction_reason.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.restriction_reason.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Restriction Date -->
+                <div>
+                    <label for="{{ form.extended.restriction_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Restriction Date</label>
+                    <input type="date" name="{{ form.extended.restriction_date.name }}" id="{{ form.extended.restriction_date.id_for_label }}" value="{% if form.extended.restriction_date.value %}{{ form.extended.restriction_date.value|date:'Y-m-d' }}{% endif %}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.restriction_date.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.restriction_date.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Restriction Duration Days -->
+                <div>
+                    <label for="{{ form.extended.restriction_duration_days.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Restriction Duration (Days)</label>
+                    <input type="number" name="{{ form.extended.restriction_duration_days.name }}" id="{{ form.extended.restriction_duration_days.id_for_label }}" value="{{ form.extended.restriction_duration_days.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.restriction_duration_days.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.restriction_duration_days.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Restriction Status -->
+                <div>
+                    <label for="{{ form.extended.restriction_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Restriction Status</label>
+                    <input type="text" name="{{ form.extended.restriction_status.name }}" id="{{ form.extended.restriction_status.id_for_label }}" value="{{ form.extended.restriction_status.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.restriction_status.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.restriction_status.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Early Termination By -->
+                <div>
+                    <label for="{{ form.extended.early_termination_by.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Early Termination By</label>
+                    <input type="text" name="{{ form.extended.early_termination_by.name }}" id="{{ form.extended.early_termination_by.id_for_label }}" value="{{ form.extended.early_termination_by.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    {% if form.extended.early_termination_by.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.early_termination_by.errors.0 }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 🏠 HOUSING & ADDITIONAL SUPPORT -->
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+            <div class="flex items-center mb-6">
+                <div class="w-10 h-10 bg-gradient-to-br from-orange-400 to-orange-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-bold text-neutral-800 font-header">🏠 Housing & Additional Support</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Pet Owner -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Pet Owner</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.pet_owner.name }}" id="{{ form.extended.pet_owner.id_for_label }}" {% if form.extended.pet_owner.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.pet_owner.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.pet_owner.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.pet_owner.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Legal Support -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Legal Support</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.legal_support.name }}" id="{{ form.extended.legal_support.id_for_label }}" {% if form.extended.legal_support.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.legal_support.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.legal_support.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.legal_support.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Immigration Support -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Immigration Support</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.immigration_support.name }}" id="{{ form.extended.immigration_support.id_for_label }}" {% if form.extended.immigration_support.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.immigration_support.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.immigration_support.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.immigration_support.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Religious Cultural Supports -->
+                <div class="md:col-span-2">
+                    <label for="{{ form.extended.religious_cultural_supports.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Religious/Cultural Supports</label>
+                    <textarea name="{{ form.extended.religious_cultural_supports.name }}" id="{{ form.extended.religious_cultural_supports.id_for_label }}" rows="3" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.extended.religious_cultural_supports.value|default:'' }}</textarea>
+                    {% if form.extended.religious_cultural_supports.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.religious_cultural_supports.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Safety Concerns -->
+                <div class="md:col-span-2">
+                    <label for="{{ form.extended.safety_concerns.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Safety Concerns</label>
+                    <textarea name="{{ form.extended.safety_concerns.name }}" id="{{ form.extended.safety_concerns.id_for_label }}" rows="3" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.extended.safety_concerns.value|default:'' }}</textarea>
+                    {% if form.extended.safety_concerns.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.safety_concerns.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Intimate Partner Violence Support -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Intimate Partner Violence Support</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.intimate_partner_violence_support.name }}" id="{{ form.extended.intimate_partner_violence_support.id_for_label }}" {% if form.extended.intimate_partner_violence_support.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.intimate_partner_violence_support.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.intimate_partner_violence_support.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.intimate_partner_violence_support.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Human Trafficking Support -->
+                <div>
+                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Human Trafficking Support</label>
+                    <div class="flex items-center">
+                        <input type="checkbox" name="{{ form.extended.human_trafficking_support.name }}" id="{{ form.extended.human_trafficking_support.id_for_label }}" {% if form.extended.human_trafficking_support.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
+                        <label for="{{ form.extended.human_trafficking_support.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
+                    </div>
+                    {% if form.extended.human_trafficking_support.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.human_trafficking_support.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- Other Supports -->
+                <div class="md:col-span-2">
+                    <label for="{{ form.extended.other_supports.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Other Supports</label>
+                    <textarea name="{{ form.extended.other_supports.name }}" id="{{ form.extended.other_supports.id_for_label }}" rows="3" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.extended.other_supports.value|default:'' }}</textarea>
+                    {% if form.extended.other_supports.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.extended.other_supports.errors.0 }}</div>
                     {% endif %}
                 </div>
             </div>
@@ -905,128 +1947,6 @@
     </form>
 </div>
 
-<!-- Program Enrollment Modal -->
-<div id="program-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
-    <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
-        <div class="mt-3">
-            <!-- Modal Header -->
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-gray-900">Add Program Enrollment</h3>
-                <button type="button" id="close-modal" onclick="document.getElementById('program-modal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
-            </div>
-            
-            <!-- Modal Content -->
-            <div class="space-y-4">
-                <!-- Program Selection -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Program *</label>
-                    <select id="modal-program-select" onchange="toggleSubprogramsSection()" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
-                        <option value="">Select Program</option>
-                    </select>
-                </div>
-                
-                <!-- Sub-programs Section -->
-                <div id="subprograms-section" class="hidden">
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Sub-programs</label>
-                    <div id="subprograms-container" class="space-y-2">
-                        <!-- Sub-programs will be added here -->
-                    </div>
-                    <button type="button" id="add-subprogram-btn" class="mt-2 inline-flex items-center px-3 py-1 border border-gray-300 text-sm font-medium rounded text-gray-700 bg-white hover:bg-gray-50">
-                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                        </svg>
-                        Add Sub-program
-                    </button>
-                </div>
-                
-                <!-- Program Details -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Level of Support</label>
-                        <input type="text" id="modal-level-of-support" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent" placeholder="Enter level of support">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Client Type</label>
-                        <input type="text" id="modal-client-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent" placeholder="Enter client type">
-                    </div>
-                </div>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Referral Source</label>
-                        <input type="text" id="modal-referral-source" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent" placeholder="Enter referral source">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Worker / Support Worker(s)</label>
-                        <input type="text" id="modal-support-workers" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent" placeholder="Enter support workers (comma-separated)">
-                    </div>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Receiving Services</label>
-                    <div class="flex items-center">
-                        <input type="checkbox" id="modal-receiving-services" class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-gray-300 rounded">
-                        <label for="modal-receiving-services" class="ml-2 text-sm text-gray-700">Yes</label>
-                    </div>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Receiving Services Date</label>
-                    <input type="date" id="modal-receiving-services-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
-                    <p class="mt-1 text-sm text-gray-500">Date when client actually started receiving services</p>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Days Elapsed</label>
-                    <input type="number" id="modal-days-elapsed" readonly class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600" placeholder="Auto-calculated">
-                    <p class="mt-1 text-sm text-gray-500">Auto-calculated based on start date</p>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Reason (for Discharge/Program Status)</label>
-                    <textarea id="modal-reason-discharge" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent" placeholder="Enter reason for discharge or program status"></textarea>
-                </div>
-                
-                <!-- Enrollment Details -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Start Date *</label>
-                        <input type="date" id="modal-start-date" onchange="calculateModalDaysElapsed()" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">End Date</label>
-                        <input type="date" id="modal-end-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
-                    </div>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                    <select id="modal-status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
-                        <option value="pending">Pending</option>
-                        <option value="active">Active</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                        <option value="suspended">Suspended</option>
-                    </select>
-                </div>
-            </div>
-            
-            <!-- Modal Footer -->
-            <div class="flex justify-end space-x-3 mt-6">
-                <button type="button" id="cancel-modal" onclick="document.getElementById('program-modal').classList.add('hidden')" class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
-                    Cancel
-                </button>
-                <button type="button" id="save-program" class="px-4 py-2 bg-brand-sky text-white text-sm font-medium rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky">
-                    Save Program
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 
 <script>
 // Global functions that need to be accessible from HTML onclick handlers
@@ -1482,11 +2402,18 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-// Alpine.js clientForm function for support workers management
+// Alpine.js clientForm function for support workers management and profile picture
 function clientForm() {
     return {
         supportWorkers: {{ form.support_workers.value|default:'[]'|safe }},
         newSupportWorker: '',
+        isDragOver: false,
+        profilePicture: {
+            current: {% if object and object.profile_image_url %}'{{ object.profile_image_url }}'{% else %}null{% endif %},
+            preview: null,
+            fileName: null,
+            file: null
+        },
         
         init() {
             // Initialize support workers from form data
@@ -1511,6 +2438,125 @@ function clientForm() {
         
         removeSupportWorker(index) {
             this.supportWorkers.splice(index, 1);
+        },
+        
+        // Profile Picture Methods
+        getInitials() {
+            const firstName = document.querySelector('input[name="first_name"]')?.value || '';
+            const lastName = document.querySelector('input[name="last_name"]')?.value || '';
+            return (firstName.charAt(0) + lastName.charAt(0)).toUpperCase();
+        },
+        
+        getClientName() {
+            const firstName = document.querySelector('input[name="first_name"]')?.value || '';
+            const lastName = document.querySelector('input[name="last_name"]')?.value || '';
+            return `${firstName} ${lastName}`.trim() || 'Client';
+        },
+        
+        handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                this.processFile(file);
+            }
+        },
+        
+        handleFileDrop(event) {
+            this.isDragOver = false;
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                const file = files[0];
+                this.processFile(file);
+            }
+        },
+        
+        processFile(file) {
+            // Validate file type - only allow specific image formats
+            const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
+            if (!allowedTypes.includes(file.type)) {
+                this.showError('Please select a valid image file (PNG, JPG, or GIF).');
+                return;
+            }
+            
+            // Validate file size (5MB limit)
+            const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+            if (file.size > maxSize) {
+                this.showError('File size must be less than 5MB.');
+                return;
+            }
+            
+            // Clear any previous errors
+            this.clearError();
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                this.profilePicture.preview = e.target.result;
+                this.profilePicture.fileName = file.name;
+                this.profilePicture.file = file;
+            };
+            reader.readAsDataURL(file);
+        },
+        
+        showError(message) {
+            // Create or update error message
+            let errorDiv = document.getElementById('profile-picture-error');
+            if (!errorDiv) {
+                errorDiv = document.createElement('div');
+                errorDiv.id = 'profile-picture-error';
+                errorDiv.className = 'p-2 bg-red-50 border border-red-200 rounded-lg mt-2';
+                errorDiv.innerHTML = `
+                    <div class="flex items-center space-x-2">
+                        <svg class="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                        <p class="text-sm text-red-600"></p>
+                    </div>
+                `;
+                // Insert after the file input
+                const fileInput = this.$refs.profileFileInput;
+                fileInput.parentNode.insertBefore(errorDiv, fileInput.nextSibling);
+            }
+            errorDiv.querySelector('p').textContent = message;
+        },
+        
+        clearError() {
+            const errorDiv = document.getElementById('profile-picture-error');
+            if (errorDiv) {
+                errorDiv.remove();
+            }
+        },
+        
+        removeProfilePicture() {
+            this.profilePicture.preview = null;
+            this.profilePicture.fileName = null;
+            this.profilePicture.file = null;
+            // Clear the file input
+            const fileInput = this.$refs.profileFileInput;
+            if (fileInput) {
+                fileInput.value = '';
+            }
+            // Clear any errors
+            this.clearError();
+        },
+        
+        removeCurrentProfilePicture() {
+            this.profilePicture.current = null;
+            // Add a hidden input to indicate removal
+            this.addHiddenInput('remove_profile_picture', 'true');
+        },
+        
+        addHiddenInput(name, value) {
+            // Remove existing hidden input with same name
+            const existing = document.querySelector(`input[name="${name}"]`);
+            if (existing) {
+                existing.remove();
+            }
+            
+            // Add new hidden input
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = name;
+            hiddenInput.value = value;
+            document.querySelector('form').appendChild(hiddenInput);
         }
     }
 }

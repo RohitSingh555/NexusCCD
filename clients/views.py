@@ -1116,16 +1116,13 @@ def upload_clients(request):
             print(f"DEBUG: client_id column NOT found in CSV")
             print(f"DEBUG: Available columns with 'client' in name: {[col for col in df.columns if 'client' in col.lower()]}")
         
-        # Check for required fields using case-insensitive mapping
-        # Note: client_id is now required for ALL uploads (both new and updates)
-        required_fields = ['client_id', 'first_name', 'last_name', 'phone', 'dob']
-        missing_fields = []
-        
         # Debug: Check if we have client_id column (now required for all uploads)
-        has_client_id = 'client_id' in df.columns
+        # Check if any column maps to client_id (not just exact column name)
+        has_client_id = any(column_mapping.get(col) == 'client_id' for col in df.columns)
         print(f"DEBUG: Has client_id column: {has_client_id}")
         if has_client_id:
-            print(f"DEBUG: client_id column found - will check for existing clients with matching client_id + source to determine if update or new creation")
+            client_id_col = next((col for col in df.columns if column_mapping.get(col) == 'client_id'), None)
+            print(f"DEBUG: client_id column found: '{client_id_col}' - will check for existing clients with matching client_id + source to determine if update or new creation")
         else:
             print(f"DEBUG: client_id column NOT found - this will cause validation error")
         
@@ -1152,6 +1149,18 @@ def upload_clients(request):
         
         print(f"DEBUG: Final has_existing_client_ids: {has_existing_client_ids}")
         
+        # Check for required fields using case-insensitive mapping
+        # Note: client_id is now required for ALL uploads (both new and updates)
+        # For updates: only client_id is required
+        # For new clients: client_id, first_name, last_name, and either phone or dob are required
+        if has_existing_client_ids:
+            # If we have existing clients, this is an update - only require client_id
+            required_fields = ['client_id']
+        else:
+            # If no existing clients, this is new client creation - require full set
+            required_fields = ['client_id', 'first_name', 'last_name']
+        missing_fields = []
+        
         # Debug logging
         debug_info = {
             'column_mapping': column_mapping,
@@ -1174,6 +1183,20 @@ def upload_clients(request):
                 'success': False, 
                 'error': f'Missing required columns. Please include columns for: {", ".join(missing_fields)}. Note: client_id is now required for all uploads.'
             }, status=400)
+        
+        # Check that at least one of phone OR dob is present (only for new clients)
+        if not has_existing_client_ids:
+            has_phone = any(column_mapping.get(col) == 'phone' for col in df.columns)
+            has_dob = any(column_mapping.get(col) == 'dob' for col in df.columns)
+            
+            print(f"DEBUG: Has phone column: {has_phone}")
+            print(f"DEBUG: Has dob column: {has_dob}")
+            
+            if not has_phone and not has_dob:
+                return JsonResponse({
+                    'success': False, 
+                    'error': 'At least one of phone or DOB columns is required for new client creation. Please include either a phone number column or a date of birth (DOB) column.'
+                }, status=400)
         
         # Check for intake-related columns using case-insensitive mapping
         has_intake_data = False
@@ -1267,13 +1290,13 @@ def upload_clients(request):
             # If we get here, the data is essentially the same
             return True
         
-        def process_intake_data(client, row, index, column_mapping):
+        def process_intake_data(client, row, index, column_mapping, df_columns):
             """Process intake data for a client"""
             try:
                 # Helper function to get data using field mapping
                 def get_field_data(field_name, default=''):
                     """Get data from row using field mapping"""
-                    for col in df.columns:
+                    for col in df_columns:
                         if column_mapping.get(col) == field_name:
                             value = row[col]
                             if pd.notna(value) and str(value).strip():
@@ -1683,7 +1706,70 @@ def upload_clients(request):
                     'contact_information': {
                         'email': email,
                         'phone': phone,
-                    }
+                    },
+                    # Extended fields for ClientExtended model
+                    'indigenous_identity': get_field_data('indigenous_identity'),
+                    'military_status': get_field_data('military_status'),
+                    'refugee_status': get_field_data('refugee_status'),
+                    'household_size': parse_integer(get_field_data('household_size')),
+                    'family_head_client_no': get_field_data('family_head_client_no'),
+                    'relationship': get_field_data('relationship'),
+                    'primary_worker': get_field_data('primary_worker'),
+                    'chronically_homeless': parse_boolean(get_field_data('chronically_homeless')),
+                    'num_bednights_current_stay': parse_integer(get_field_data('num_bednights_current_stay')),
+                    'length_homeless_3yrs': parse_integer(get_field_data('length_homeless_3yrs')),
+                    'income_source': get_field_data('income_source'),
+                    'taxation_year_filed': get_field_data('taxation_year_filed'),
+                    'status_id': get_field_data('status_id'),
+                    'picture_id': get_field_data('picture_id'),
+                    'other_id': get_field_data('other_id'),
+                    'bnl_consent': parse_boolean(get_field_data('bnl_consent')),
+                    'allergies': get_field_data('allergies'),
+                    'harm_reduction_support': parse_boolean(get_field_data('harm_reduction_support')),
+                    'medication_support': parse_boolean(get_field_data('medication_support')),
+                    'pregnancy_support': parse_boolean(get_field_data('pregnancy_support')),
+                    'mental_health_support': parse_boolean(get_field_data('mental_health_support')),
+                    'physical_health_support': parse_boolean(get_field_data('physical_health_support')),
+                    'daily_activities_support': parse_boolean(get_field_data('daily_activities_support')),
+                    'other_health_supports': get_field_data('other_health_supports'),
+                    'cannot_use_stairs': parse_boolean(get_field_data('cannot_use_stairs')),
+                    'limited_mobility': parse_boolean(get_field_data('limited_mobility')),
+                    'wheelchair_accessibility': parse_boolean(get_field_data('wheelchair_accessibility')),
+                    'vision_hearing_speech_supports': get_field_data('vision_hearing_speech_supports'),
+                    'english_translator': parse_boolean(get_field_data('english_translator')),
+                    'reading_supports': parse_boolean(get_field_data('reading_supports')),
+                    'other_accessibility_supports': get_field_data('other_accessibility_supports'),
+                    'pet_owner': parse_boolean(get_field_data('pet_owner')),
+                    'legal_support': parse_boolean(get_field_data('legal_support')),
+                    'immigration_support': parse_boolean(get_field_data('immigration_support')),
+                    'religious_cultural_supports': get_field_data('religious_cultural_supports'),
+                    'safety_concerns': get_field_data('safety_concerns'),
+                    'intimate_partner_violence_support': parse_boolean(get_field_data('intimate_partner_violence_support')),
+                    'human_trafficking_support': parse_boolean(get_field_data('human_trafficking_support')),
+                    'other_supports': get_field_data('other_supports'),
+                    'access_to_housing_application': get_field_data('access_to_housing_application'),
+                    'access_to_housing_no': get_field_data('access_to_housing_no'),
+                    'access_point_application': get_field_data('access_point_application'),
+                    'access_point_no': get_field_data('access_point_no'),
+                    'cars': get_field_data('cars'),
+                    'cars_no': parse_integer(get_field_data('cars_no')),
+                    'discharge_disposition': get_field_data('discharge_disposition'),
+                    'intake_status': get_field_data('intake_status'),
+                    'lived_last_12_months': get_field_data('lived_last_12_months'),
+                    'reason_for_service': get_field_data('reason_for_service'),
+                    'intake_date': parse_date(get_field_data('intake_date')),
+                    'service_end_date': parse_date(get_field_data('service_end_date')),
+                    'rejection_date': parse_date(get_field_data('rejection_date')),
+                    'rejection_reason': get_field_data('rejection_reason'),
+                    'room': get_field_data('room'),
+                    'bed': get_field_data('bed'),
+                    'occupancy_status': get_field_data('occupancy_status'),
+                    'bed_nights_historical': parse_integer(get_field_data('bed_nights_historical')),
+                    'restriction_reason': get_field_data('restriction_reason'),
+                    'restriction_date': parse_date(get_field_data('restriction_date')),
+                    'restriction_duration_days': parse_integer(get_field_data('restriction_duration_days')),
+                    'restriction_status': get_field_data('restriction_status'),
+                    'early_termination_by': get_field_data('early_termination_by')
                 }
                 
                 # Handle languages_spoken (expect comma-separated string)
@@ -1789,56 +1875,51 @@ def upload_clients(request):
                             if 'contact_information' in client_data:
                                 print(f"Row {index + 1}: contact_information in client_data: {client_data['contact_information']}")
                             
+                            # For updates, only include fields that are actually present in the CSV
                             filtered_data = {}
+                            
+                            # Get all fields that are mapped from CSV columns
+                            csv_fields = set()
+                            for col in df.columns:
+                                field_name = column_mapping.get(col)
+                                if field_name:
+                                    csv_fields.add(field_name)
+                            
+                            # Only include fields that exist in the CSV and have non-empty values
                             for field, value in client_data.items():
-                                if value is not None and value != '':
-                                    if isinstance(value, str) and value.strip() == '':
+                                # Skip if field is not in CSV
+                                if field not in csv_fields:
+                                    continue
+                                    
+                                # Skip if value is None, empty string, or empty dict
+                                if value is None:
+                                    continue
+                                if isinstance(value, str) and value.strip() == '':
+                                    continue
+                                if isinstance(value, dict) and not value:
+                                    continue
+                                    
+                                # Handle contact_information specially - only include if it has actual values
+                                if field == 'contact_information' and isinstance(value, dict):
+                                    has_values = False
+                                    for key, val in value.items():
+                                        if val and str(val).strip():
+                                            has_values = True
+                                            break
+                                    if not has_values:
                                         continue
-                                    if isinstance(value, dict) and not value:
+                                
+                                # Handle other dictionary fields (addresses, etc.) - only include if they have actual values
+                                if isinstance(value, dict) and field not in ['contact_information']:
+                                    has_values = False
+                                    for key, val in value.items():
+                                        if val and str(val).strip():
+                                            has_values = True
+                                            break
+                                    if not has_values:
                                         continue
-                                    
-                                    # Skip default values for fields not in CSV
-                                    if field == 'gender' and value == 'Unknown':
-                                        # Check if Gender column exists in CSV
-                                        if 'Gender' not in df.columns and 'gender' not in df.columns:
-                                            continue
-                                    
-                                    # Skip boolean fields with default False values when column doesn't exist
-                                    if field in ['language_interpreter_required', 'children_home', 'permission_to_phone', 'permission_to_email'] and value is False:
-                                        # Check if corresponding column exists in CSV
-                                        column_name = field.replace('_', ' ').title()
-                                        if column_name not in df.columns and field not in df.columns:
-                                            continue
-                                    
-                                    # Skip empty string fields when column doesn't exist
-                                    if isinstance(value, str) and value.strip() == '':
-                                        # Check if corresponding column exists in CSV
-                                        column_name = field.replace('_', ' ').title()
-                                        if column_name not in df.columns and field not in df.columns:
-                                            continue
-                                    
-                                    # Handle contact_information specially - only include if it has actual values
-                                    if field == 'contact_information' and isinstance(value, dict):
-                                        # Check if contact_information has any non-empty values
-                                        has_values = False
-                                        for key, val in value.items():
-                                            if val and str(val).strip():
-                                                has_values = True
-                                                break
-                                        if not has_values:
-                                            continue
-                                    
-                                    # Handle other dictionary fields (addresses, etc.) - only include if they have actual values
-                                    if isinstance(value, dict) and field not in ['contact_information']:
-                                        has_values = False
-                                        for key, val in value.items():
-                                            if val and str(val).strip():
-                                                has_values = True
-                                                break
-                                        if not has_values:
-                                            continue
-                                    
-                                    filtered_data[field] = value
+                                
+                                filtered_data[field] = value
                             
                             # Debug: Log what fields are being updated
                             print(f"Row {index + 1}: Updating client {client.first_name} {client.last_name}")
@@ -1847,17 +1928,67 @@ def upload_clients(request):
                             if 'gender' in filtered_data:
                                 print(f"Row {index + 1}: Gender in filtered_data: '{filtered_data['gender']}'")
                             
-                            # Apply only the filtered (non-empty) values
+                            # Apply only the filtered (non-empty) values, excluding extended fields
+                            extended_fields_list = [
+                                'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
+                                'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
+                                'num_bednights_current_stay', 'length_homeless_3yrs', 'income_source',
+                                'taxation_year_filed', 'status_id', 'picture_id', 'other_id', 'bnl_consent',
+                                'allergies', 'harm_reduction_support', 'medication_support', 'pregnancy_support',
+                                'mental_health_support', 'physical_health_support', 'daily_activities_support',
+                                'other_health_supports', 'cannot_use_stairs', 'limited_mobility',
+                                'wheelchair_accessibility', 'vision_hearing_speech_supports', 'english_translator',
+                                'reading_supports', 'other_accessibility_supports', 'pet_owner', 'legal_support',
+                                'immigration_support', 'religious_cultural_supports', 'safety_concerns',
+                                'intimate_partner_violence_support', 'human_trafficking_support', 'other_supports',
+                                'access_to_housing_application', 'access_to_housing_no', 'access_point_application',
+                                'access_point_no', 'cars', 'cars_no', 'discharge_disposition', 'intake_status',
+                                'lived_last_12_months', 'reason_for_service', 'intake_date', 'service_end_date',
+                                'rejection_date', 'rejection_reason', 'room', 'bed', 'occupancy_status',
+                                'bed_nights_historical', 'restriction_reason', 'restriction_date',
+                                'restriction_duration_days', 'restriction_status', 'early_termination_by'
+                            ]
+                            
                             for field, value in filtered_data.items():
-                                if hasattr(client, field):
+                                if hasattr(client, field) and field not in extended_fields_list:
                                     setattr(client, field, value)
                             
                             # Save the updated client
                             client.save()
                             logger.info(f"Updated existing client by Client ID {client_data['client_id']}: {client.first_name} {client.last_name}")
+                            
+                            # Update or create ClientExtended record
+                            from core.models import ClientExtended
+                            extended_data = {}
+                            
+                            # Extract extended fields from filtered_data (only non-empty values)
+                            for field in extended_fields_list:
+                                if field in filtered_data:
+                                    value = filtered_data[field]
+                                    if value is not None and value != '':
+                                        if isinstance(value, str) and value.strip() != '':
+                                            extended_data[field] = value.strip()
+                                        elif not isinstance(value, str):
+                                            extended_data[field] = value
+                            
+                            # Update or create ClientExtended record
+                            if extended_data:
+                                extended_record, created = ClientExtended.objects.get_or_create(
+                                    client=client,
+                                    defaults=extended_data
+                                )
+                                if not created:
+                                    # Update existing record
+                                    for field, value in extended_data.items():
+                                        setattr(extended_record, field, value)
+                                    extended_record.save()
+                                    logger.info(f"Updated ClientExtended record for client {client.client_id}")
+                                else:
+                                    logger.info(f"Created ClientExtended record for client {client.client_id}")
                         else:
                             # Client ID exists but with different source - CREATE new client
                             print(f"Row {index + 1}: Client ID '{client_id_to_find}' exists but with different source - will CREATE new client")
+                            is_update = False  # Reset to False since we're creating a new client
                         
                     except Exception as e:
                         logger.error(f"Error updating client with ID {client_data['client_id']}: {e}")
@@ -1866,32 +1997,48 @@ def upload_clients(request):
                 # Validate required fields for all rows (client_id is now required for all uploads)
                 if not is_update:
                     # For new client creation, validate required fields (including client_id)
-                    required_fields = ['client_id', 'first_name', 'last_name', 'phone_number', 'dob']
+                    # Either phone OR dob is required (not both)
+                    required_fields = ['client_id', 'first_name', 'last_name']
                     missing_required = []
                     
                     for field in required_fields:
-                        if field == 'phone_number':
-                            # Check phone number in both locations
-                            phone_value = client_data.get('contact_information', {}).get('phone')
-                            if not phone_value or (isinstance(phone_value, str) and phone_value.strip() == ''):
-                                # Also check the direct phone field
-                                phone_value = client_data.get('phone')
-                                if not phone_value or (isinstance(phone_value, str) and phone_value.strip() == ''):
-                                    missing_required.append(field)
-                        else:
-                            value = client_data.get(field)
-                            if not value or (isinstance(value, str) and value.strip() == ''):
-                                missing_required.append(field)
+                        value = client_data.get(field)
+                        if not value or (isinstance(value, str) and value.strip() == ''):
+                            missing_required.append(field)
+                    
+                    # Check that at least one of phone OR dob is present (only for new clients)
+                    has_phone = False
+                    has_dob = False
+                    
+                    # Check phone number in both locations
+                    phone_value = client_data.get('contact_information', {}).get('phone')
+                    if phone_value and isinstance(phone_value, str) and phone_value.strip() != '':
+                        has_phone = True
+                    else:
+                        # Also check the direct phone field
+                        phone_value = client_data.get('phone')
+                        if phone_value and isinstance(phone_value, str) and phone_value.strip() != '':
+                            has_phone = True
+                    
+                    # Check DOB
+                    dob_value = client_data.get('dob')
+                    if dob_value:
+                        has_dob = True
+                    
+                    if not has_phone and not has_dob:
+                        missing_required.append('phone_or_dob')
                     
                     # Debug: Log what's in client_data for required fields
                     debug_fields = []
                     for f in required_fields:
-                        if f == 'phone_number':
-                            contact_phone = client_data.get('contact_information', {}).get('phone')
-                            direct_phone = client_data.get('phone')
-                            debug_fields.append((f, f"contact_information.phone='{contact_phone}', direct phone='{direct_phone}'"))
-                        else:
-                            debug_fields.append((f, client_data.get(f)))
+                        debug_fields.append((f, client_data.get(f)))
+                    
+                    # Add phone/dob debug info
+                    contact_phone = client_data.get('contact_information', {}).get('phone')
+                    direct_phone = client_data.get('phone')
+                    dob_value = client_data.get('dob')
+                    debug_fields.append(('phone_or_dob', f"contact_phone='{contact_phone}', direct_phone='{direct_phone}', dob='{dob_value}'"))
+                    
                     debug_row_info = f"Row {index + 1}: client_data for required fields: {debug_fields}"
                     print(debug_row_info)
                     if not hasattr(debug_info, 'row_debug'):
@@ -1899,12 +2046,26 @@ def upload_clients(request):
                     debug_info['row_debug'].append(debug_row_info)
                     
                     if missing_required:
-                        errors.append(f"Row {index + 1}: Missing required fields for client creation: {', '.join(missing_required)}")
+                        # Handle special case for phone_or_dob
+                        if 'phone_or_dob' in missing_required:
+                            missing_required.remove('phone_or_dob')
+                            if missing_required:
+                                error_msg = f"Row {index + 1}: Missing required fields: {', '.join(missing_required)}. Also, at least one of phone or DOB is required."
+                            else:
+                                error_msg = f"Row {index + 1}: At least one of phone or DOB is required for client creation."
+                        else:
+                            error_msg = f"Row {index + 1}: Missing required fields for client creation: {', '.join(missing_required)}"
+                        print(f"Row {index + 1}: VALIDATION FAILED - {error_msg}")
+                        errors.append(error_msg)
                         skipped_count += 1
                         continue
+                    else:
+                        print(f"Row {index + 1}: VALIDATION PASSED - proceeding to client creation")
                     
-                    # Check for duplicates using our custom logic
+                    # Check for duplicates using our custom logic (only for new clients)
+                    print(f"Row {index + 1}: About to check for duplicates")
                     duplicate_client, match_type = find_duplicate_client(client_data)
+                    print(f"Row {index + 1}: Duplicate check result: duplicate_client={duplicate_client}, match_type={match_type}")
                     
                     # Store original values for duplicate relationship creation
                     if duplicate_client:
@@ -1916,13 +2077,63 @@ def upload_clients(request):
                         # The client will be created with original contact information
                         # Duplicate detection will be handled through the ClientDuplicate relationship
                     
-                    # Create the client with original data (no more unique constraint issues)
-                    client = Client.objects.create(**client_data)
+                    # Separate client fields from extended fields for new client creation
+                    print(f"Row {index + 1}: About to separate client fields from extended fields")
+                    client_fields = {}
+                    extended_fields_list = [
+                        'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
+                        'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
+                        'num_bednights_current_stay', 'length_homeless_3yrs', 'income_source',
+                        'taxation_year_filed', 'status_id', 'picture_id', 'other_id', 'bnl_consent',
+                        'allergies', 'harm_reduction_support', 'medication_support', 'pregnancy_support',
+                        'mental_health_support', 'physical_health_support', 'daily_activities_support',
+                        'other_health_supports', 'cannot_use_stairs', 'limited_mobility',
+                        'wheelchair_accessibility', 'vision_hearing_speech_supports', 'english_translator',
+                        'reading_supports', 'other_accessibility_supports', 'pet_owner', 'legal_support',
+                        'immigration_support', 'religious_cultural_supports', 'safety_concerns',
+                        'intimate_partner_violence_support', 'human_trafficking_support', 'other_supports',
+                        'access_to_housing_application', 'access_to_housing_no', 'access_point_application',
+                        'access_point_no', 'cars', 'cars_no', 'discharge_disposition', 'intake_status',
+                        'lived_last_12_months', 'reason_for_service', 'intake_date', 'service_end_date',
+                        'rejection_date', 'rejection_reason', 'room', 'bed', 'occupancy_status',
+                        'bed_nights_historical', 'restriction_reason', 'restriction_date',
+                        'restriction_duration_days', 'restriction_status', 'early_termination_by'
+                    ]
+                    
+                    # Filter out extended fields from client_data
+                    for field, value in client_data.items():
+                        if field not in extended_fields_list:
+                            client_fields[field] = value
+                    
+                    # Create the client with only client fields
+                    print(f"Row {index + 1}: About to create client with fields: {list(client_fields.keys())}")
+                    client = Client.objects.create(**client_fields)
                     created_count += 1
+                    print(f"Row {index + 1}: Successfully created client: {client.first_name} {client.last_name}")
                     if duplicate_client:
                         logger.info(f"Created new client with duplicate flag: {client.email or client.phone}")
                     else:
                         logger.info(f"Created new client: {client.email or client.phone}")
+                    
+                    # Create ClientExtended record if there are extended fields
+                    extended_data = {}
+                    
+                    # Extract extended fields from original client_data
+                    for field in extended_fields_list:
+                        if field in client_data:
+                            value = client_data[field]
+                            if value is not None and value != '':
+                                if isinstance(value, str) and value.strip() != '':
+                                    extended_data[field] = value.strip()
+                                elif not isinstance(value, str):
+                                    extended_data[field] = value
+                    
+                    # Create ClientExtended record if there's any extended data
+                    if extended_data:
+                        from core.models import ClientExtended
+                        extended_data['client'] = client
+                        ClientExtended.objects.create(**extended_data)
+                        logger.info(f"Created ClientExtended record for client {client.client_id}")
                 
                 # If we have a client and found a potential duplicate, create duplicate relationship for review
                 # Only do this for newly created clients, not updated ones
@@ -1970,7 +2181,7 @@ def upload_clients(request):
                 # Process intake data if available and we have a client
                 if has_intake_data and client is not None:
                     print(f"DEBUG: Processing intake data for client {client.first_name} {client.last_name}")
-                    process_intake_data(client, row, index, column_mapping)
+                    process_intake_data(client, row, index, column_mapping, df.columns)
                 else:
                     print(f"DEBUG: Skipping intake data - has_intake_data: {has_intake_data}, client: {client is not None}")
                     

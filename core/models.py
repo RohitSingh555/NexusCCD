@@ -416,7 +416,7 @@ class Client(BaseModel):
     middle_name = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     preferred_name = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     alias = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Last Name at Birth")
-    dob = models.DateField(db_index=True)
+    dob = models.DateField(db_index=True, null=True, blank=True)
     age = models.IntegerField(null=True, blank=True, help_text="Calculated from DOB")
     gender = models.CharField(max_length=50, db_index=True)
     gender_identity = models.CharField(max_length=100, null=True, blank=True, db_index=True)
@@ -579,6 +579,86 @@ class Client(BaseModel):
     def __str__(self):
         return f"{self.first_name} {self.last_name}"
 
+class ClientExtended(BaseModel):
+    client = models.OneToOneField('Client', on_delete=models.CASCADE, related_name='extended')
+
+    # 🧍 Demographics / Core
+    indigenous_identity = models.CharField(max_length=200, null=True, blank=True)
+    military_status = models.CharField(max_length=200, null=True, blank=True)
+    refugee_status = models.CharField(max_length=200, null=True, blank=True)
+    household_size = models.IntegerField(null=True, blank=True)
+    family_head_client_no = models.CharField(max_length=100, null=True, blank=True)
+    relationship = models.CharField(max_length=100, null=True, blank=True)
+    primary_worker = models.CharField(max_length=200, null=True, blank=True)
+    chronically_homeless = models.BooleanField(default=False)
+    num_bednights_current_stay = models.IntegerField(null=True, blank=True)
+    length_homeless_3yrs = models.IntegerField(null=True, blank=True)
+    income_source = models.CharField(max_length=200, null=True, blank=True)
+    taxation_year_filed = models.CharField(max_length=4, null=True, blank=True)
+    status_id = models.CharField(max_length=200, null=True, blank=True)
+    picture_id = models.CharField(max_length=200, null=True, blank=True)
+    other_id = models.CharField(max_length=200, null=True, blank=True)
+    bnl_consent = models.BooleanField(default=False)
+
+    # 🏥 Health & Supports
+    allergies = models.TextField(null=True, blank=True)
+    harm_reduction_support = models.BooleanField(default=False)
+    medication_support = models.BooleanField(default=False)
+    pregnancy_support = models.BooleanField(default=False)
+    mental_health_support = models.BooleanField(default=False)
+    physical_health_support = models.BooleanField(default=False)
+    daily_activities_support = models.BooleanField(default=False)
+    other_health_supports = models.TextField(null=True, blank=True)
+
+    # ♿ Accessibility
+    cannot_use_stairs = models.BooleanField(default=False)
+    limited_mobility = models.BooleanField(default=False)
+    wheelchair_accessibility = models.BooleanField(default=False)
+    vision_hearing_speech_supports = models.TextField(null=True, blank=True)
+    english_translator = models.BooleanField(default=False)
+    reading_supports = models.BooleanField(default=False)
+    other_accessibility_supports = models.TextField(null=True, blank=True)
+
+    # 🐾 Lifestyle & Legal
+    pet_owner = models.BooleanField(default=False)
+    legal_support = models.BooleanField(default=False)
+    immigration_support = models.BooleanField(default=False)
+    religious_cultural_supports = models.TextField(null=True, blank=True)
+    safety_concerns = models.TextField(null=True, blank=True)
+    intimate_partner_violence_support = models.BooleanField(default=False)
+    human_trafficking_support = models.BooleanField(default=False)
+    other_supports = models.TextField(null=True, blank=True)
+
+    # 🏠 Housing / Intake / Discharge
+    access_to_housing_application = models.CharField(max_length=255, null=True, blank=True)
+    access_to_housing_no = models.CharField(max_length=100, null=True, blank=True)
+    access_point_application = models.CharField(max_length=255, null=True, blank=True)
+    access_point_no = models.CharField(max_length=100, null=True, blank=True)
+    cars = models.CharField(max_length=255, null=True, blank=True)
+    cars_no = models.CharField(max_length=100, null=True, blank=True)
+    discharge_disposition = models.CharField(max_length=255, null=True, blank=True)
+    intake_status = models.CharField(max_length=100, null=True, blank=True)
+    lived_last_12_months = models.TextField(null=True, blank=True)
+    reason_for_service = models.TextField(null=True, blank=True)
+    intake_date = models.DateField(null=True, blank=True)
+    service_end_date = models.DateField(null=True, blank=True)
+    rejection_date = models.DateField(null=True, blank=True)
+    rejection_reason = models.TextField(null=True, blank=True)
+    room = models.CharField(max_length=50, null=True, blank=True)
+    bed = models.CharField(max_length=50, null=True, blank=True)
+    occupancy_status = models.CharField(max_length=100, null=True, blank=True)
+    bed_nights_historical = models.IntegerField(null=True, blank=True)
+    restriction_reason = models.TextField(null=True, blank=True)
+    restriction_date = models.DateField(null=True, blank=True)
+    restriction_duration_days = models.IntegerField(null=True, blank=True)
+    restriction_status = models.CharField(max_length=100, null=True, blank=True)
+    early_termination_by = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        db_table = 'client_extended'
+
+    def __str__(self):
+        return f"Extended Info for {self.client}"
 
 class ClientProgramEnrollment(BaseModel):
     STATUS_CHOICES = [
