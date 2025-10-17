@@ -109,17 +109,15 @@
                         <span class="text-sm text-neutral-900 font-body">{{ client.gender|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Gender Identity:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.gender_identity|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Pronoun:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.pronoun|default:"—" }}</span>
                     </div>
+                    {% if client.children_home %}
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Marital Status:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.marital_status|default:"—" }}</span>
+                        <span class="text-sm font-medium text-neutral-500">Number of Children:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.children_number|default:"—" }}</span>
                     </div>
+                    {% endif %}
                 </div>
             </div>
 
@@ -136,24 +134,32 @@
                 
                 <div class="space-y-3">
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Citizenship Status:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.citizenship_status|default:"—" }}</span>
+                        <span class="text-sm font-medium text-neutral-500">Healthcare Coverage:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.healthcare_coverage|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Country of Birth:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.country_of_birth|default:"—" }}</span>
+                        <span class="text-sm font-medium text-neutral-500">Citizenship Status:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.citizenship_status|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Indigenous Status:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.indigenous_status|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Aboriginal Status:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.aboriginal_status|default:"—" }}</span>
+                        <span class="text-sm font-medium text-neutral-500">Country of Birth:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.country_of_birth|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">LGBTQ+ Status:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.lgbtq_status|default:"—" }}</span>
+                        <span class="text-sm font-medium text-neutral-500">Preferred Official Language:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.preferred_official_language|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Primary Language Spoken:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.primary_language_spoken|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Mother Tongue:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.mother_tongue|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Sexual Orientation:</span>
@@ -162,29 +168,6 @@
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Self-Identification Race/Ethnicity:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.self_identification_race_ethnicity|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Ethnicity:</span>
-                        <span class="text-sm text-neutral-900 font-body">
-                            {% if client.ethnicity %}
-                                {% for ethnicity in client.ethnicity %}
-                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-1">{{ ethnicity }}</span>
-                                {% endfor %}
-                            {% else %}
-                                —
-                            {% endif %}
-                        </span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Highest Level Education:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.highest_level_education|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Children at Home:</span>
-                        <span class="text-sm text-neutral-900 font-body">
-                            {% if client.children_home %}Yes{% else %}No{% endif %}
-                            {% if client.children_number %} ({{ client.children_number }}){% endif %}
-                        </span>
                     </div>
                 </div>
             </div>
@@ -205,16 +188,8 @@
                 
                 <div class="space-y-3">
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Language:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.language|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Preferred Language:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.preferred_language|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Mother Tongue:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.mother_tongue|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Official Language:</span>
@@ -224,18 +199,6 @@
                         <span class="text-sm font-medium text-neutral-500">Language Interpreter Required:</span>
                         <span class="text-sm text-neutral-900 font-body">
                             {% if client.language_interpreter_required %}Yes{% else %}No{% endif %}
-                        </span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Languages Spoken:</span>
-                        <span class="text-sm text-neutral-900 font-body">
-                            {% if client.languages_spoken %}
-                                {% for language in client.languages_spoken %}
-                                    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800 mr-1">{{ language }}</span>
-                                {% endfor %}
-                            {% else %}
-                                —
-                            {% endif %}
                         </span>
                     </div>
                 </div>
@@ -278,10 +241,6 @@
                         <span class="text-sm font-medium text-neutral-500">Location County:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.location_county|default:"—" }}</span>
                     </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">LHIN:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.lhin|default:"—" }}</span>
-                    </div>
                 </div>
             </div>
         </div>
@@ -300,8 +259,9 @@
                 </div>
                 
                 <div class="space-y-3">
+                    <!-- Primary Contact Information -->
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Phone:</span>
+                        <span class="text-sm font-medium text-neutral-500">Phone #:</span>
                         <span class="text-sm text-neutral-900 font-body">
                             {% if client.phone %}
                                 <a href="tel:{{ client.phone }}" class="text-brand-sky hover:text-brand-darkBlue">{{ client.phone }}</a>
@@ -312,28 +272,9 @@
                             {% endif %}
                         </span>
                     </div>
+                    
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Work Phone:</span>
-                        <span class="text-sm text-neutral-900 font-body">
-                            {% if client.phone_work %}
-                                <a href="tel:{{ client.phone_work }}" class="text-brand-sky hover:text-brand-darkBlue">{{ client.phone_work }}</a>
-                            {% else %}
-                                —
-                            {% endif %}
-                        </span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Alternative Phone:</span>
-                        <span class="text-sm text-neutral-900 font-body">
-                            {% if client.phone_alt %}
-                                <a href="tel:{{ client.phone_alt }}" class="text-brand-sky hover:text-brand-darkBlue">{{ client.phone_alt }}</a>
-                            {% else %}
-                                —
-                            {% endif %}
-                        </span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Email:</span>
+                        <span class="text-sm font-medium text-neutral-500">Email Address:</span>
                         <span class="text-sm text-neutral-900 font-body">
                             {% if client.email %}
                                 <a href="mailto:{{ client.email }}" class="text-brand-sky hover:text-brand-darkBlue">{{ client.email }}</a>
@@ -344,18 +285,97 @@
                             {% endif %}
                         </span>
                     </div>
+                    
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Permission to Phone:</span>
-                        <span class="text-sm text-neutral-900 font-body">
-                            {% if client.permission_to_phone %}Yes{% else %}No{% endif %}
-                        </span>
+                        <span class="text-sm font-medium text-neutral-500">Preferred Method of Communication:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.preferred_communication_method|default:"—" }}</span>
                     </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Permission to Email:</span>
-                        <span class="text-sm text-neutral-900 font-body">
-                            {% if client.permission_to_email %}Yes{% else %}No{% endif %}
-                        </span>
+                    
+                    <!-- Address Information -->
+                    <div class="pt-2 border-t border-neutral-200">
+                        <span class="text-sm font-medium text-neutral-500 block mb-2">Address:</span>
+                        <div class="text-sm text-neutral-900 font-body">
+                            {% if client.address %}
+                                <div>{{ client.address }}</div>
+                                {% if client.address_2 %}<div>{{ client.address_2 }}</div>{% endif %}
+                                <div>{{ client.city }}, {{ client.province }} {{ client.postal_code }}</div>
+                            {% else %}
+                                —
+                            {% endif %}
+                        </div>
                     </div>
+                    
+                    <!-- Emergency Contact Information -->
+                    <div class="pt-2 border-t border-neutral-200">
+                        <span class="text-sm font-medium text-neutral-500 block mb-2">Emergency Contact:</span>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Name:</span>
+                                <span class="text-sm text-neutral-900 font-body">
+                                    {% if client.emergency_contact.name %}
+                                        {{ client.emergency_contact.name }}
+                                    {% elif client.next_of_kin.name %}
+                                        {{ client.next_of_kin.name }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Phone #:</span>
+                                <span class="text-sm text-neutral-900 font-body">
+                                    {% if client.emergency_contact.phone %}
+                                        <a href="tel:{{ client.emergency_contact.phone }}" class="text-brand-sky hover:text-brand-darkBlue">{{ client.emergency_contact.phone }}</a>
+                                    {% elif client.next_of_kin.phone %}
+                                        <a href="tel:{{ client.next_of_kin.phone }}" class="text-brand-sky hover:text-brand-darkBlue">{{ client.next_of_kin.phone }}</a>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Additional Contact Information -->
+                    <div class="pt-2 border-t border-neutral-200">
+                        <span class="text-sm font-medium text-neutral-500 block mb-2">Additional Contact Info:</span>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Work Phone:</span>
+                                <span class="text-sm text-neutral-900 font-body">
+                                    {% if client.phone_work %}
+                                        <a href="tel:{{ client.phone_work }}" class="text-brand-sky hover:text-brand-darkBlue">{{ client.phone_work }}</a>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Alternative Phone:</span>
+                                <span class="text-sm text-neutral-900 font-body">
+                                    {% if client.phone_alt %}
+                                        <a href="tel:{{ client.phone_alt }}" class="text-brand-sky hover:text-brand-darkBlue">{{ client.phone_alt }}</a>
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Permission to Phone:</span>
+                                <span class="text-sm text-neutral-900 font-body">
+                                    {% if client.permission_to_phone %}Yes{% else %}No{% endif %}
+                                </span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Permission to Email:</span>
+                                <span class="text-sm text-neutral-900 font-body">
+                                    {% if client.permission_to_email %}Yes{% else %}No{% endif %}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Additional Addresses -->
                     {% if client.addresses %}
                     <div class="pt-2 border-t border-neutral-200">
                         <span class="text-sm font-medium text-neutral-500 block mb-2">Additional Addresses:</span>
@@ -367,37 +387,6 @@
                             {% if address.country %}<div>{{ address.country }}</div>{% endif %}
                         </div>
                         {% endfor %}
-                    </div>
-                    {% endif %}
-                    
-                    <!-- Emergency Contacts -->
-                    {% if client.next_of_kin or client.emergency_contact %}
-                    <div class="pt-2 border-t border-neutral-200">
-                        <span class="text-sm font-medium text-neutral-500 block mb-2">Emergency Contacts:</span>
-                        {% if client.next_of_kin %}
-                        <div class="mb-3">
-                            <span class="text-xs font-medium text-neutral-600">Next of Kin:</span>
-                            {% for key, value in client.next_of_kin.items %}
-                                {% if value %}
-                                <div class="text-xs text-neutral-700 font-body ml-2">
-                                    <span class="font-medium">{{ key|title }}:</span> {{ value }}
-                                </div>
-                                {% endif %}
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        {% if client.emergency_contact %}
-                        <div class="mb-3">
-                            <span class="text-xs font-medium text-neutral-600">Emergency Contact:</span>
-                            {% for key, value in client.emergency_contact.items %}
-                                {% if value %}
-                                <div class="text-xs text-neutral-700 font-body ml-2">
-                                    <span class="font-medium">{{ key|title }}:</span> {{ value }}
-                                </div>
-                                {% endif %}
-                            {% endfor %}
-                        </div>
-                        {% endif %}
                     </div>
                     {% endif %}
                     
@@ -552,6 +541,14 @@
                         <span class="text-sm text-neutral-900 font-body">{{ client.source|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">UID External:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.uid_external|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Program Status:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.program_status|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Updated By:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.updated_by|default:"—" }}</span>
                     </div>
@@ -573,7 +570,424 @@
             </div>
         </div>
 
+        <!-- 🏠 CLIENT EXTENDED INFORMATION -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Identity & Status Information -->
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-green-400 to-green-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Identity & Status</h2>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Indigenous Identity:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.indigenous_identity|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Military Status:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.military_status|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Refugee Status:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.refugee_status|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Household Size:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.household_size|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Family Head Client No:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.family_head_client_no|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Primary Worker:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.primary_worker|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Chronically Homeless:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.chronically_homeless %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Bed Nights Current Stay:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.num_bednights_current_stay|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Length Homeless (3yrs):</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.length_homeless_3yrs|default:"—" }}</span>
+                    </div>
+                </div>
+            </div>
 
+            <!-- Financial & ID Information -->
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Financial & ID</h2>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Income Source:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.income_source|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Taxation Year Filed:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.taxation_year_filed|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Status ID:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.status_id|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Picture ID:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.picture_id|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Other ID:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.other_id|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">BNL Consent:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.bnl_consent %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Health & Accessibility Support -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Health Support Information -->
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-red-400 to-red-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Health Support</h2>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Allergies:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.allergies|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Harm Reduction Support:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.harm_reduction_support %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Medication Support:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.medication_support %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Pregnancy Support:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.pregnancy_support %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Mental Health Support:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.mental_health_support %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Physical Health Support:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.physical_health_support %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Daily Activities Support:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.daily_activities_support %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Other Health Supports:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.other_health_supports|default:"—" }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accessibility Information -->
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-purple-400 to-purple-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Accessibility</h2>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Cannot Use Stairs:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.cannot_use_stairs %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Limited Mobility:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.limited_mobility %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Wheelchair Accessibility:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.wheelchair_accessibility %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Vision/Hearing/Speech Supports:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.vision_hearing_speech_supports|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">English Translator:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.english_translator %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Reading Supports:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.reading_supports %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Other Accessibility Supports:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.other_accessibility_supports|default:"—" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Support & Housing Information -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Additional Support Information -->
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-indigo-400 to-indigo-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192L5.636 18.364M12 2.25a9.75 9.75 0 100 19.5 9.75 9.75 0 000-19.5z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Additional Support</h2>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Pet Owner:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.pet_owner %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Legal Support:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.legal_support %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Immigration Support:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.immigration_support %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Religious/Cultural Supports:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.religious_cultural_supports|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Safety Concerns:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.safety_concerns|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Intimate Partner Violence Support:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.intimate_partner_violence_support %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Human Trafficking Support:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.human_trafficking_support %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Other Supports:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.other_supports|default:"—" }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Housing & Application Information -->
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Housing & Applications</h2>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Access to Housing Application:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.access_to_housing_application %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Access to Housing No:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.access_to_housing_no|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Access Point Application:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.access_point_application %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Access Point No:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.access_point_no|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Cars:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.extended.cars %}Yes{% else %}No{% endif %}
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Number of Cars:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.cars_no|default:"—" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Service & Intake Information -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Service Information -->
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-teal-400 to-teal-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Service Information</h2>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Discharge Disposition:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.discharge_disposition|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Intake Status:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.intake_status|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Lived Last 12 Months:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.lived_last_12_months|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Reason for Service:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.reason_for_service|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Intake Date:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.intake_date|date:"M d, Y"|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Service End Date:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.service_end_date|date:"M d, Y"|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Rejection Date:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.rejection_date|date:"M d, Y"|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Rejection Reason:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.rejection_reason|default:"—" }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accommodation & Restrictions -->
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-orange-400 to-orange-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Accommodation & Restrictions</h2>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Room:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.room|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Bed:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.bed|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Occupancy Status:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.occupancy_status|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Bed Nights Historical:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.bed_nights_historical|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Restriction Reason:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.restriction_reason|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Restriction Date:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.restriction_date|date:"M d, Y"|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Restriction Duration (Days):</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.restriction_duration_days|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Restriction Status:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.restriction_status|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Early Termination By:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.early_termination_by|default:"—" }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Program Enrollments & Service Restrictions -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -655,74 +1069,77 @@
                                 <div class="border border-neutral-200 rounded-lg p-4 {% if restriction.is_active %}bg-red-50 border-red-200{% else %}bg-neutral-50{% endif %}">
                                     <div class="flex items-start justify-between">
                                         <div class="flex-1">
-                                            <div class="flex items-center space-x-2 mb-2">
+                                            <!-- Status and Scope -->
+                                            <div class="flex items-center space-x-2 mb-3">
                                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold {% if restriction.is_active %}bg-red-100 text-red-800{% else %}bg-neutral-100 text-neutral-800{% endif %}">
                                                     {% if restriction.is_active %}Active{% else %}Inactive{% endif %}
                                                 </span>
-                                                <div class="flex flex-wrap gap-1">
-                                                    {% for behavior_value, behavior_display in restriction.get_behavior_tags %}
-                                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800">
-                                                            {{ behavior_display }}
-                                                        </span>
-                                                    {% empty %}
-                                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-800">
-                                                            No behaviors
-                                                        </span>
-                                                    {% endfor %}
-                                                </div>
                                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800">
                                                     {{ restriction.get_scope_display }}
                                                 </span>
                                             </div>
                                             
-                                            <div class="space-y-2">
+                                            <!-- Service Restriction Details -->
+                                            <div class="space-y-2 mb-3">
                                                 <div class="flex items-center text-sm">
-                                                    <span class="font-medium text-neutral-700 w-20">Start:</span>
-                                                    <span class="text-neutral-900">{{ restriction.start_date|date:"M d, Y" }}</span>
+                                                    <span class="font-medium text-neutral-700 w-24">Scope:</span>
+                                                    <span class="text-neutral-900">
+                                                        {% if restriction.program %}
+                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                                                {{ restriction.program.name }}
+                                                            </span>
+                                                        {% else %}
+                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                                                Agency-Wide
+                                                            </span>
+                                                        {% endif %}
+                                                    </span>
                                                 </div>
                                                 
-                                                {% if restriction.end_date %}
-                                                    <div class="flex items-center text-sm">
-                                                        <span class="font-medium text-neutral-700 w-20">End:</span>
-                                                        <span class="text-neutral-900">{{ restriction.end_date|date:"M d, Y" }}</span>
-                                                    </div>
-                                                {% elif restriction.is_indefinite %}
-                                                    <div class="flex items-center text-sm">
-                                                        <span class="font-medium text-neutral-700 w-20">End:</span>
-                                                        <span class="text-red-600 font-bold">Indefinite</span>
-                                                    </div>
-                                                {% endif %}
-                                                
-                                                {% if restriction.program %}
-                                                    <div class="flex items-center text-sm">
-                                                        <span class="font-medium text-neutral-700 w-20">Program:</span>
-                                                        <span class="text-neutral-900">{{ restriction.program.name }}</span>
-                                                    </div>
-                                                {% endif %}
-                                                
-                                                {% if restriction.behaviors %}
-                                                    <div class="flex items-start text-sm">
-                                                        <span class="font-medium text-neutral-700 w-20 mt-1">Behaviors:</span>
-                                                        <div class="flex flex-wrap gap-1">
-                                                            {% for behavior in restriction.behaviors %}
-                                                                <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-orange-100 text-orange-800">
-                                                                    {{ behavior|title }}
-                                                                </span>
-                                                            {% endfor %}
-                                                        </div>
-                                                    </div>
-                                                {% endif %}
-                                                
-                                                {% if restriction.notes %}
-                                                    <div class="flex items-start text-sm">
-                                                        <span class="font-medium text-neutral-700 w-20 mt-1">Notes:</span>
-                                                        <span class="text-neutral-900">{{ restriction.notes }}</span>
-                                                    </div>
-                                                {% endif %}
+                                                <div class="flex items-center text-sm">
+                                                    <span class="font-medium text-neutral-700 w-24">Length:</span>
+                                                    <span class="text-neutral-900">
+                                                        {% if restriction.is_indefinite %}
+                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
+                                                                Indefinite
+                                                            </span>
+                                                        {% elif restriction.end_date %}
+                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
+                                                                {{ restriction.start_date|date:"M d, Y" }} - {{ restriction.end_date|date:"M d, Y" }}
+                                                            </span>
+                                                        {% else %}
+                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                                                                Since {{ restriction.start_date|date:"M d, Y" }}
+                                                            </span>
+                                                        {% endif %}
+                                                    </span>
+                                                </div>
                                             </div>
+                                            
+                                            <!-- Behaviors -->
+                                            {% if restriction.behaviors %}
+                                                <div class="mb-3">
+                                                    <span class="text-sm font-medium text-neutral-700 block mb-1">Behaviors:</span>
+                                                    <div class="flex flex-wrap gap-1">
+                                                        {% for behavior in restriction.behaviors %}
+                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                                                {{ behavior|title }}
+                                                            </span>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                            {% endif %}
+                                            
+                                            <!-- Notes -->
+                                            {% if restriction.notes %}
+                                                <div class="mt-2 pt-2 border-t border-neutral-200">
+                                                    <span class="text-xs font-medium text-neutral-600">Notes:</span>
+                                                    <p class="text-xs text-neutral-700 mt-1">{{ restriction.notes }}</p>
+                                                </div>
+                                            {% endif %}
                                         </div>
                                         
-                                        <div class="text-xs text-neutral-500 ml-4">
+                                        <div class="text-xs text-neutral-500 ml-4 text-right">
                                             <div>Created: {{ restriction.created_at|date:"M d, Y" }}</div>
                                             {% if restriction.created_by %}
                                                 <div>By: {{ restriction.created_by }}</div>

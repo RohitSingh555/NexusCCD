@@ -1,193 +1,130 @@
 {
   "field_mapping": {
-    "first_name": [
-      "first_name", "first name", "firstname", "fname", "given name", "First Name", "FIRST NAME"
-    ],
-    "last_name": [
-      "last_name", "last name", "lastname", "lname", "surname", "family name", "Last Name", "LAST NAME"
-    ],
-    "email": [
-      "email", "e-mail", "email address", "e_mail"
-    ],
-    "phone_number": [
-      "phone_number", "phone number", "phone", "telephone", "tel", "mobile", "cell", "Phone", "PHONE"
-    ],
-    "phone": [
-      "phone_number", "phone number", "phone", "telephone", "tel", "mobile", "cell", "Phone", "PHONE"
-    ],
-    "client_id": [
-      "client_id", "client id", "clientid", "id", "client number", "Client ID", "CLIENT ID"
-    ],
-    "middle_name": [
-      "middle name", "middlename", "mname"
-    ],
-    "preferred_name": [
-      "preferred name", "preferredname", "nickname", "nick name"
-    ],
-    "alias": [
-      "alias", "alias/last name at birth", "last name at birth", "maiden name"
-    ],
-    "dob": [
-      "dob", "date of birth", "birthdate", "birth date", "dateofbirth", "DOB", "DOB"
-    ],
-    "age": [
-      "age"
-    ],
-    "gender": [
-      "gender", "sex"
-    ],
-    "gender_identity": [
-      "gender identity", "genderidentity"
-    ],
-    "pronoun": [
-      "pronoun", "pronouns", "preferred pronoun"
-    ],
-    "marital_status": [
-      "marital status", "maritalstatus", "marriage status"
-    ],
-    "citizenship_status": [
-      "citizenship status", "citizenshipstatus", "citizenship"
-    ],
-    "location_county": [
-      "location/county", "location", "county", "location county"
-    ],
-    "province": [
-      "province", "state"
-    ],
-    "city": [
-      "city", "town"
-    ],
-    "postal_code": [
-      "postal code", "postalcode", "zip", "zip code", "zipcode"
-    ],
-    "address": [
-      "address", "street address", "street"
-    ],
-    "address_2": [
-      "address 2", "address2", "address line 2", "apt", "apartment", "suite"
-    ],
-    "language": [
-      "language", "languages"
-    ],
-    "preferred_language": [
-      "preferred language", "preferredlanguage"
-    ],
-    "mother_tongue": [
-      "mother tongue", "mothertongue", "native language"
-    ],
-    "official_language": [
-      "official language", "officiallanguage"
-    ],
-    "language_interpreter_required": [
-      "language interpreter required", "interpreter required", "interpreter"
-    ],
-    "self_identification_race_ethnicity": [
-      "self-identification as race/ethnicity", "race/ethnicity", "race ethnicity", "self identification"
-    ],
-    "ethnicity": [
-      "ethnicity", "ethnic background"
-    ],
-    "aboriginal_status": [
-      "aboriginal status", "aboriginalstatus", "indigenous status", "indigenous"
-    ],
-    "lgbtq_status": [
-      "lgbtq+?", "lgbtq", "lgbtq+", "sexual orientation"
-    ],
-    "highest_level_education": [
-      "highest level of education", "education level", "education"
-    ],
-    "children_home": [
-      "children home", "childrenhome", "has children"
-    ],
-    "children_number": [
-      "children number", "childrennumber", "number of children"
-    ],
-    "lhin": [
-      "lhin", "local health integration network"
-    ],
-    "medical_conditions": [
-      "medical conditions", "medicalconditions", "health conditions"
-    ],
-    "primary_diagnosis": [
-      "primary diagnosis", "primarydiagnosis", "diagnosis"
-    ],
-    "family_doctor": [
-      "family doctor", "familydoctor", "doctor", "physician"
-    ],
-    "health_card_number": [
-      "hc", "health card", "healthcard", "health card number", "HC#", "hc#"
-    ],
-    "health_card_version": [
-      "hc version", "health card version", "healthcardversion", "HC Version", "hc version"
-    ],
-    "health_card_exp_date": [
-      "hc exp date", "health card exp date", "health card expiry", "healthcardexpdate", "HC Exp Date", "hc exp date"
-    ],
-    "health_card_issuing_province": [
-      "hc issuing province", "health card issuing province", "healthcardissuingprovince", "HC Issuing Province", "hc issuing province"
-    ],
-    "no_health_card_reason": [
-      "no hc reason", "no health card reason", "nohealthcardreason", "No HC Reason", "no hc reason"
-    ],
-    "permission_to_phone": [
-      "permission to phone", "permissiontophone", "phone permission"
-    ],
-    "permission_to_email": [
-      "permission to email", "permissiontoemail", "email permission"
-    ],
-    "phone_work": [
-      "phone (work)", "phone work", "work phone", "workphone", "Phone (Work)"
-    ],
-    "phone_alt": [
-      "phone (alt)", "phone alt", "alternative phone", "alt phone","Phone (Alt)"
-    ],
-    "next_of_kin": [
-      "next of kin", "nextofkin", "kin"
-    ],
-    "emergency_contact": [
-      "emergency contact", "emergencycontact", "emergency"
-    ],
-    "comments": [
-      "comments", "notes", "remarks"
-    ],
-    "program_name": [
-      "program", "program name", "programname"
-    ],
-    "sub_program": [
-      "sub-program", "subprogram", "sub program"
-    ],
-    "support_workers": [
-      "worker / support worker(s)", "support workers", "supportworkers", "workers", "Support Worker(s)", "support worker(s)", "Worker"
-    ],
-    "level_of_support": [
-      "level of support", "levelofsupport", "support level"
-    ],
-    "client_type": [
-      "client type", "clienttype", "type"
-    ],
-    "admission_date": [
-      "admission date", "admissiondate", "start date", "enrollment date"
-    ],
-    "discharge_date": [
-      "discharge date", "dischargedate", "end date", "exit date"
-    ],
-    "days_elapsed": [
-      "days elapsed", "dayselapsed", "days since admission"
-    ],
-    "program_status": [
-      "program status", "programstatus", "status"
-    ],
-    "reason_discharge": [
-      "reason (for discharge/program status)", "reason for discharge", "discharge reason", "reason"
-    ],
-    "receiving_services": [
-      "receiving services", "receivingservices", "active"
-    ],
-    "referral_source": [
-      "referral source", "referralsource", "source"
-    ],
-    "chart_number": [
-      "chart number", "chartnumber", "chart"
-    ]
+    "_comment": "For updates: only client_id is required. For new clients: client_id, first_name, last_name, and either phone or dob are required.",
+    "client_id": ["client_id", "client id", "clientno", "id", "client number", "Client No.", "Client ID", "CLIENT ID"],
+    "first_name": ["first_name", "first name", "firstname", "fname", "given name", "First Name", "FIRST NAME", "Name"],
+    "last_name": ["last_name", "last name", "lastname", "lname", "surname", "family name", "Last Name", "LAST NAME"],
+    "middle_name": ["middle name", "middlename", "mname"],
+    "preferred_name": ["preferred name", "preferredname", "nickname", "nick name"],
+    "alias": ["alias", "alias/last name at birth", "last name at birth", "maiden name"],
+    "dob": ["dob", "date of birth", "birthdate", "birth date", "dateofbirth", "DOB"],
+    "age": ["age"],
+    "gender": ["gender", "sex"],
+    "gender_identity": ["gender identity", "genderidentity"],
+    "pronoun": ["pronoun", "pronouns", "preferred pronoun"],
+    "marital_status": ["marital status", "maritalstatus", "marriage status"],
+    "citizenship_status": ["citizenship status", "citizenshipstatus", "citizenship"],
+    "location_county": ["location/county", "location", "county", "location county"],
+    "province": ["province", "state"],
+    "city": ["city", "town"],
+    "postal_code": ["postal code", "postalcode", "zip", "zip code", "zipcode"],
+    "address": ["address", "street address", "street"],
+    "address_2": ["address 2", "address2", "address line 2", "apt", "apartment", "suite"],
+    "language": ["language", "languages"],
+    "preferred_language": ["preferred language", "preferredlanguage"],
+    "mother_tongue": ["mother tongue", "mothertongue", "native language"],
+    "country_of_birth": ["country of birth", "countryofbirth", "birth country"],
+    "official_language": ["official language", "officiallanguage"],
+    "language_interpreter_required": ["language interpreter required", "interpreter required", "interpreter"],
+    "self_identification_race_ethnicity": ["self-identification as race/ethnicity", "race/ethnicity", "race ethnicity", "self identification"],
+    "ethnicity": ["ethnicity", "ethnic background"],
+    "aboriginal_status": ["aboriginal status", "aboriginalstatus", "indigenous status", "indigenous"],
+    "lgbtq_status": ["lgbtq+?", "lgbtq", "lgbtq+", "sexual orientation"],
+    "highest_level_education": ["highest level of education", "education level", "education"],
+    "children_home": ["children home", "childrenhome", "has children"],
+    "children_number": ["children number", "childrennumber", "number of children"],
+    "lhin": ["lhin", "local health integration network"],
+    "medical_conditions": ["medical conditions", "medicalconditions", "health conditions"],
+    "primary_diagnosis": ["primary diagnosis", "primarydiagnosis", "diagnosis"],
+    "family_doctor": ["family doctor", "familydoctor", "doctor", "physician"],
+    "health_card_number": ["hc", "health card", "healthcard", "health card number", "HC#", "hc#"],
+    "health_card_version": ["hc version", "health card version", "healthcardversion", "HC Version", "hc version"],
+    "health_card_exp_date": ["hc exp date", "health card exp date", "health card expiry", "healthcardexpdate", "HC Exp Date", "hc exp date"],
+    "health_card_issuing_province": ["hc issuing province", "health card issuing province", "healthcardissuingprovince", "HC Issuing Province", "hc issuing province"],
+    "no_health_card_reason": ["no hc reason", "no health card reason", "nohealthcardreason", "No HC Reason", "no hc reason"],
+    "permission_to_phone": ["permission to phone", "permissiontophone", "phone permission"],
+    "permission_to_email": ["permission to email", "permissiontoemail", "email permission"],
+    "phone": ["phone_number", "phone number", "phone", "telephone", "tel", "mobile", "cell", "Phone", "PHONE"],
+    "phone_work": ["phone (work)", "phone work", "work phone", "workphone", "Phone (Work)"],
+    "phone_alt": ["phone (alt)", "phone alt", "alternative phone", "alt phone","Phone (Alt)"],
+    "email": ["email", "e-mail", "email address", "e_mail"],
+    "next_of_kin": ["next of kin", "nextofkin", "kin"],
+    "emergency_contact": ["emergency contact", "emergencycontact", "emergency"],
+    "comments": ["comments", "notes", "remarks"],
+    "program_name": ["program", "program name", "programname"],
+    "sub_program": ["sub-program", "subprogram", "sub program"],
+    "support_workers": ["worker / support worker(s)", "support workers", "supportworkers", "workers", "Support Worker(s)", "support worker(s)", "Worker"],
+    "level_of_support": ["level of support", "levelofsupport", "support level"],
+    "client_type": ["client type", "clienttype", "type"],
+    "days_elapsed": ["days elapsed", "dayselapsed", "days since admission"],
+    "program_status": ["program status", "programstatus", "status"],
+    "reason_discharge": ["reason (for discharge/program status)", "reason for discharge", "discharge reason", "reason"],
+    "discharge_disposition": ["discharge disposition", "discharge_disposition"],
+    "receiving_services": ["receiving services", "receivingservices", "active"],
+    "referral_source": ["referral source", "referralsource", "source"],
+    "chart_number": ["chart number", "chartnumber", "chart"],
+
+    "indigenous_identity": ["indigenous identity", "indigenous_identity"],
+    "military_status": ["military status", "military_status"],
+    "refugee_status": ["refugee status", "refugee_status"],
+    "household_size": ["household size", "household_size"],
+    "family_head_client_no": ["family head client no", "family_head_client_no", "family_head", "Family Head Client No."],
+    "relationship": ["relationship", "Relationship"],
+    "primary_worker": ["primary worker", "primary_worker"],
+    "chronically_homeless": ["chronically homeless", "chronically_homeless"],
+    "num_bednights_current_stay": ["no. of bednights within current stay", "num_bednights_current_stay", "bed nights"],
+    "length_homeless_3yrs": ["length of homelessness in SMIS in the past 3 years", "length_homeless_3yrs"],
+    "income_source": ["income source", "income_source"],
+    "taxation_year_filed": ["last taxation year client filed for", "taxation_year_filed"],
+    "status_id": ["status id", "status_id"],
+    "picture_id": ["picture id", "picture_id"],
+    "other_id": ["other id", "other_id"],
+    "bnl_consent": ["bnl consent", "bnl_consent"],
+    "allergies": ["allergies or dietary restrictions", "allergies"],
+    "harm_reduction_support": ["harm reduction/ substance use supports", "harm_reduction_support"],
+    "medication_support": ["medication support", "medication_support"],
+    "pregnancy_support": ["pregnancy support", "pregnancy_support"],
+    "mental_health_support": ["mental health support", "mental_health_support"],
+    "physical_health_support": ["physical health support", "physical_health_support"],
+    "daily_activities_support": ["daily activities support", "daily_activities_support"],
+    "other_health_supports": ["other health supports", "other_health_supports"],
+    "cannot_use_stairs": ["cannot use stairs", "cannot_use_stairs"],
+    "limited_mobility": ["limited mobility", "limited_mobility"],
+    "wheelchair_accessibility": ["wheelchair accessibility", "wheelchair_accessibility"],
+    "vision_hearing_speech_supports": ["vision, hearing, speech supports", "vision_hearing_speech_supports", "Vision, Hearing, Speech Supports"],
+    "english_translator": ["english translator", "english_translator"],
+    "reading_supports": ["reading/ paperwork supports", "reading_supports"],
+    "other_accessibility_supports": ["other accessibility supports", "other_accessibility_supports"],
+    "pet_owner": ["pet owner", "pet_owner"],
+    "legal_support": ["legal support", "legal_support"],
+    "immigration_support": ["immigration support", "immigration_support"],
+    "religious_cultural_supports": ["religious/ cultural supports", "religious_cultural_supports"],
+    "safety_concerns": ["safety concerns", "safety_concerns"],
+    "intimate_partner_violence_support": ["intimate partner violence/ sexual violence supports", "intimate_partner_violence_support"],
+    "human_trafficking_support": ["human trafficking supports", "human_trafficking_support"],
+    "other_supports": ["other supports", "other_supports"],
+
+    "access_to_housing_application": ["access to housing application", "access_to_housing_application"],
+    "access_to_housing_no": ["access to housing no", "access_to_housing_no", "Access to Housing No."],
+    "access_point_application": ["access point application", "access_point_application"],
+    "access_point_no": ["access point no", "access_point_no", "Access Point No."],
+    "cars": ["CARS", "cars"],
+    "cars_no": ["CARS No.", "cars_no"],
+    "lived_last_12_months": ["lived last 12 months", "lived_last_12_months","Lived Last 12 Mnths"],
+    "intake_status": ["intake status", "intake_status"],
+    "reason_for_service": ["reason for service", "reason_for_service"],
+    "intake_date": ["intake date", "intake_date","admission date", "admissiondate", "start date", "enrollment date","receiving services date", "services start date"],
+    "service_end_date": ["service end date", "service_end_date","discharge date", "dischargedate", "end date", "exit date"],
+    "rejection_date": ["rejection date", "rejection_date"],
+    "rejection_reason": ["rejection reason", "rejection_reason","Rejection Reason"],
+    "room": ["room", "room_no", "room number"],
+    "bed": ["bed", "bed_no", "bed number"],
+    "occupancy_status": ["occupancy status", "occupancy_status"],
+    "bed_nights_historical": ["bed nights historical", "bed_nights_historical"],
+    "restriction_reason": ["restriction reason", "restriction_reason"],
+    "restriction_date": ["restriction date", "restriction_date"],
+    "restriction_duration_days": ["restriction duration (days)", "restriction_duration_days"],
+    "restriction_status": ["restriction status", "restriction_status"],
+    "early_termination_by": ["early termination by", "early_termination_by"]
   }
 }
