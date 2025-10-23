@@ -268,12 +268,9 @@
                 <div>
                     <label for="{{ form.gender.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Gender *</label>
                     <select name="{{ form.gender.name }}" id="{{ form.gender.id_for_label }}" required class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Gender</option>
-                        <option value="Male" {% if form.gender.value == 'Male' %}selected{% endif %}>Male</option>
-                        <option value="Female" {% if form.gender.value == 'Female' %}selected{% endif %}>Female</option>
-                        <option value="Non-binary" {% if form.gender.value == 'Non-binary' %}selected{% endif %}>Non-binary</option>
-                        <option value="Other" {% if form.gender.value == 'Other' %}selected{% endif %}>Other</option>
-                        <option value="Prefer not to say" {% if form.gender.value == 'Prefer not to say' %}selected{% endif %}>Prefer not to say</option>
+                        {% for value, label in form.gender.field.widget.choices %}
+                            <option value="{{ value }}" {% if form.gender.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
                     </select>
                     {% if form.gender.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.gender.errors.0 }}</div>
@@ -307,25 +304,14 @@
                     {% endif %}
                 </div>
 
-                <!-- Gender Identity -->
-                <div>
-                    <label for="{{ form.gender_identity.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Gender Identity</label>
-                    <input type="text" name="{{ form.gender_identity.name }}" id="{{ form.gender_identity.id_for_label }}" value="{{ form.gender_identity.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.gender_identity.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.gender_identity.errors.0 }}</div>
-                    {% endif %}
-                </div>
 
                 <!-- Citizenship Status -->
                 <div>
                     <label for="{{ form.citizenship_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Citizenship Status</label>
                     <select name="{{ form.citizenship_status.name }}" id="{{ form.citizenship_status.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Citizenship Status</option>
-                        <option value="Citizen" {% if form.citizenship_status.value == 'Citizen' %}selected{% endif %}>Citizen</option>
-                        <option value="Permanent Resident" {% if form.citizenship_status.value == 'Permanent Resident' %}selected{% endif %}>Permanent Resident</option>
-                        <option value="Refugee Claimant" {% if form.citizenship_status.value == 'Refugee Claimant' %}selected{% endif %}>Refugee Claimant</option>
-                        <option value="Temporary Resident" {% if form.citizenship_status.value == 'Temporary Resident' %}selected{% endif %}>Temporary Resident</option>
-                        <option value="Other" {% if form.citizenship_status.value == 'Other' %}selected{% endif %}>Other</option>
+                        {% for value, label in form.citizenship_status.field.widget.choices %}
+                            <option value="{{ value }}" {% if form.citizenship_status.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
                     </select>
                     {% if form.citizenship_status.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.citizenship_status.errors.0 }}</div>
@@ -336,13 +322,9 @@
                 <div>
                     <label for="{{ form.indigenous_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Indigenous Status</label>
                     <select name="{{ form.indigenous_status.name }}" id="{{ form.indigenous_status.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Indigenous Status</option>
-                        <option value="First Nations" {% if form.indigenous_status.value == 'First Nations' %}selected{% endif %}>First Nations</option>
-                        <option value="Métis" {% if form.indigenous_status.value == 'Métis' %}selected{% endif %}>Métis</option>
-                        <option value="Inuit" {% if form.indigenous_status.value == 'Inuit' %}selected{% endif %}>Inuit</option>
-                        <option value="Other Indigenous" {% if form.indigenous_status.value == 'Other Indigenous' %}selected{% endif %}>Other Indigenous</option>
-                        <option value="Not Indigenous" {% if form.indigenous_status.value == 'Not Indigenous' %}selected{% endif %}>Not Indigenous</option>
-                        <option value="Prefer not to say" {% if form.indigenous_status.value == 'Prefer not to say' %}selected{% endif %}>Prefer not to say</option>
+                        {% for value, label in form.indigenous_status.field.widget.choices %}
+                            <option value="{{ value }}" {% if form.indigenous_status.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
                     </select>
                     {% if form.indigenous_status.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.indigenous_status.errors.0 }}</div>
@@ -355,70 +337,6 @@
                     <input type="text" name="{{ form.country_of_birth.name }}" id="{{ form.country_of_birth.id_for_label }}" value="{{ form.country_of_birth.value|default:'' }}" placeholder="e.g., Canada, United States, etc." class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                     {% if form.country_of_birth.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.country_of_birth.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Preferred Official Language -->
-                <div>
-                    <label for="{{ form.preferred_official_language.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Preferred Official Language</label>
-                    <select name="{{ form.preferred_official_language.name }}" id="{{ form.preferred_official_language.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Preferred Official Language</option>
-                        <option value="English" {% if form.preferred_official_language.value == 'English' %}selected{% endif %}>English</option>
-                        <option value="French" {% if form.preferred_official_language.value == 'French' %}selected{% endif %}>French</option>
-                        <option value="Both" {% if form.preferred_official_language.value == 'Both' %}selected{% endif %}>Both</option>
-                    </select>
-                    {% if form.preferred_official_language.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.preferred_official_language.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Primary Language Spoken -->
-                <div>
-                    <label for="{{ form.primary_language_spoken.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Primary Language Spoken</label>
-                    <select name="{{ form.primary_language_spoken.name }}" id="{{ form.primary_language_spoken.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Primary Language</option>
-                        <option value="English" {% if form.primary_language_spoken.value == 'English' %}selected{% endif %}>English</option>
-                        <option value="Spanish" {% if form.primary_language_spoken.value == 'Spanish' %}selected{% endif %}>Spanish</option>
-                        <option value="Chinese (Mandarin)" {% if form.primary_language_spoken.value == 'Chinese (Mandarin)' %}selected{% endif %}>Chinese (Mandarin)</option>
-                        <option value="Chinese (Cantonese)" {% if form.primary_language_spoken.value == 'Chinese (Cantonese)' %}selected{% endif %}>Chinese (Cantonese)</option>
-                        <option value="Tagalog" {% if form.primary_language_spoken.value == 'Tagalog' %}selected{% endif %}>Tagalog</option>
-                        <option value="Vietnamese" {% if form.primary_language_spoken.value == 'Vietnamese' %}selected{% endif %}>Vietnamese</option>
-                        <option value="Arabic" {% if form.primary_language_spoken.value == 'Arabic' %}selected{% endif %}>Arabic</option>
-                        <option value="French" {% if form.primary_language_spoken.value == 'French' %}selected{% endif %}>French</option>
-                        <option value="Korean" {% if form.primary_language_spoken.value == 'Korean' %}selected{% endif %}>Korean</option>
-                        <option value="Russian" {% if form.primary_language_spoken.value == 'Russian' %}selected{% endif %}>Russian</option>
-                        <option value="Portuguese" {% if form.primary_language_spoken.value == 'Portuguese' %}selected{% endif %}>Portuguese</option>
-                        <option value="Hindi" {% if form.primary_language_spoken.value == 'Hindi' %}selected{% endif %}>Hindi</option>
-                        <option value="Urdu" {% if form.primary_language_spoken.value == 'Urdu' %}selected{% endif %}>Urdu</option>
-                        <option value="Bengali" {% if form.primary_language_spoken.value == 'Bengali' %}selected{% endif %}>Bengali</option>
-                        <option value="Punjabi" {% if form.primary_language_spoken.value == 'Punjabi' %}selected{% endif %}>Punjabi</option>
-                        <option value="Gujarati" {% if form.primary_language_spoken.value == 'Gujarati' %}selected{% endif %}>Gujarati</option>
-                        <option value="Tamil" {% if form.primary_language_spoken.value == 'Tamil' %}selected{% endif %}>Tamil</option>
-                        <option value="Telugu" {% if form.primary_language_spoken.value == 'Telugu' %}selected{% endif %}>Telugu</option>
-                        <option value="Marathi" {% if form.primary_language_spoken.value == 'Marathi' %}selected{% endif %}>Marathi</option>
-                        <option value="Haitian Creole" {% if form.primary_language_spoken.value == 'Haitian Creole' %}selected{% endif %}>Haitian Creole</option>
-                        <option value="Amharic" {% if form.primary_language_spoken.value == 'Amharic' %}selected{% endif %}>Amharic</option>
-                        <option value="Somali" {% if form.primary_language_spoken.value == 'Somali' %}selected{% endif %}>Somali</option>
-                        <option value="Swahili" {% if form.primary_language_spoken.value == 'Swahili' %}selected{% endif %}>Swahili</option>
-                        <option value="Yoruba" {% if form.primary_language_spoken.value == 'Yoruba' %}selected{% endif %}>Yoruba</option>
-                        <option value="Igbo" {% if form.primary_language_spoken.value == 'Igbo' %}selected{% endif %}>Igbo</option>
-                        <option value="Farsi/Persian" {% if form.primary_language_spoken.value == 'Farsi/Persian' %}selected{% endif %}>Farsi/Persian</option>
-                        <option value="Turkish" {% if form.primary_language_spoken.value == 'Turkish' %}selected{% endif %}>Turkish</option>
-                        <option value="Polish" {% if form.primary_language_spoken.value == 'Polish' %}selected{% endif %}>Polish</option>
-                        <option value="Italian" {% if form.primary_language_spoken.value == 'Italian' %}selected{% endif %}>Italian</option>
-                        <option value="German" {% if form.primary_language_spoken.value == 'German' %}selected{% endif %}>German</option>
-                        <option value="Japanese" {% if form.primary_language_spoken.value == 'Japanese' %}selected{% endif %}>Japanese</option>
-                        <option value="Thai" {% if form.primary_language_spoken.value == 'Thai' %}selected{% endif %}>Thai</option>
-                        <option value="Burmese" {% if form.primary_language_spoken.value == 'Burmese' %}selected{% endif %}>Burmese</option>
-                        <option value="Nepali" {% if form.primary_language_spoken.value == 'Nepali' %}selected{% endif %}>Nepali</option>
-                        <option value="Sinhala" {% if form.primary_language_spoken.value == 'Sinhala' %}selected{% endif %}>Sinhala</option>
-                        <option value="Khmer" {% if form.primary_language_spoken.value == 'Khmer' %}selected{% endif %}>Khmer</option>
-                        <option value="Lao" {% if form.primary_language_spoken.value == 'Lao' %}selected{% endif %}>Lao</option>
-                        <option value="Hmong" {% if form.primary_language_spoken.value == 'Hmong' %}selected{% endif %}>Hmong</option>
-                        <option value="Other" {% if form.primary_language_spoken.value == 'Other' %}selected{% endif %}>Other</option>
-                    </select>
-                    {% if form.primary_language_spoken.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.primary_language_spoken.errors.0 }}</div>
                     {% endif %}
                 </div>
 
@@ -494,46 +412,9 @@
                 <div>
                     <label for="{{ form.language.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Language</label>
                     <select name="{{ form.language.name }}" id="{{ form.language.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Language</option>
-                        <option value="English" {% if form.language.value == 'English' %}selected{% endif %}>English</option>
-                        <option value="Spanish" {% if form.language.value == 'Spanish' %}selected{% endif %}>Spanish</option>
-                        <option value="Chinese (Mandarin)" {% if form.language.value == 'Chinese (Mandarin)' %}selected{% endif %}>Chinese (Mandarin)</option>
-                        <option value="Chinese (Cantonese)" {% if form.language.value == 'Chinese (Cantonese)' %}selected{% endif %}>Chinese (Cantonese)</option>
-                        <option value="Tagalog" {% if form.language.value == 'Tagalog' %}selected{% endif %}>Tagalog</option>
-                        <option value="Vietnamese" {% if form.language.value == 'Vietnamese' %}selected{% endif %}>Vietnamese</option>
-                        <option value="Arabic" {% if form.language.value == 'Arabic' %}selected{% endif %}>Arabic</option>
-                        <option value="French" {% if form.language.value == 'French' %}selected{% endif %}>French</option>
-                        <option value="Korean" {% if form.language.value == 'Korean' %}selected{% endif %}>Korean</option>
-                        <option value="Russian" {% if form.language.value == 'Russian' %}selected{% endif %}>Russian</option>
-                        <option value="Portuguese" {% if form.language.value == 'Portuguese' %}selected{% endif %}>Portuguese</option>
-                        <option value="Hindi" {% if form.language.value == 'Hindi' %}selected{% endif %}>Hindi</option>
-                        <option value="Urdu" {% if form.language.value == 'Urdu' %}selected{% endif %}>Urdu</option>
-                        <option value="Bengali" {% if form.language.value == 'Bengali' %}selected{% endif %}>Bengali</option>
-                        <option value="Punjabi" {% if form.language.value == 'Punjabi' %}selected{% endif %}>Punjabi</option>
-                        <option value="Gujarati" {% if form.language.value == 'Gujarati' %}selected{% endif %}>Gujarati</option>
-                        <option value="Tamil" {% if form.language.value == 'Tamil' %}selected{% endif %}>Tamil</option>
-                        <option value="Telugu" {% if form.language.value == 'Telugu' %}selected{% endif %}>Telugu</option>
-                        <option value="Marathi" {% if form.language.value == 'Marathi' %}selected{% endif %}>Marathi</option>
-                        <option value="Haitian Creole" {% if form.language.value == 'Haitian Creole' %}selected{% endif %}>Haitian Creole</option>
-                        <option value="Amharic" {% if form.language.value == 'Amharic' %}selected{% endif %}>Amharic</option>
-                        <option value="Somali" {% if form.language.value == 'Somali' %}selected{% endif %}>Somali</option>
-                        <option value="Swahili" {% if form.language.value == 'Swahili' %}selected{% endif %}>Swahili</option>
-                        <option value="Yoruba" {% if form.language.value == 'Yoruba' %}selected{% endif %}>Yoruba</option>
-                        <option value="Igbo" {% if form.language.value == 'Igbo' %}selected{% endif %}>Igbo</option>
-                        <option value="Farsi/Persian" {% if form.language.value == 'Farsi/Persian' %}selected{% endif %}>Farsi/Persian</option>
-                        <option value="Turkish" {% if form.language.value == 'Turkish' %}selected{% endif %}>Turkish</option>
-                        <option value="Polish" {% if form.language.value == 'Polish' %}selected{% endif %}>Polish</option>
-                        <option value="Italian" {% if form.language.value == 'Italian' %}selected{% endif %}>Italian</option>
-                        <option value="German" {% if form.language.value == 'German' %}selected{% endif %}>German</option>
-                        <option value="Japanese" {% if form.language.value == 'Japanese' %}selected{% endif %}>Japanese</option>
-                        <option value="Thai" {% if form.language.value == 'Thai' %}selected{% endif %}>Thai</option>
-                        <option value="Burmese" {% if form.language.value == 'Burmese' %}selected{% endif %}>Burmese</option>
-                        <option value="Nepali" {% if form.language.value == 'Nepali' %}selected{% endif %}>Nepali</option>
-                        <option value="Sinhala" {% if form.language.value == 'Sinhala' %}selected{% endif %}>Sinhala</option>
-                        <option value="Khmer" {% if form.language.value == 'Khmer' %}selected{% endif %}>Khmer</option>
-                        <option value="Lao" {% if form.language.value == 'Lao' %}selected{% endif %}>Lao</option>
-                        <option value="Hmong" {% if form.language.value == 'Hmong' %}selected{% endif %}>Hmong</option>
-                        <option value="Other" {% if form.language.value == 'Other' %}selected{% endif %}>Other</option>
+                        {% for value, label in form.language.field.widget.choices %}
+                            <option value="{{ value }}" {% if form.language.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
                     </select>
                     {% if form.language.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.language.errors.0 }}</div>
@@ -544,46 +425,9 @@
                 <div>
                     <label for="{{ form.preferred_language.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Preferred Language</label>
                     <select name="{{ form.preferred_language.name }}" id="{{ form.preferred_language.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Language</option>
-                        <option value="English" {% if form.preferred_language.value == 'English' %}selected{% endif %}>English</option>
-                        <option value="Spanish" {% if form.preferred_language.value == 'Spanish' %}selected{% endif %}>Spanish</option>
-                        <option value="Chinese (Mandarin)" {% if form.preferred_language.value == 'Chinese (Mandarin)' %}selected{% endif %}>Chinese (Mandarin)</option>
-                        <option value="Chinese (Cantonese)" {% if form.preferred_language.value == 'Chinese (Cantonese)' %}selected{% endif %}>Chinese (Cantonese)</option>
-                        <option value="Tagalog" {% if form.preferred_language.value == 'Tagalog' %}selected{% endif %}>Tagalog</option>
-                        <option value="Vietnamese" {% if form.preferred_language.value == 'Vietnamese' %}selected{% endif %}>Vietnamese</option>
-                        <option value="Arabic" {% if form.preferred_language.value == 'Arabic' %}selected{% endif %}>Arabic</option>
-                        <option value="French" {% if form.preferred_language.value == 'French' %}selected{% endif %}>French</option>
-                        <option value="Korean" {% if form.preferred_language.value == 'Korean' %}selected{% endif %}>Korean</option>
-                        <option value="Russian" {% if form.preferred_language.value == 'Russian' %}selected{% endif %}>Russian</option>
-                        <option value="Portuguese" {% if form.preferred_language.value == 'Portuguese' %}selected{% endif %}>Portuguese</option>
-                        <option value="Hindi" {% if form.preferred_language.value == 'Hindi' %}selected{% endif %}>Hindi</option>
-                        <option value="Urdu" {% if form.preferred_language.value == 'Urdu' %}selected{% endif %}>Urdu</option>
-                        <option value="Bengali" {% if form.preferred_language.value == 'Bengali' %}selected{% endif %}>Bengali</option>
-                        <option value="Punjabi" {% if form.preferred_language.value == 'Punjabi' %}selected{% endif %}>Punjabi</option>
-                        <option value="Gujarati" {% if form.preferred_language.value == 'Gujarati' %}selected{% endif %}>Gujarati</option>
-                        <option value="Tamil" {% if form.preferred_language.value == 'Tamil' %}selected{% endif %}>Tamil</option>
-                        <option value="Telugu" {% if form.preferred_language.value == 'Telugu' %}selected{% endif %}>Telugu</option>
-                        <option value="Marathi" {% if form.preferred_language.value == 'Marathi' %}selected{% endif %}>Marathi</option>
-                        <option value="Haitian Creole" {% if form.preferred_language.value == 'Haitian Creole' %}selected{% endif %}>Haitian Creole</option>
-                        <option value="Amharic" {% if form.preferred_language.value == 'Amharic' %}selected{% endif %}>Amharic</option>
-                        <option value="Somali" {% if form.preferred_language.value == 'Somali' %}selected{% endif %}>Somali</option>
-                        <option value="Swahili" {% if form.preferred_language.value == 'Swahili' %}selected{% endif %}>Swahili</option>
-                        <option value="Yoruba" {% if form.preferred_language.value == 'Yoruba' %}selected{% endif %}>Yoruba</option>
-                        <option value="Igbo" {% if form.preferred_language.value == 'Igbo' %}selected{% endif %}>Igbo</option>
-                        <option value="Farsi/Persian" {% if form.preferred_language.value == 'Farsi/Persian' %}selected{% endif %}>Farsi/Persian</option>
-                        <option value="Turkish" {% if form.preferred_language.value == 'Turkish' %}selected{% endif %}>Turkish</option>
-                        <option value="Polish" {% if form.preferred_language.value == 'Polish' %}selected{% endif %}>Polish</option>
-                        <option value="Italian" {% if form.preferred_language.value == 'Italian' %}selected{% endif %}>Italian</option>
-                        <option value="German" {% if form.preferred_language.value == 'German' %}selected{% endif %}>German</option>
-                        <option value="Japanese" {% if form.preferred_language.value == 'Japanese' %}selected{% endif %}>Japanese</option>
-                        <option value="Thai" {% if form.preferred_language.value == 'Thai' %}selected{% endif %}>Thai</option>
-                        <option value="Burmese" {% if form.preferred_language.value == 'Burmese' %}selected{% endif %}>Burmese</option>
-                        <option value="Nepali" {% if form.preferred_language.value == 'Nepali' %}selected{% endif %}>Nepali</option>
-                        <option value="Sinhala" {% if form.preferred_language.value == 'Sinhala' %}selected{% endif %}>Sinhala</option>
-                        <option value="Khmer" {% if form.language.value == 'Khmer' %}selected{% endif %}>Khmer</option>
-                        <option value="Lao" {% if form.preferred_language.value == 'Lao' %}selected{% endif %}>Lao</option>
-                        <option value="Hmong" {% if form.preferred_language.value == 'Hmong' %}selected{% endif %}>Hmong</option>
-                        <option value="Other" {% if form.preferred_language.value == 'Other' %}selected{% endif %}>Other</option>
+                        {% for value, label in form.preferred_language.field.widget.choices %}
+                            <option value="{{ value }}" {% if form.preferred_language.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
                     </select>
                     {% if form.preferred_language.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.preferred_language.errors.0 }}</div>
@@ -594,46 +438,9 @@
                 <div>
                     <label for="{{ form.mother_tongue.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Mother Tongue</label>
                     <select name="{{ form.mother_tongue.name }}" id="{{ form.mother_tongue.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Language</option>
-                        <option value="English" {% if form.mother_tongue.value == 'English' %}selected{% endif %}>English</option>
-                        <option value="Spanish" {% if form.mother_tongue.value == 'Spanish' %}selected{% endif %}>Spanish</option>
-                        <option value="Chinese (Mandarin)" {% if form.mother_tongue.value == 'Chinese (Mandarin)' %}selected{% endif %}>Chinese (Mandarin)</option>
-                        <option value="Chinese (Cantonese)" {% if form.mother_tongue.value == 'Chinese (Cantonese)' %}selected{% endif %}>Chinese (Cantonese)</option>
-                        <option value="Tagalog" {% if form.mother_tongue.value == 'Tagalog' %}selected{% endif %}>Tagalog</option>
-                        <option value="Vietnamese" {% if form.mother_tongue.value == 'Vietnamese' %}selected{% endif %}>Vietnamese</option>
-                        <option value="Arabic" {% if form.mother_tongue.value == 'Arabic' %}selected{% endif %}>Arabic</option>
-                        <option value="French" {% if form.mother_tongue.value == 'French' %}selected{% endif %}>French</option>
-                        <option value="Korean" {% if form.mother_tongue.value == 'Korean' %}selected{% endif %}>Korean</option>
-                        <option value="Russian" {% if form.mother_tongue.value == 'Russian' %}selected{% endif %}>Russian</option>
-                        <option value="Portuguese" {% if form.mother_tongue.value == 'Portuguese' %}selected{% endif %}>Portuguese</option>
-                        <option value="Hindi" {% if form.mother_tongue.value == 'Hindi' %}selected{% endif %}>Hindi</option>
-                        <option value="Urdu" {% if form.mother_tongue.value == 'Urdu' %}selected{% endif %}>Urdu</option>
-                        <option value="Bengali" {% if form.mother_tongue.value == 'Bengali' %}selected{% endif %}>Bengali</option>
-                        <option value="Punjabi" {% if form.mother_tongue.value == 'Punjabi' %}selected{% endif %}>Punjabi</option>
-                        <option value="Gujarati" {% if form.mother_tongue.value == 'Gujarati' %}selected{% endif %}>Gujarati</option>
-                        <option value="Tamil" {% if form.mother_tongue.value == 'Tamil' %}selected{% endif %}>Tamil</option>
-                        <option value="Telugu" {% if form.mother_tongue.value == 'Telugu' %}selected{% endif %}>Telugu</option>
-                        <option value="Marathi" {% if form.mother_tongue.value == 'Marathi' %}selected{% endif %}>Marathi</option>
-                        <option value="Haitian Creole" {% if form.mother_tongue.value == 'Haitian Creole' %}selected{% endif %}>Haitian Creole</option>
-                        <option value="Amharic" {% if form.mother_tongue.value == 'Amharic' %}selected{% endif %}>Amharic</option>
-                        <option value="Somali" {% if form.mother_tongue.value == 'Somali' %}selected{% endif %}>Somali</option>
-                        <option value="Swahili" {% if form.mother_tongue.value == 'Swahili' %}selected{% endif %}>Swahili</option>
-                        <option value="Yoruba" {% if form.mother_tongue.value == 'Yoruba' %}selected{% endif %}>Yoruba</option>
-                        <option value="Igbo" {% if form.mother_tongue.value == 'Igbo' %}selected{% endif %}>Igbo</option>
-                        <option value="Farsi/Persian" {% if form.mother_tongue.value == 'Farsi/Persian' %}selected{% endif %}>Farsi/Persian</option>
-                        <option value="Turkish" {% if form.mother_tongue.value == 'Turkish' %}selected{% endif %}>Turkish</option>
-                        <option value="Polish" {% if form.mother_tongue.value == 'Polish' %}selected{% endif %}>Polish</option>
-                        <option value="Italian" {% if form.mother_tongue.value == 'Italian' %}selected{% endif %}>Italian</option>
-                        <option value="German" {% if form.mother_tongue.value == 'German' %}selected{% endif %}>German</option>
-                        <option value="Japanese" {% if form.mother_tongue.value == 'Japanese' %}selected{% endif %}>Japanese</option>
-                        <option value="Thai" {% if form.mother_tongue.value == 'Thai' %}selected{% endif %}>Thai</option>
-                        <option value="Burmese" {% if form.mother_tongue.value == 'Burmese' %}selected{% endif %}>Burmese</option>
-                        <option value="Nepali" {% if form.mother_tongue.value == 'Nepali' %}selected{% endif %}>Nepali</option>
-                        <option value="Sinhala" {% if form.mother_tongue.value == 'Sinhala' %}selected{% endif %}>Sinhala</option>
-                        <option value="Khmer" {% if form.mother_tongue.value == 'Khmer' %}selected{% endif %}>Khmer</option>
-                        <option value="Lao" {% if form.mother_tongue.value == 'Lao' %}selected{% endif %}>Lao</option>
-                        <option value="Hmong" {% if form.mother_tongue.value == 'Hmong' %}selected{% endif %}>Hmong</option>
-                        <option value="Other" {% if form.mother_tongue.value == 'Other' %}selected{% endif %}>Other</option>
+                        {% for value, label in form.mother_tongue.field.widget.choices %}
+                            <option value="{{ value }}" {% if form.mother_tongue.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
                     </select>
                     {% if form.mother_tongue.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.mother_tongue.errors.0 }}</div>
@@ -644,46 +451,9 @@
                 <div>
                     <label for="{{ form.official_language.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Official Language</label>
                     <select name="{{ form.official_language.name }}" id="{{ form.official_language.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        <option value="">Select Language</option>
-                        <option value="English" {% if form.official_language.value == 'English' %}selected{% endif %}>English</option>
-                        <option value="Spanish" {% if form.official_language.value == 'Spanish' %}selected{% endif %}>Spanish</option>
-                        <option value="Chinese (Mandarin)" {% if form.official_language.value == 'Chinese (Mandarin)' %}selected{% endif %}>Chinese (Mandarin)</option>
-                        <option value="Chinese (Cantonese)" {% if form.official_language.value == 'Chinese (Cantonese)' %}selected{% endif %}>Chinese (Cantonese)</option>
-                        <option value="Tagalog" {% if form.official_language.value == 'Tagalog' %}selected{% endif %}>Tagalog</option>
-                        <option value="Vietnamese" {% if form.official_language.value == 'Vietnamese' %}selected{% endif %}>Vietnamese</option>
-                        <option value="Arabic" {% if form.official_language.value == 'Arabic' %}selected{% endif %}>Arabic</option>
-                        <option value="French" {% if form.official_language.value == 'French' %}selected{% endif %}>French</option>
-                        <option value="Korean" {% if form.official_language.value == 'Korean' %}selected{% endif %}>Korean</option>
-                        <option value="Russian" {% if form.official_language.value == 'Russian' %}selected{% endif %}>Russian</option>
-                        <option value="Portuguese" {% if form.official_language.value == 'Portuguese' %}selected{% endif %}>Portuguese</option>
-                        <option value="Hindi" {% if form.official_language.value == 'Hindi' %}selected{% endif %}>Hindi</option>
-                        <option value="Urdu" {% if form.official_language.value == 'Urdu' %}selected{% endif %}>Urdu</option>
-                        <option value="Bengali" {% if form.official_language.value == 'Bengali' %}selected{% endif %}>Bengali</option>
-                        <option value="Punjabi" {% if form.official_language.value == 'Punjabi' %}selected{% endif %}>Punjabi</option>
-                        <option value="Gujarati" {% if form.official_language.value == 'Gujarati' %}selected{% endif %}>Gujarati</option>
-                        <option value="Tamil" {% if form.official_language.value == 'Tamil' %}selected{% endif %}>Tamil</option>
-                        <option value="Telugu" {% if form.official_language.value == 'Telugu' %}selected{% endif %}>Telugu</option>
-                        <option value="Marathi" {% if form.official_language.value == 'Marathi' %}selected{% endif %}>Marathi</option>
-                        <option value="Haitian Creole" {% if form.official_language.value == 'Haitian Creole' %}selected{% endif %}>Haitian Creole</option>
-                        <option value="Amharic" {% if form.official_language.value == 'Amharic' %}selected{% endif %}>Amharic</option>
-                        <option value="Somali" {% if form.official_language.value == 'Somali' %}selected{% endif %}>Somali</option>
-                        <option value="Swahili" {% if form.official_language.value == 'Swahili' %}selected{% endif %}>Swahili</option>
-                        <option value="Yoruba" {% if form.official_language.value == 'Yoruba' %}selected{% endif %}>Yoruba</option>
-                        <option value="Igbo" {% if form.official_language.value == 'Igbo' %}selected{% endif %}>Igbo</option>
-                        <option value="Farsi/Persian" {% if form.official_language.value == 'Farsi/Persian' %}selected{% endif %}>Farsi/Persian</option>
-                        <option value="Turkish" {% if form.official_language.value == 'Turkish' %}selected{% endif %}>Turkish</option>
-                        <option value="Polish" {% if form.official_language.value == 'Polish' %}selected{% endif %}>Polish</option>
-                        <option value="Italian" {% if form.official_language.value == 'Italian' %}selected{% endif %}>Italian</option>
-                        <option value="German" {% if form.official_language.value == 'German' %}selected{% endif %}>German</option>
-                        <option value="Japanese" {% if form.official_language.value == 'Japanese' %}selected{% endif %}>Japanese</option>
-                        <option value="Thai" {% if form.official_language.value == 'Thai' %}selected{% endif %}>Thai</option>
-                        <option value="Burmese" {% if form.official_language.value == 'Burmese' %}selected{% endif %}>Burmese</option>
-                        <option value="Nepali" {% if form.official_language.value == 'Nepali' %}selected{% endif %}>Nepali</option>
-                        <option value="Sinhala" {% if form.official_language.value == 'Sinhala' %}selected{% endif %}>Sinhala</option>
-                        <option value="Khmer" {% if form.official_language.value == 'Khmer' %}selected{% endif %}>Khmer</option>
-                        <option value="Lao" {% if form.official_language.value == 'Lao' %}selected{% endif %}>Lao</option>
-                        <option value="Hmong" {% if form.official_language.value == 'Hmong' %}selected{% endif %}>Hmong</option>
-                        <option value="Other" {% if form.official_language.value == 'Other' %}selected{% endif %}>Other</option>
+                        {% for value, label in form.official_language.field.widget.choices %}
+                            <option value="{{ value }}" {% if form.official_language.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
                     </select>
                     {% if form.official_language.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.official_language.errors.0 }}</div>
@@ -705,8 +475,11 @@
                 <!-- Ethnicity -->
                 <div>
                     <label for="{{ form.ethnicity.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Ethnicity</label>
-                    <input type="text" name="{{ form.ethnicity.name }}" id="{{ form.ethnicity.id_for_label }}" value="{{ form.ethnicity.value|default:'' }}" placeholder="Enter ethnicity (comma-separated for multiple)" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    <p class="mt-1 text-xs text-neutral-500 font-body">Enter multiple ethnicities separated by commas</p>
+                    <select name="{{ form.ethnicity.name }}" id="{{ form.ethnicity.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        {% for value, label in form.ethnicity.field.widget.choices %}
+                            <option value="{{ value }}" {% if form.ethnicity.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
                     {% if form.ethnicity.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.ethnicity.errors.0 }}</div>
                     {% endif %}
@@ -739,44 +512,6 @@
                     {% endif %}
                 </div>
 
-                <!-- Highest Level of Education -->
-                <div>
-                    <label for="{{ form.highest_level_education.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Highest Level of Education</label>
-                    <input type="text" name="{{ form.highest_level_education.name }}" id="{{ form.highest_level_education.id_for_label }}" value="{{ form.highest_level_education.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.highest_level_education.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.highest_level_education.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Children Home -->
-                <div>
-                    <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Children Home</label>
-                    <div class="flex items-center">
-                        <input type="checkbox" name="{{ form.children_home.name }}" id="{{ form.children_home.id_for_label }}" {% if form.children_home.value %}checked{% endif %} class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
-                        <label for="{{ form.children_home.id_for_label }}" class="ml-2 text-sm text-neutral-700">Yes</label>
-                    </div>
-                    {% if form.children_home.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.children_home.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Children Number -->
-                <div>
-                    <label for="{{ form.children_number.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Children Number</label>
-                    <input type="number" name="{{ form.children_number.name }}" id="{{ form.children_number.id_for_label }}" value="{{ form.children_number.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.children_number.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.children_number.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- LHIN -->
-                <div>
-                    <label for="{{ form.lhin.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">LHIN (Local Health Integration Network)</label>
-                    <input type="text" name="{{ form.lhin.name }}" id="{{ form.lhin.id_for_label }}" value="{{ form.lhin.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.lhin.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.lhin.errors.0 }}</div>
-                    {% endif %}
-                </div>
 
                 <!-- Sexual Orientation -->
                 <div>
@@ -799,91 +534,6 @@
             </div>
         </div>
 
-        <!-- 💊 MEDICAL & HEALTH INFORMATION -->
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-            <div class="flex items-center mb-6">
-                <div class="w-10 h-10 bg-gradient-to-br from-red-400 to-red-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                    </svg>
-                </div>
-                <h2 class="text-xl font-bold text-neutral-800 font-header">💊 Medical & Health Information</h2>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Medical Conditions -->
-                <div class="md:col-span-2">
-                    <label for="{{ form.medical_conditions.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Medical Conditions</label>
-                    <textarea name="{{ form.medical_conditions.name }}" id="{{ form.medical_conditions.id_for_label }}" rows="3" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.medical_conditions.value|default:'' }}</textarea>
-                    {% if form.medical_conditions.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.medical_conditions.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Primary Diagnosis -->
-                <div>
-                    <label for="{{ form.primary_diagnosis.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Primary Diagnosis</label>
-                    <input type="text" name="{{ form.primary_diagnosis.name }}" id="{{ form.primary_diagnosis.id_for_label }}" value="{{ form.primary_diagnosis.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.primary_diagnosis.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.primary_diagnosis.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Family Doctor -->
-                <div>
-                    <label for="{{ form.family_doctor.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Family Doctor</label>
-                    <input type="text" name="{{ form.family_doctor.name }}" id="{{ form.family_doctor.id_for_label }}" value="{{ form.family_doctor.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.family_doctor.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.family_doctor.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Health Card Number -->
-                <div>
-                    <label for="{{ form.health_card_number.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">HC# (Health Card Number)</label>
-                    <input type="text" name="{{ form.health_card_number.name }}" id="{{ form.health_card_number.id_for_label }}" value="{{ form.health_card_number.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.health_card_number.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.health_card_number.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Health Card Version -->
-                <div>
-                    <label for="{{ form.health_card_version.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">HC Version</label>
-                    <input type="text" name="{{ form.health_card_version.name }}" id="{{ form.health_card_version.id_for_label }}" value="{{ form.health_card_version.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.health_card_version.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.health_card_version.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Health Card Exp Date -->
-                <div>
-                    <label for="{{ form.health_card_exp_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">HC Exp Date</label>
-                    <input type="date" name="{{ form.health_card_exp_date.name }}" id="{{ form.health_card_exp_date.id_for_label }}" value="{% if form.health_card_exp_date.value %}{{ form.health_card_exp_date.value|date:'Y-m-d' }}{% endif %}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.health_card_exp_date.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.health_card_exp_date.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Health Card Issuing Province -->
-                <div>
-                    <label for="{{ form.health_card_issuing_province.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">HC Issuing Province</label>
-                    <input type="text" name="{{ form.health_card_issuing_province.name }}" id="{{ form.health_card_issuing_province.id_for_label }}" value="{{ form.health_card_issuing_province.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.health_card_issuing_province.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.health_card_issuing_province.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- No Health Card Reason -->
-                <div class="md:col-span-2">
-                    <label for="{{ form.no_health_card_reason.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">No HC Reason</label>
-                    <textarea name="{{ form.no_health_card_reason.name }}" id="{{ form.no_health_card_reason.id_for_label }}" rows="2" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">{{ form.no_health_card_reason.value|default:'' }}</textarea>
-                    {% if form.no_health_card_reason.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.no_health_card_reason.errors.0 }}</div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
 
         <!-- 👥 CONTACT & PERMISSIONS -->
         <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
@@ -974,14 +624,6 @@
                     {% endif %}
                 </div>
 
-                <!-- Next of Kin -->
-                <div>
-                    <label for="next_of_kin_name" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Next of Kin</label>
-                    <input type="text" id="next_of_kin_name" placeholder="Name" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body mb-2">
-                    <input type="text" id="next_of_kin_phone" placeholder="Phone #" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body mb-2">
-                    <input type="text" id="next_of_kin_relationship" placeholder="Relationship" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    <input type="hidden" name="{{ form.next_of_kin.name }}" id="{{ form.next_of_kin.id_for_label }}" value="{{ form.next_of_kin.value|default:'{}' }}">
-                </div>
 
                 <!-- Emergency Contact -->
                 <div>
@@ -1016,21 +658,6 @@
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <label for="{{ form.level_of_support.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Level of Support</label>
-                    <input type="text" name="{{ form.level_of_support.name }}" id="{{ form.level_of_support.id_for_label }}" value="{{ form.level_of_support.value|default:'' }}" placeholder="Enter level of support" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.level_of_support.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.level_of_support.errors.0 }}</div>
-                    {% endif %}
-                </div>
-                
-                <div>
-                    <label for="{{ form.client_type.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Client Type</label>
-                    <input type="text" name="{{ form.client_type.name }}" id="{{ form.client_type.id_for_label }}" value="{{ form.client_type.value|default:'' }}" placeholder="Enter client type" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.client_type.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.client_type.errors.0 }}</div>
-                    {% endif %}
-                </div>
                 
                 <div>
                     <label for="{{ form.referral_source.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Referral Source</label>
@@ -2089,13 +1716,6 @@ function addProgramDisplay(programId, programName, subprogramNames, startDate, e
 
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Handle Next of Kin fields
-    const nextOfKinFields = {
-        name: document.getElementById('next_of_kin_name'),
-        phone: document.getElementById('next_of_kin_phone'),
-        relationship: document.getElementById('next_of_kin_relationship')
-    };
-    const nextOfKinHidden = document.getElementById('{{ form.next_of_kin.id_for_label }}');
     
     // Handle Emergency Contact fields
     const emergencyContactFields = {

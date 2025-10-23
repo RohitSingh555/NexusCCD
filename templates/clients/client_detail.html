@@ -112,12 +112,6 @@
                         <span class="text-sm font-medium text-neutral-500">Pronoun:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.pronoun|default:"—" }}</span>
                     </div>
-                    {% if client.children_home %}
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Number of Children:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.children_number|default:"—" }}</span>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
 
@@ -148,18 +142,6 @@
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Country of Birth:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.country_of_birth|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Preferred Official Language:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.preferred_official_language|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Primary Language Spoken:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.primary_language_spoken|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Mother Tongue:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.mother_tongue|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Sexual Orientation:</span>
@@ -245,8 +227,8 @@
             </div>
         </div>
 
-        <!-- Contact & Medical Information -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Contact Information -->
+        <div class="grid grid-cols-1 gap-6">
             <!-- Contact Information -->
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
                 <div class="flex items-center mb-4">
@@ -393,57 +375,11 @@
                 </div>
             </div>
 
-            <!-- Medical Information -->
-            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <div class="flex items-center mb-4">
-                    <div class="w-8 h-8 bg-gradient-to-br from-red-400 to-red-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
-                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-                        </svg>
-                    </div>
-                    <h2 class="text-lg font-bold text-neutral-800 font-header">Medical Information</h2>
-                </div>
-                
-                <div class="space-y-3">
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Primary Diagnosis:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.primary_diagnosis|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Medical Conditions:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.medical_conditions|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Family Doctor:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.family_doctor|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Health Card Number:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.health_card_number|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Health Card Version:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.health_card_version|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Health Card Exp Date:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.health_card_exp_date|date:"M d, Y"|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Health Card Issuing Province:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.health_card_issuing_province|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">No Health Card Reason:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.no_health_card_reason|default:"—" }}</span>
-                    </div>
-                </div>
-            </div>
         </div>
 
-        <!-- Service & Support Information -->
+        <!-- Service & Program Information -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Service & Support Information -->
+            <!-- Service & Program Information -->
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
                 <div class="flex items-center mb-4">
                     <div class="w-8 h-8 bg-gradient-to-br from-indigo-400 to-indigo-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
@@ -451,60 +387,67 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                         </svg>
                     </div>
-                    <h2 class="text-lg font-bold text-neutral-800 font-header">Service & Support Information</h2>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Service & Program Information</h2>
                 </div>
                 
                 <div class="space-y-3">
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Level of Support:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.level_of_support|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Client Type:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.client_type|default:"—" }}</span>
-                    </div>
+                    <!-- Program Information -->
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Referral Source:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.referral_source|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Receiving Services:</span>
-                        <span class="text-sm text-neutral-900 font-body">
-                            {% if client.receiving_services %}Yes{% else %}No{% endif %}
-                        </span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Receiving Services Date:</span>
-                        <span class="text-sm text-neutral-900 font-body">
-                            {% if client.clientprogramenrollment_set.exists %}
-                                {% for enrollment in client.clientprogramenrollment_set.all %}
-                                    {% if enrollment.receiving_services_date %}
-                                        {{ enrollment.receiving_services_date|date:"M d, Y" }}
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                {% endfor %}
-                            {% else %}
-                                —
-                            {% endif %}
-                        </span>
-                    </div>
-                    <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Days Elapsed:</span>
                         <span class="text-sm text-neutral-900 font-body">
-                            {% if client.clientprogramenrollment_set.exists %}
-                                {% for enrollment in client.clientprogramenrollment_set.all %}
-                                    {% if enrollment.days_elapsed %}
-                                        {{ enrollment.days_elapsed }} days
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                {% endfor %}
+                            {% if client.extended.days_elapsed is not None %}
+                                {{ client.extended.days_elapsed }} days
+                                {% if not client.extended.service_end_date %} (ongoing){% endif %}
                             {% else %}
                                 —
                             {% endif %}
                         </span>
                     </div>
+                    
+                    <!-- Service Information -->
+                    <div class="pt-2 border-t border-neutral-200">
+                        <span class="text-sm font-medium text-neutral-500 block mb-2">Service Details:</span>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Discharge Disposition:</span>
+                                <span class="text-sm text-neutral-900 font-body">{{ client.extended.discharge_disposition|default:"—" }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Intake Status:</span>
+                                <span class="text-sm text-neutral-900 font-body">{{ client.extended.intake_status|default:"—" }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Lived Last 12 Months:</span>
+                                <span class="text-sm text-neutral-900 font-body">{{ client.extended.lived_last_12_months|default:"—" }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Reason for Service:</span>
+                                <span class="text-sm text-neutral-900 font-body">{{ client.extended.reason_for_service|default:"—" }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Intake Date:</span>
+                                <span class="text-sm text-neutral-900 font-body">{{ client.extended.intake_date|date:"M d, Y"|default:"—" }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Service End Date:</span>
+                                <span class="text-sm text-neutral-900 font-body">{{ client.extended.service_end_date|date:"M d, Y"|default:"—" }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Rejection Date:</span>
+                                <span class="text-sm text-neutral-900 font-body">{{ client.extended.rejection_date|date:"M d, Y"|default:"—" }}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-sm font-medium text-neutral-500">Rejection Reason:</span>
+                                <span class="text-sm text-neutral-900 font-body">{{ client.extended.rejection_reason|default:"—" }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Support Workers -->
                     {% if client.support_workers %}
                     <div class="pt-2 border-t border-neutral-200">
                         <span class="text-sm font-medium text-neutral-500 block mb-2">Support Workers:</span>
@@ -533,22 +476,6 @@
                 
                 <div class="space-y-3">
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Chart Number:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.chart_number|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Source:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.source|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">UID External:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.uid_external|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Program Status:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.program_status|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Updated By:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.updated_by|default:"—" }}</span>
                     </div>
@@ -560,12 +487,6 @@
                         <span class="text-sm font-medium text-neutral-500">Updated At:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.updated_at|date:"M d, Y H:i"|default:"—" }}</span>
                     </div>
-                    {% if client.comments %}
-                    <div class="pt-2 border-t border-neutral-200">
-                        <span class="text-sm font-medium text-neutral-500 block mb-2">Comments:</span>
-                        <p class="text-sm text-neutral-900 font-body">{{ client.comments }}</p>
-                    </div>
-                    {% endif %}
                 </div>
             </div>
         </div>
@@ -888,56 +809,8 @@
             </div>
         </div>
 
-        <!-- Service & Intake Information -->
+        <!-- Accommodation & Restrictions -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Service Information -->
-            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-                <div class="flex items-center mb-4">
-                    <div class="w-8 h-8 bg-gradient-to-br from-teal-400 to-teal-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
-                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
-                        </svg>
-                    </div>
-                    <h2 class="text-lg font-bold text-neutral-800 font-header">Service Information</h2>
-                </div>
-                
-                <div class="space-y-3">
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Discharge Disposition:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.discharge_disposition|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Intake Status:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.intake_status|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Lived Last 12 Months:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.lived_last_12_months|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Reason for Service:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.reason_for_service|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Intake Date:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.intake_date|date:"M d, Y"|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Service End Date:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.service_end_date|date:"M d, Y"|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Rejection Date:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.rejection_date|date:"M d, Y"|default:"—" }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Rejection Reason:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.extended.rejection_reason|default:"—" }}</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Accommodation & Restrictions -->
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
                 <div class="flex items-center mb-4">
                     <div class="w-8 h-8 bg-gradient-to-br from-orange-400 to-orange-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
@@ -985,6 +858,55 @@
                         <span class="text-sm font-medium text-neutral-500">Early Termination By:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.extended.early_termination_by|default:"—" }}</span>
                     </div>
+                </div>
+            </div>
+
+            <!-- Program & Enrollment Details -->
+            <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-lg font-bold text-neutral-800 font-header">Program & Enrollment Details</h2>
+                </div>
+                
+                <div class="space-y-3">
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Program:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.program|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Sub Program:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.sub_program|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Program Status:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.program_status|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Reason for Discharge:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.reason_discharge|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Chart Number:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.chart_number|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Source:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.source|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">UID External:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.uid_external|default:"—" }}</span>
+                    </div>
+                    {% if client.comments %}
+                    <div class="pt-2 border-t border-neutral-200">
+                        <span class="text-sm font-medium text-neutral-500 block mb-2">Comments:</span>
+                        <p class="text-sm text-neutral-900 font-body">{{ client.comments|truncatechars:100 }}</p>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

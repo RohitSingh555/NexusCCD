@@ -657,6 +657,18 @@ class ClientExtended(BaseModel):
     class Meta:
         db_table = 'client_extended'
 
+    @property
+    def days_elapsed(self):
+        """Calculate days elapsed between intake date and service end date (or current date if ongoing)"""
+        if not self.intake_date:
+            return None
+        
+        from django.utils import timezone
+        
+        end_date = self.service_end_date or timezone.now().date()
+        delta = end_date - self.intake_date
+        return delta.days
+
     def __str__(self):
         return f"Extended Info for {self.client}"
 
