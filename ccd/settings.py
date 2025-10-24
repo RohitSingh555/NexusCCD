@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 from decouple import config
 
-load_dotenv()
+load_dotenv('.env.dev')
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -80,7 +80,7 @@ DATABASES = {
         'USER': os.getenv('DB_USER', 'nexusccd_user'),
         'PASSWORD': os.getenv('DB_PASSWORD'),
         'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'PORT': os.getenv('DB_PORT', '5433'),
     }
 }
 

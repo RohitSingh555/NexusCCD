@@ -193,7 +193,7 @@ def dashboard(request):
         role_names = [staff_role.role.name for staff_role in user_roles]
         
         # Check if user has any meaningful permissions
-        has_permissions = any(role in ['SuperAdmin', 'Staff', 'Manager', 'Leader', 'Analyst'] for role in role_names)
+        has_permissions = any(role in ['SuperAdmin', 'Admin', 'Staff', 'Manager', 'Leader', 'Analyst'] for role in role_names)
         
         if not has_permissions:
             # User doesn't have proper permissions, redirect to profile
@@ -927,7 +927,7 @@ class AuditLogListView(ListView):
                 user_roles = staff.staffrole_set.select_related('role').all()
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
-                if 'SuperAdmin' not in role_names:
+                if not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     messages.error(request, 'You do not have permission to view audit logs.')
                     return redirect('dashboard')
             except:
@@ -1196,7 +1196,7 @@ class EnrollmentCreateView(AnalystAccessMixin, ProgramManagerAccessMixin, Create
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot create enrollments
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
                     messages.error(request, 'You do not have permission to create enrollments. Contact your administrator.')
                     return redirect('core:enrollments')
             except Exception:
@@ -1330,7 +1330,7 @@ class EnrollmentUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, Update
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot edit enrollments
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
                     messages.error(request, 'You do not have permission to edit enrollments. Contact your administrator.')
                     return redirect('core:enrollments')
             except Exception:
@@ -1433,7 +1433,7 @@ class EnrollmentDeleteView(AnalystAccessMixin, ProgramManagerAccessMixin, Delete
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot archive enrollments
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
                     messages.error(request, 'You do not have permission to archive enrollments. Contact your administrator.')
                     return redirect('core:enrollments')
             except Exception:
@@ -1652,7 +1652,7 @@ class RestrictionDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, Detai
                     # Managers can view ALL restrictions (no access restriction for viewing)
                     pass
                 
-                elif 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
+                elif 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
                     # Staff users can view all restrictions (no additional filtering needed)
                     pass
                 
@@ -1727,7 +1727,7 @@ class RestrictionCreateView(AnalystAccessMixin, ProgramManagerAccessMixin, Creat
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot create restrictions
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
                     messages.error(request, 'You do not have permission to create restrictions. Contact your administrator.')
                     return redirect('core:restrictions')
             except Exception:
