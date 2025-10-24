@@ -121,6 +121,12 @@ LANGUAGE_CHOICES = [
     ('Yiddish', 'Yiddish'),
 ]
 
+OFFICIAL_LANGUAGE_CHOICES = [
+    ('', 'Select Official Language'),
+    ('English', 'English'),
+    ('French', 'French'),
+]
+
 # Gender choices for comprehensive gender identity options (alphabetically sorted)
 GENDER_CHOICES = [
     ('', 'Select Gender'),
@@ -396,7 +402,7 @@ class ClientForm(forms.ModelForm):
             'language': forms.Select(attrs={'class': 'form-control'}, choices=LANGUAGE_CHOICES),
             'preferred_language': forms.Select(attrs={'class': 'form-control'}, choices=LANGUAGE_CHOICES),
             'mother_tongue': forms.Select(attrs={'class': 'form-control'}, choices=LANGUAGE_CHOICES),
-            'official_language': forms.Select(attrs={'class': 'form-control'}, choices=LANGUAGE_CHOICES),
+            'official_language': forms.Select(attrs={'class': 'form-control'}, choices=OFFICIAL_LANGUAGE_CHOICES),
             
             # Gender dropdown
             'gender': forms.Select(attrs={'class': 'form-control'}, choices=GENDER_CHOICES),

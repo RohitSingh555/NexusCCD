@@ -42,7 +42,7 @@ class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
                 user_roles = staff.staffrole_set.select_related('role').all()
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
                     # Staff-only users see ONLY programs where their assigned clients are enrolled
                     from staff.models import StaffClientAssignment
                     
@@ -340,7 +340,7 @@ class ProgramBulkEnrollView(ProgramManagerAccessMixin, View):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot enroll clients
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
                     from django.contrib import messages
                     messages.error(request, 'You do not have permission to enroll clients. Contact your administrator.')
                     return redirect('programs:list')
@@ -451,7 +451,7 @@ class ProgramBulkAssignManagersView(ProgramManagerAccessMixin, View):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Only SuperAdmin users can assign managers
-                if not any(role in ['SuperAdmin'] for role in role_names):
+                if not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     from django.contrib import messages
                     messages.error(request, 'You do not have permission to assign managers. Contact your administrator.')
                     return redirect('programs:list')
@@ -537,7 +537,7 @@ class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot create programs
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
                     from django.contrib import messages
                     messages.error(request, 'You do not have permission to create programs. Contact your administrator.')
                     return redirect('programs:list')
@@ -603,7 +603,7 @@ class ProgramUpdateView(ProgramManagerAccessMixin, UpdateView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot edit programs
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
                     from django.contrib import messages
                     messages.error(request, 'You do not have permission to edit programs. Contact your administrator.')
                     return redirect('programs:list')
@@ -696,7 +696,7 @@ class ProgramDeleteView(ProgramManagerAccessMixin, DeleteView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot delete programs
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
                     from django.contrib import messages
                     messages.error(request, 'You do not have permission to delete programs. Contact your administrator.')
                     return redirect('programs:list')
@@ -773,7 +773,7 @@ class ProgramCSVExportView(ProgramManagerAccessMixin, ListView):
                 user_roles = staff.staffrole_set.select_related('role').all()
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
                     # Staff-only users see ONLY programs where their assigned clients are enrolled
                     from staff.models import StaffClientAssignment
                     

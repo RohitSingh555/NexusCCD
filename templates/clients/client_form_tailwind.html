@@ -277,15 +277,6 @@
                     {% endif %}
                 </div>
 
-                <!-- Gender Identity -->
-                <div>
-                    <label for="{{ form.gender_identity.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Gender Identity</label>
-                    <input type="text" name="{{ form.gender_identity.name }}" id="{{ form.gender_identity.id_for_label }}" value="{{ form.gender_identity.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.gender_identity.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.gender_identity.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
                 <!-- Pronoun -->
                 <div>
                     <label for="{{ form.pronoun.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Pronoun</label>
@@ -315,19 +306,6 @@
                     </select>
                     {% if form.citizenship_status.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.citizenship_status.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- Indigenous Status -->
-                <div>
-                    <label for="{{ form.indigenous_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Indigenous Status</label>
-                    <select name="{{ form.indigenous_status.name }}" id="{{ form.indigenous_status.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                        {% for value, label in form.indigenous_status.field.widget.choices %}
-                            <option value="{{ value }}" {% if form.indigenous_status.value == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                    {% if form.indigenous_status.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.indigenous_status.errors.0 }}</div>
                     {% endif %}
                 </div>
 
@@ -485,33 +463,18 @@
                     {% endif %}
                 </div>
 
-                <!-- Self-Identification as Race/Ethnicity -->
+                <!-- Indigenous Status -->
                 <div>
-                    <label for="{{ form.self_identification_race_ethnicity.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Self-Identification as Race/Ethnicity</label>
-                    <input type="text" name="{{ form.self_identification_race_ethnicity.name }}" id="{{ form.self_identification_race_ethnicity.id_for_label }}" value="{{ form.self_identification_race_ethnicity.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.self_identification_race_ethnicity.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.self_identification_race_ethnicity.errors.0 }}</div>
+                    <label for="{{ form.indigenous_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Indigenous Status</label>
+                    <select name="{{ form.indigenous_status.name }}" id="{{ form.indigenous_status.id_for_label }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        {% for value, label in form.indigenous_status.field.widget.choices %}
+                            <option value="{{ value }}" {% if form.indigenous_status.value == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if form.indigenous_status.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.indigenous_status.errors.0 }}</div>
                     {% endif %}
                 </div>
-
-                <!-- Aboriginal Status -->
-                <div>
-                    <label for="{{ form.aboriginal_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Aboriginal Status</label>
-                    <input type="text" name="{{ form.aboriginal_status.name }}" id="{{ form.aboriginal_status.id_for_label }}" value="{{ form.aboriginal_status.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.aboriginal_status.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.aboriginal_status.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
-                <!-- LGBTQ+ Status -->
-                <div>
-                    <label for="{{ form.lgbtq_status.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">LGBTQ+?</label>
-                    <input type="text" name="{{ form.lgbtq_status.name }}" id="{{ form.lgbtq_status.id_for_label }}" value="{{ form.lgbtq_status.value|default:'' }}" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
-                    {% if form.lgbtq_status.errors %}
-                        <div class="mt-1 text-sm text-red-600">{{ form.lgbtq_status.errors.0 }}</div>
-                    {% endif %}
-                </div>
-
 
                 <!-- Sexual Orientation -->
                 <div>

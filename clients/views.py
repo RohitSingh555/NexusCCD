@@ -224,19 +224,31 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         
         # Gender filtering
         if gender_filter:
-            if gender_filter == 'Other':
-                # Show all clients whose gender is not Male or Female
-                queryset = queryset.exclude(gender__in=['Male', 'Female'])
-            else:
-                queryset = queryset.filter(gender=gender_filter)
+            queryset = queryset.filter(gender=gender_filter)
         
-        # Program manager filtering
+        # Program manager filtering - only apply if user has permission and manager is selected
         manager_filter = self.request.GET.get('manager', '')
-        if manager_filter:
-            queryset = queryset.filter(
-                clientprogramenrollment__program__manager_assignments__staff_id=manager_filter,
-                clientprogramenrollment__program__manager_assignments__is_active=True
-            ).distinct()
+        if manager_filter and self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Only apply manager filter if user is SuperAdmin or Admin
+                if any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    # Get programs managed by the selected manager
+                    from core.models import ProgramManagerAssignment
+                    managed_programs = Program.objects.filter(
+                        manager_assignments__staff_id=manager_filter,
+                        manager_assignments__is_active=True
+                    ).distinct()
+                    
+                    # Filter clients enrolled in those programs
+                    queryset = queryset.filter(
+                        clientprogramenrollment__program__in=managed_programs
+                    ).distinct()
+            except Exception:
+                pass  # If user doesn't have permission, ignore the manager filter
         
         return queryset.order_by('-created_at')
     
@@ -249,6 +261,10 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         context['gender_filter'] = self.request.GET.get('gender', '')
         context['manager_filter'] = self.request.GET.get('manager', '')
         context['per_page'] = self.request.GET.get('per_page', '10')
+        
+        # Add gender choices for the filter dropdown
+        from .forms import GENDER_CHOICES
+        context['gender_choices'] = GENDER_CHOICES
         # Filter programs for program managers
         if self.request.user.is_authenticated:
             try:
@@ -266,11 +282,29 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         if context.get('paginator') and context['paginator'].count > 0:
             context['is_paginated'] = True
         
-        # Get program managers
-        from core.models import ProgramManagerAssignment, Staff
-        context['program_managers'] = Staff.objects.filter(
-            program_manager_assignments__is_active=True
-        ).distinct().order_by('first_name', 'last_name')
+        # Get program managers (users with Manager role) - only for SuperAdmin and Admin
+        from core.models import ProgramManagerAssignment, Staff, Role
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Only show manager filter to SuperAdmin and Admin
+                if any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    try:
+                        manager_role = Role.objects.get(name='Manager')
+                        context['program_managers'] = Staff.objects.filter(
+                            staffrole__role=manager_role
+                        ).select_related('user').distinct().order_by('first_name', 'last_name')
+                    except Role.DoesNotExist:
+                        context['program_managers'] = Staff.objects.none()
+                else:
+                    context['program_managers'] = Staff.objects.none()
+            except Exception:
+                context['program_managers'] = Staff.objects.none()
+        else:
+            context['program_managers'] = Staff.objects.none()
         
         # Add current filter values (like programs page)
         context['current_program'] = self.request.GET.get('program', '')
@@ -1012,7 +1046,7 @@ class ClientUploadView(TemplateView):
         
         return super().dispatch(request, *args, **kwargs)
 
-@method_decorator(csrf_exempt, name='dispatch')
+@csrf_exempt
 @require_http_methods(["POST"])
 def upload_clients(request):
     """Handle CSV/Excel file upload and process client data"""
@@ -1082,6 +1116,9 @@ def upload_clients(request):
             column_mapping = {}
             df_columns_lower = [col.lower().strip() for col in df_columns]
             
+            print(f"DEBUG: CSV columns: {df_columns}")
+            print(f"DEBUG: Looking for DOB column mapping...")
+            
             for standard_name, variations in field_mapping.items():
                 for variation in variations:
                     variation_lower = variation.lower().strip()
@@ -1089,6 +1126,8 @@ def upload_clients(request):
                         # Find the original column name (case-sensitive)
                         original_col = df_columns[df_columns_lower.index(variation_lower)]
                         column_mapping[original_col] = standard_name
+                        if standard_name == 'dob':
+                            print(f"DEBUG: DOB column found: '{original_col}' -> '{standard_name}'")
                         break
             
             return column_mapping
@@ -1634,8 +1673,41 @@ def upload_clients(request):
                 dob = None
                 try:
                     dob_value = get_field_data('dob')
+                    print(f"DEBUG: Row {index + 1}: DOB value from get_field_data('dob'): {repr(dob_value)}")
                     if dob_value:
-                        dob = pd.to_datetime(dob_value).date()
+                        # Check if the value looks like a valid date format
+                        dob_str = str(dob_value).strip().lower()
+                        
+                        # Skip values that are clearly not dates
+                        if dob_str in ['yes', 'no', 'y', 'n', 'true', 'false', '1', '0', '']:
+                            # These are not valid date values, treat as missing
+                            dob_value = None
+                        
+                        if dob_value:
+                            # Try to parse the date with multiple format attempts
+                            try:
+                                # First try pandas automatic parsing
+                                dob = pd.to_datetime(dob_value).date()
+                            except:
+                                # If that fails, try specific date formats
+                                dob_str = str(dob_value).strip()
+                                try:
+                                    # Try YYYY-MM-DD format
+                                    from datetime import datetime
+                                    dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
+                                except:
+                                    # Try other common formats
+                                    try:
+                                        dob = datetime.strptime(dob_str, '%Y/%m/%d').date()
+                                    except:
+                                        try:
+                                            dob = datetime.strptime(dob_str, '%m/%d/%Y').date()
+                                        except:
+                                            try:
+                                                dob = datetime.strptime(dob_str, '%d/%m/%Y').date()
+                                            except:
+                                                # If all parsing attempts fail, raise the original error
+                                                raise ValueError(f"Unable to parse date: {dob_str}")
                     else:
                         # Check if this is an update (has Client ID) - if so, DOB is optional
                         client_id = get_field_data('client_id')
@@ -1646,10 +1718,14 @@ def upload_clients(request):
                             continue
                         # For updates, we can proceed without DOB
                 except Exception as e:
-                    # If date parsing fails, skip this row
-                    errors.append(f"Row {index + 1}: Invalid Date of Birth format - {str(e)}")
-                    skipped_count += 1
-                    continue
+                    # If date parsing fails, check if this is a new client or update
+                    client_id = get_field_data('client_id')
+                    if not client_id:
+                        # This is a new client creation, DOB is required
+                        errors.append(f"Row {index + 1}: Invalid Date of Birth format - {str(e)}")
+                        skipped_count += 1
+                        continue
+                    # For updates, we can proceed without DOB
                 
                 client_data = {
                     'first_name': get_field_data('first_name'),
@@ -3460,11 +3536,7 @@ def export_clients(request):
         # Apply gender filter
         gender_filter = request.GET.get('gender', '')
         if gender_filter:
-            if gender_filter == 'Other':
-                # Show all clients whose gender is not Male or Female
-                queryset = queryset.exclude(gender__in=['Male', 'Female'])
-            else:
-                queryset = queryset.filter(gender=gender_filter)
+            queryset = queryset.filter(gender=gender_filter)
         
         # Apply program manager filter
         if manager_filter:

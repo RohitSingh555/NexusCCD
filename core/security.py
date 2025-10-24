@@ -39,10 +39,11 @@ class SecurityManager:
             'view_reports', 'manage_reports'
         ],
         'Admin': [
-            'view_all', 'manage_all', 'export_all',
-            'manage_staff', 'manage_departments', 'manage_programs',
-            'manage_clients', 'manage_enrollments', 'manage_restrictions',
-            'view_audit_log', 'manage_email_subscriptions', 'view_reports'
+            'view_all', 'manage_all', 'delete_all', 'export_all',
+            'manage_users', 'manage_staff', 'manage_departments',
+            'manage_programs', 'manage_clients', 'manage_enrollments',
+            'manage_restrictions', 'view_audit_log', 'manage_email_subscriptions',
+            'view_reports', 'manage_reports'
         ],
         'Manager': [
             'view_department', 'manage_department', 'export_department',
