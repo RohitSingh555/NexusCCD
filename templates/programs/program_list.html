@@ -49,7 +49,7 @@
 {% block page_title %}Programs & Services{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="programManager()">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="programManager()" x-init="console.log('Alpine.js initialized')">
     <div class="flex justify-between items-center mb-8">
         <div>
             <h1 class="text-3xl font-bold text-neutral-800 font-header">Programs & Services</h1>
@@ -216,8 +216,11 @@
                     {% for program_data in programs_with_capacity %}
                     <tr class="hover:bg-neutral-50 relative cursor-pointer" 
                         @contextmenu.prevent="showContextMenu($event, '{{ program_data.program.external_id }}', '{{ program_data.program.name }}')"
-                        @click="viewProgram('{{ program_data.program.external_id }}')"
-                        :class="{ 'bg-blue-50': selectedPrograms.includes('{{ program_data.program.external_id }}') }">
+                        @click="console.log('Row clicked!'); viewProgram('{{ program_data.program.external_id }}')"
+                        onclick="console.log('Direct click handler'); window.location.href='/programs/{{ program_data.program.external_id }}/'"
+                        :class="{ 'bg-blue-50': selectedPrograms.includes('{{ program_data.program.external_id }}') }"
+                        data-program-id="{{ program_data.program.external_id }}"
+                        data-program-name="{{ program_data.program.name }}">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <input type="checkbox" 
                                    :checked="selectedPrograms.includes('{{ program_data.program.external_id }}')"
@@ -437,12 +440,19 @@ function programManager() {
         },
         
         viewProgram(programId = null) {
+            console.log('viewProgram called with programId:', programId);
+            console.log('contextMenu.programId:', this.contextMenu.programId);
+            
             if (programId) {
                 // Called from table row click
-                window.location.href = `/programs/${programId}/`;
+                const url = `/programs/${programId}/`;
+                console.log('Navigating to:', url);
+                window.location.href = url;
             } else if (this.contextMenu.programId) {
                 // Called from context menu
-                window.location.href = `/programs/${this.contextMenu.programId}/`;
+                const url = `/programs/${this.contextMenu.programId}/`;
+                console.log('Navigating to:', url);
+                window.location.href = url;
                 this.hideContextMenu();
             }
         },

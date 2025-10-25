@@ -22,9 +22,9 @@ class Command(BaseCommand):
             {'name': 'SuperAdmin', 'description': 'Full system access', 'permissions': ['all']},
             {'name': 'Admin', 'description': 'Administrative access', 'permissions': ['admin']},
             {'name': 'Manager', 'description': 'Program management access', 'permissions': ['program_management']},
+            {'name': 'Leader', 'description': 'Department leadership access', 'permissions': ['leadership']},
             {'name': 'Staff', 'description': 'Basic staff access', 'permissions': ['read', 'write']},
-            {'name': 'Viewer', 'description': 'Read-only access', 'permissions': ['read']},
-            {'name': 'Coordinator', 'description': 'Data coordination access', 'permissions': ['coordinate']},
+            {'name': 'User', 'description': 'Basic user access', 'permissions': ['read']},
             {'name': 'Analyst', 'description': 'Analytical access', 'permissions': ['analyze']},
         ]
 

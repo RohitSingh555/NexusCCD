@@ -11,12 +11,10 @@ import json
 class EnrollmentForm(forms.ModelForm):
     class Meta:
         model = ClientProgramEnrollment
-        fields = ['client', 'program', 'start_date', 'end_date', 'status', 'days_elapsed', 'receiving_services_date', 'notes']
+        fields = ['client', 'program', 'start_date', 'end_date', 'status', 'notes']
         widgets = {
             'start_date': forms.DateInput(attrs={'type': 'date'}),
             'end_date': forms.DateInput(attrs={'type': 'date'}),
-            'receiving_services_date': forms.DateInput(attrs={'type': 'date'}),
-            'days_elapsed': forms.NumberInput(attrs={'readonly': True, 'class': 'bg-gray-100'}),
             'notes': forms.Textarea(attrs={'rows': 3}),
         }
     
@@ -32,8 +30,7 @@ class EnrollmentForm(forms.ModelForm):
             self.fields['client'].queryset = client_queryset
         
         # Set up field styling and help text
-        self.fields['days_elapsed'].help_text = "Auto-calculated based on start date"
-        self.fields['receiving_services_date'].help_text = "Date when client actually started receiving services"
+        pass
     
     def clean(self):
         cleaned_data = super().clean()
@@ -41,17 +38,6 @@ class EnrollmentForm(forms.ModelForm):
         client = cleaned_data.get('client')
         program = cleaned_data.get('program')
         start_date = cleaned_data.get('start_date')
-        receiving_services_date = cleaned_data.get('receiving_services_date')
-        
-        # Calculate days elapsed if start_date is provided
-        if start_date:
-            days_elapsed = self.calculate_days_elapsed(start_date)
-            cleaned_data['days_elapsed'] = days_elapsed
-        
-        # Validate receiving_services_date
-        if receiving_services_date and start_date:
-            if receiving_services_date < start_date:
-                raise ValidationError("Receiving services date cannot be before the enrollment start date.")
         
         if client and program and start_date:
             # Check for service restrictions
@@ -62,13 +48,6 @@ class EnrollmentForm(forms.ModelForm):
         
         return cleaned_data
     
-    def calculate_days_elapsed(self, start_date):
-        """Calculate days elapsed since start date"""
-        if start_date:
-            today = date.today()
-            delta = today - start_date
-            return max(0, delta.days)
-        return 0
     
     def check_service_restrictions(self, client, program, start_date):
         """Check if client has service restrictions that would prevent enrollment"""

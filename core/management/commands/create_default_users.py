@@ -9,70 +9,48 @@ class Command(BaseCommand):
     help = 'Create default users for each role'
 
     def handle(self, *args, **options):
-        # Default users for each role
+        # Default users for each role - one user per role
         default_users = [
             {
                 'role_name': 'SuperAdmin',
                 'users': [
-                    {'username': 'superadmin', 'email': 'admin@admin.com', 'password': 'admin123'},
-                    {'username': 'superadmin2', 'email': 'superadmin2@admin.com', 'password': 'admin123'},
-                    {'username': 'superadmin3', 'email': 'superadmin3@admin.com', 'password': 'admin123'},
+                    {'username': 'superadmin', 'email': 'superadmin@live.com', 'password': 'SuperAdmin@2024'},
                 ]
             },
             {
                 'role_name': 'Admin',
                 'users': [
-                    {'username': 'admin1', 'email': 'admin1@admin.com', 'password': 'admin123'},
-                    {'username': 'admin2', 'email': 'admin2@admin.com', 'password': 'admin123'},
-                    {'username': 'admin3', 'email': 'admin3@admin.com', 'password': 'admin123'},
+                    {'username': 'admin', 'email': 'admin@live.com', 'password': 'Admin@2024'},
                 ]
             },
             {
                 'role_name': 'Manager',
                 'users': [
-                    {'username': 'manager1', 'email': 'manager1@example.com', 'password': 'manager123'},
-                    {'username': 'manager2', 'email': 'manager2@example.com', 'password': 'manager123'},
-                    {'username': 'manager3', 'email': 'manager3@example.com', 'password': 'manager123'},
+                    {'username': 'manager', 'email': 'manager@live.com', 'password': 'Manager@2024'},
+                ]
+            },
+            {
+                'role_name': 'Leader',
+                'users': [
+                    {'username': 'leader', 'email': 'leader@live.com', 'password': 'Leader@2024'},
                 ]
             },
             {
                 'role_name': 'Staff',
                 'users': [
-                    {'username': 'staff1', 'email': 'staff1@example.com', 'password': 'staff123'},
-                    {'username': 'staff2', 'email': 'staff2@example.com', 'password': 'staff123'},
-                    {'username': 'staff3', 'email': 'staff3@example.com', 'password': 'staff123'},
+                    {'username': 'staff', 'email': 'staff@live.com', 'password': 'Staff@2024'},
                 ]
             },
             {
-                'role_name': 'Manager',
+                'role_name': 'User',
                 'users': [
-                    {'username': 'progmanager1', 'email': 'progmanager1@example.com', 'password': 'progmanager123'},
-                    {'username': 'progmanager2', 'email': 'progmanager2@example.com', 'password': 'progmanager123'},
-                    {'username': 'progmanager3', 'email': 'progmanager3@example.com', 'password': 'progmanager123'},
-                ]
-            },
-            {
-                'role_name': 'Viewer',
-                'users': [
-                    {'username': 'viewer1', 'email': 'viewer1@example.com', 'password': 'viewer123'},
-                    {'username': 'viewer2', 'email': 'viewer2@example.com', 'password': 'viewer123'},
-                    {'username': 'viewer3', 'email': 'viewer3@example.com', 'password': 'viewer123'},
-                ]
-            },
-            {
-                'role_name': 'Coordinator',
-                'users': [
-                    {'username': 'coordinator1', 'email': 'coordinator1@example.com', 'password': 'coordinator123'},
-                    {'username': 'coordinator2', 'email': 'coordinator2@example.com', 'password': 'coordinator123'},
-                    {'username': 'coordinator3', 'email': 'coordinator3@example.com', 'password': 'coordinator123'},
+                    {'username': 'user', 'email': 'user@live.com', 'password': 'User@2024'},
                 ]
             },
             {
                 'role_name': 'Analyst',
                 'users': [
-                    {'username': 'analyst1', 'email': 'analyst1@example.com', 'password': 'analyst123'},
-                    {'username': 'analyst2', 'email': 'analyst2@example.com', 'password': 'analyst123'},
-                    {'username': 'analyst3', 'email': 'analyst3@example.com', 'password': 'analyst123'},
+                    {'username': 'analyst', 'email': 'analyst@live.com', 'password': 'Analyst@2024'},
                 ]
             }
         ]
@@ -143,12 +121,16 @@ class Command(BaseCommand):
                 continue
 
         self.stdout.write(self.style.SUCCESS('Default users creation completed!'))
-        self.stdout.write('\nDefault Login Credentials:')
-        self.stdout.write('SuperAdmin: superadmin, superadmin2, superadmin3 / admin123')
-        self.stdout.write('Admin: admin1, admin2, admin3 / admin123')
-        self.stdout.write('Manager: manager1, manager2, manager3 / manager123')
-        self.stdout.write('Staff: staff1, staff2, staff3 / staff123')
-        self.stdout.write('Manager: progmanager1, progmanager2, progmanager3 / progmanager123')
-        self.stdout.write('Viewer: viewer1, viewer2, viewer3 / viewer123')
-        self.stdout.write('Coordinator: coordinator1, coordinator2, coordinator3 / coordinator123')
-        self.stdout.write('Analyst: analyst1, analyst2, analyst3 / analyst123')
+        self.stdout.write('\n' + '='*60)
+        self.stdout.write('🔐 LIVE DEPLOYMENT CREDENTIALS')
+        self.stdout.write('='*60)
+        self.stdout.write('SuperAdmin: superadmin / SuperAdmin@2024')
+        self.stdout.write('Admin: admin / Admin@2024')
+        self.stdout.write('Manager: manager / Manager@2024')
+        self.stdout.write('Leader: leader / Leader@2024')
+        self.stdout.write('Staff: staff / Staff@2024')
+        self.stdout.write('User: user / User@2024')
+        self.stdout.write('Analyst: analyst / Analyst@2024')
+        self.stdout.write('='*60)
+        self.stdout.write('⚠️  IMPORTANT: Change these passwords after first login!')
+        self.stdout.write('='*60)
