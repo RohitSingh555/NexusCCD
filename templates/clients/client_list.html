@@ -1408,7 +1408,7 @@ function initializeClientListSearch() {
             clientItem.className = 'search-result-item p-3 hover:bg-neutral-50 cursor-pointer border-b border-neutral-100 last:border-b-0';
             clientItem.innerHTML = `
                 <div class="font-bold text-neutral-900">${highlightSearchTerm(client.name, clientSearchInput.value)}</div>
-                <div class="text-sm text-neutral-500">ID: ${client.external_id}</div>
+                <div class="text-sm text-neutral-500">ID: ${client.client_id ? (parseFloat(client.client_id) % 1 === 0 ? parseInt(client.client_id).toString() : client.client_id) : client.external_id}</div>
                 <div class="text-xs text-neutral-400 mt-1">Click to view client details</div>
             `;
             clientItem.addEventListener('click', () => {

@@ -460,7 +460,7 @@ class ClientCreateView(AnalystAccessMixin, CreateView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot create clients
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
                     messages.error(request, 'You do not have permission to create clients. Contact your administrator.')
                     return redirect('clients:list')
             except Exception:
@@ -727,7 +727,7 @@ class ClientUpdateView(AnalystAccessMixin, UpdateView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot edit clients
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
                     messages.error(request, 'You do not have permission to edit clients. Contact your administrator.')
                     return redirect('clients:list')
             except Exception:
@@ -943,7 +943,9 @@ class ClientUpdateView(AnalystAccessMixin, UpdateView):
                         status=status,
                         notes=notes,
                         receiving_services_date=receiving_services_date if receiving_services_date else None,
-                        days_elapsed=int(days_elapsed) if days_elapsed else None
+                        days_elapsed=int(days_elapsed) if days_elapsed else None,
+                        created_by=self.request.user.get_full_name() or self.request.user.username,
+                        updated_by=self.request.user.get_full_name() or self.request.user.username
                     )
                     print(f"DEBUG: Created enrollment: {enrollment}")
                     print(f"DEBUG: Enrollment ID: {enrollment.id}")
@@ -968,7 +970,7 @@ class ClientDeleteView(DeleteView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot delete clients
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
                     messages.error(request, 'You do not have permission to delete clients. Contact your administrator.')
                     return redirect('clients:list')
             except Exception:
@@ -1038,7 +1040,7 @@ class ClientUploadView(TemplateView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot upload clients
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager','Admin'] for role in role_names):
                     messages.error(request, 'You do not have permission to upload clients. Contact your administrator.')
                     return redirect('clients:list')
             except Exception:
@@ -1058,7 +1060,7 @@ def upload_clients(request):
             role_names = [staff_role.role.name for staff_role in user_roles]
             
             # Staff role users cannot upload clients
-            if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+            if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
                 return JsonResponse({'success': False, 'error': 'You do not have permission to upload clients. Contact your administrator.'}, status=403)
         except Exception:
             pass
@@ -1081,7 +1083,43 @@ def upload_clients(request):
         # Read the file
         try:
             if file_extension == 'csv':
-                df = pd.read_csv(file)
+                # Try different encodings for CSV files
+                encodings_to_try = ['latin-1', 'cp1252', 'iso-8859-1', 'utf-8', 'utf-16', 'utf-16le', 'utf-16be']
+                df = None
+                last_error = None
+                
+                for encoding in encodings_to_try:
+                    try:
+                        file.seek(0)  # Reset file pointer
+                        df = pd.read_csv(file, encoding=encoding)
+                        break
+                    except (UnicodeDecodeError, UnicodeError) as e:
+                        last_error = str(e)
+                        continue
+                    except Exception as e:
+                        # Handle other pandas errors (like parsing issues)
+                        last_error = str(e)
+                        continue
+                
+                # If all encodings fail, try with error handling using StringIO
+                if df is None:
+                    try:
+                        import io
+                        file.seek(0)
+                        # Read the file content and handle encoding errors
+                        content = file.read()
+                        # Try to decode with error replacement
+                        try:
+                            decoded_content = content.decode('latin-1')
+                        except:
+                            decoded_content = content.decode('utf-8', errors='replace')
+                        
+                        # Create StringIO object and read with pandas
+                        string_io = io.StringIO(decoded_content)
+                        df = pd.read_csv(string_io)
+                    except Exception as e:
+                        return JsonResponse({'success': False, 'error': f'Could not read CSV file with any supported encoding. Last error: {last_error}. Fallback error: {str(e)}'}, status=400)
+            
             else:
                 df = pd.read_excel(file)
         except Exception as e:
@@ -1208,12 +1246,27 @@ def upload_clients(request):
         }
         
         # Enforce required fields for all uploads (client_id is now required for both new and updates)
+        # Special handling for combined client field - if present, it can provide client_id, first_name, last_name
+        has_combined_client_field = False
+        for col in df.columns:
+            if column_mapping.get(col) == 'client_combined':
+                has_combined_client_field = True
+                print(f"DEBUG: Found combined client field: '{col}' - can provide client_id, first_name, last_name")
+                break
+        
         for required_field in required_fields:
             found = False
             for col in df.columns:
                 if column_mapping.get(col) == required_field:
                     found = True
                     break
+            
+            # If not found individually, check if combined client field can provide it
+            if not found and has_combined_client_field:
+                if required_field in ['client_id', 'first_name', 'last_name']:
+                    found = True
+                    print(f"DEBUG: Combined client field can provide '{required_field}'")
+            
             if not found:
                 missing_fields.append(required_field)
         
@@ -1281,6 +1334,95 @@ def upload_clients(request):
                 return common_words / total_words if total_words > 0 else 0
             
             return 0
+        
+        def parse_combined_client_field(client_field_value, client_id_field_value=None):
+            """
+            Parse client field that can be in two formats:
+            1. Combined: 'A Aly, Said (13687)' - everything in one field
+            2. Separate: 'A Aly, Said' + client_id from separate field
+            
+            Returns: (first_name, last_name, client_id)
+            """
+            if not client_field_value or str(client_field_value).strip() == '':
+                return None, None, None
+            
+            client_str = str(client_field_value).strip()
+            client_id = None
+            
+            # First, try to extract client_id from the combined field (format 1)
+            import re
+            
+            # Pattern 1: "A Aly, Said (13687)" - First Last, First (ID)
+            pattern1 = r'^([A-Za-z\s]+),\s*([A-Za-z\s]+)\s*\((\d+)\)$'
+            match1 = re.match(pattern1, client_str)
+            if match1:
+                first_part = match1.group(1).strip()  # "A Aly"
+                second_part = match1.group(2).strip()  # "Said"
+                client_id = match1.group(3).strip()    # "13687"
+                
+                # Split first part to get individual names
+                first_part_names = first_part.split()
+                if len(first_part_names) >= 2:
+                    first_name = first_part_names[0]  # "A"
+                    last_name = ' '.join(first_part_names[1:])  # "Aly"
+                else:
+                    first_name = first_part
+                    last_name = second_part
+                
+                return first_name, last_name, client_id
+            
+            # Pattern 2: "Abarca, Florentina (24591)" - Last, First (ID)
+            pattern2 = r'^([A-Za-z\s]+),\s*([A-Za-z\s]+)\s*\((\d+)\)$'
+            match2 = re.match(pattern2, client_str)
+            if match2:
+                last_name = match2.group(1).strip()    # "Abarca"
+                first_name = match2.group(2).strip()   # "Florentina"
+                client_id = match2.group(3).strip()    # "24591"
+                
+                return first_name, last_name, client_id
+            
+            # If no combined pattern matches, try separate format (format 2)
+            # Pattern 3: "A Aly, Said" - First Last, First (no ID in field)
+            pattern3 = r'^([A-Za-z\s]+),\s*([A-Za-z\s]+)$'
+            match3 = re.match(pattern3, client_str)
+            if match3:
+                first_part = match3.group(1).strip()  # "A Aly"
+                second_part = match3.group(2).strip()  # "Said"
+                
+                # Split first part to get individual names
+                first_part_names = first_part.split()
+                if len(first_part_names) >= 2:
+                    first_name = first_part_names[0]  # "A"
+                    last_name = ' '.join(first_part_names[1:])  # "Aly"
+                else:
+                    first_name = first_part
+                    last_name = second_part
+                
+                # Use client_id from separate field if provided
+                if client_id_field_value and str(client_id_field_value).strip():
+                    client_id = str(client_id_field_value).strip()
+                    return first_name, last_name, client_id
+                else:
+                    # Return names but no client_id
+                    return first_name, last_name, None
+            
+            # Pattern 4: "Abarca, Florentina" - Last, First (no ID in field)
+            pattern4 = r'^([A-Za-z\s]+),\s*([A-Za-z\s]+)$'
+            match4 = re.match(pattern4, client_str)
+            if match4:
+                last_name = match4.group(1).strip()    # "Abarca"
+                first_name = match4.group(2).strip()   # "Florentina"
+                
+                # Use client_id from separate field if provided
+                if client_id_field_value and str(client_id_field_value).strip():
+                    client_id = str(client_id_field_value).strip()
+                    return first_name, last_name, client_id
+                else:
+                    # Return names but no client_id
+                    return first_name, last_name, None
+            
+            # If no pattern matches, return None
+            return None, None, None
         
         def _is_duplicate_data(existing_client, new_data):
             """Check if the new data is essentially the same as existing client data"""
@@ -1397,9 +1539,9 @@ def upload_clients(request):
                     if created:
                         logger.info(f"Created new department: {program_department}")
                 else:
-                    # Default to Social Services if no department specified
+                    # Default to NA if no department specified
                     department, created = Department.objects.get_or_create(
-                        name='Social Services',
+                        name='NA',
                         defaults={'owner': 'System'}
                     )
                 
@@ -1482,7 +1624,8 @@ def upload_clients(request):
                         'end_date': discharge_date,
                         'status': program_status,
                         'days_elapsed': days_elapsed,
-                        'notes': ' | '.join(notes_parts)
+                        'notes': ' | '.join(notes_parts),
+                        'created_by': request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
                     }
                 )
                 
@@ -1623,6 +1766,31 @@ def upload_clients(request):
                     except (ValueError, TypeError):
                         return default
                 
+                # Helper function to clean client_id and ensure it's a whole number string
+                def clean_client_id(value):
+                    """Clean client_id to ensure it's a whole number string without decimals"""
+                    if not value or str(value).strip() == '':
+                        return None
+                    
+                    try:
+                        # Convert to string first
+                        str_value = str(value).strip()
+                        
+                        # If it's a decimal number (like 2765.0), convert to integer then back to string
+                        if '.' in str_value:
+                            # Check if it's a whole number decimal (like 2765.0)
+                            float_val = float(str_value)
+                            if float_val.is_integer():
+                                return str(int(float_val))
+                            else:
+                                # If it has actual decimal places, keep as is
+                                return str_value
+                        else:
+                            # Already a whole number, return as string
+                            return str_value
+                    except (ValueError, TypeError):
+                        return str(value).strip() if value else None
+
                 # Clean and prepare data using field mapping
                 email = get_field_data('email')  # Now optional
                 phone = get_field_data('phone')
@@ -1693,7 +1861,6 @@ def upload_clients(request):
                                 dob_str = str(dob_value).strip()
                                 try:
                                     # Try YYYY-MM-DD format
-                                    from datetime import datetime
                                     dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
                                 except:
                                     # Try other common formats
@@ -1756,7 +1923,7 @@ def upload_clients(request):
                     'children_home': parse_boolean(get_field_data('children_home')),
                     'children_number': parse_integer(get_field_data('children_number')),
                     'lhin': get_field_data('lhin'),
-                    'client_id': get_field_data('client_id'),
+                    'client_id': clean_client_id(get_field_data('client_id')),
                     'phone': get_field_data('phone'),
                     'email': email,  # Add email to direct field
                     'source': source,  # Add the source field from the form
@@ -1847,6 +2014,45 @@ def upload_clients(request):
                     'restriction_status': get_field_data('restriction_status'),
                     'early_termination_by': get_field_data('early_termination_by')
                 }
+                
+                # OPTIONAL: Check for combined client field (only if present) - MUST happen before validation
+                combined_client_value = None
+                client_id_from_separate_field = None
+                
+                # Look for combined client field
+                for col in df.columns:
+                    if column_mapping.get(col) == 'client_combined':
+                        combined_client_value = row[col]
+                        break
+                
+                # Look for separate client_id field
+                for col in df.columns:
+                    if column_mapping.get(col) == 'client_id':
+                        client_id_from_separate_field = row[col]
+                        print(f"Row {index + 1}: Found separate client_id field '{col}' with value: '{client_id_from_separate_field}'")
+                        break
+                
+                # Only parse if combined field exists AND has a value
+                if combined_client_value and str(combined_client_value).strip():
+                    print(f"Row {index + 1}: Parsing combined client field '{combined_client_value}' with separate client_id '{client_id_from_separate_field}'")
+                    parsed_first, parsed_last, parsed_client_id = parse_combined_client_field(
+                        combined_client_value, 
+                        client_id_from_separate_field
+                    )
+                    print(f"Row {index + 1}: Parsing result - First: '{parsed_first}', Last: '{parsed_last}', ID: '{parsed_client_id}'")
+                    
+                    # Only override if parsing was successful
+                    if parsed_first and parsed_last:
+                        client_data['first_name'] = parsed_first
+                        client_data['last_name'] = parsed_last
+                        
+                        # Only override client_id if we successfully parsed it
+                        if parsed_client_id:
+                            client_data['client_id'] = clean_client_id(parsed_client_id)
+                        
+                        print(f"Row {index + 1}: Parsed combined client field - First: '{parsed_first}', Last: '{parsed_last}', ID: '{parsed_client_id}'")
+                    else:
+                        print(f"Row {index + 1}: Combined client field found but parsing failed, using individual fields")
                 
                 # Handle languages_spoken (expect comma-separated string)
                 languages = get_field_data('language')
@@ -2630,7 +2836,7 @@ class ClientDedupeView(TemplateView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot access duplicate detection
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
                     messages.error(request, 'You do not have permission to access duplicate detection. Contact your administrator.')
                     return redirect('clients:list')
             except Exception:

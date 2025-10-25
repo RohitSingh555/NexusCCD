@@ -74,7 +74,7 @@
                 <div class="space-y-3">
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Client ID:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ client.client_id|default:"—" }}</span>
+                        <span class="text-sm text-neutral-900 font-body break-all font-mono">{{ client.client_id|floatformat:0|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">First Name:</span>

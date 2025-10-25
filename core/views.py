@@ -327,14 +327,12 @@ def dashboard(request):
             Q(is_bill_168=True) | Q(is_no_trespass=True)
         ).select_related('client', 'program').order_by('-created_at')[:10]
     elif is_staff_only:
-        # Staff-only users see all restrictions but limited access to other data
-        # Use directly assigned clients for staff users
-        all_assigned_clients = assigned_clients if assigned_clients else []
-        total_clients = all_assigned_clients.count() if all_assigned_clients else 0
-        active_programs = assigned_programs.count() if assigned_programs else 0
-        total_staff = Staff.objects.count()  # Staff count is same for all
+        # Staff users now see ALL data across all clients and programs (same as analysts)
+        total_clients = Client.objects.count()
+        active_programs = Program.objects.count()
+        total_staff = Staff.objects.count()
         
-        # Get active restrictions count - Staff users can now see ALL restrictions
+        # Get active restrictions count - Staff users see ALL restrictions
         from django.utils import timezone
         today = timezone.now().date()
         active_restrictions = ServiceRestriction.objects.filter(
@@ -344,15 +342,15 @@ def dashboard(request):
             Q(end_date__isnull=True) | Q(end_date__gte=today)
         ).count()
         
-        # Get recent clients (last 5) from assigned clients
-        recent_clients = all_assigned_clients.order_by('-created_at')[:5] if all_assigned_clients else []
+        # Get recent clients (last 5) - Staff users see ALL clients
+        recent_clients = Client.objects.all().order_by('-created_at')[:5]
         
-        # Get recent restrictions (last 5) - Staff users can now see ALL restrictions
+        # Get recent restrictions (last 5) - Staff users see ALL restrictions
         recent_restrictions = ServiceRestriction.objects.filter(
             is_archived=False
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
-        # Get restricted clients (Bill 168 and No Trespass) - Staff users can now see ALL restrictions
+        # Get restricted clients (Bill 168 and No Trespass) - Staff users see ALL restrictions
         restricted_clients = ServiceRestriction.objects.filter(
             is_archived=False
         ).filter(
@@ -383,38 +381,6 @@ def dashboard(request):
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
         # Get restricted clients (Bill 168 and No Trespass) - Analysts see ALL restrictions
-        restricted_clients = ServiceRestriction.objects.filter(
-            is_archived=False
-        ).filter(
-            Q(is_bill_168=True) | Q(is_no_trespass=True)
-        ).select_related('client', 'program').order_by('-created_at')[:10]
-    elif is_staff_only:
-        # Staff-only users see all restrictions but limited access to other data
-        # Use directly assigned clients for staff users
-        all_assigned_clients = assigned_clients if assigned_clients else []
-        total_clients = all_assigned_clients.count() if all_assigned_clients else 0
-        active_programs = assigned_programs.count() if assigned_programs else 0
-        total_staff = Staff.objects.count()  # Staff count is same for all
-        
-        # Get active restrictions count - Staff users can now see ALL restrictions
-        from django.utils import timezone
-        today = timezone.now().date()
-        active_restrictions = ServiceRestriction.objects.filter(
-            is_archived=False,
-            start_date__lte=today
-        ).filter(
-            Q(end_date__isnull=True) | Q(end_date__gte=today)
-        ).count()
-        
-        # Get recent clients (last 5) from assigned clients
-        recent_clients = all_assigned_clients.order_by('-created_at')[:5] if all_assigned_clients else []
-        
-        # Get recent restrictions (last 5) - Staff users can now see ALL restrictions
-        recent_restrictions = ServiceRestriction.objects.filter(
-            is_archived=False
-        ).select_related('client', 'program').order_by('-created_at')[:5]
-        
-        # Get restricted clients (Bill 168 and No Trespass) - Staff users can now see ALL restrictions
         restricted_clients = ServiceRestriction.objects.filter(
             is_archived=False
         ).filter(
@@ -1599,6 +1565,7 @@ def search_clients(request):
             results.append({
                 'id': client.id,
                 'external_id': str(client.external_id),
+                'client_id': client.client_id,  # Add the actual client_id field
                 'name': f"{client.first_name} {client.last_name}",
                 'first_name': client.first_name,
                 'last_name': client.last_name,
