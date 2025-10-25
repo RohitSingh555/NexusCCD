@@ -51,6 +51,7 @@ urlpatterns = [
     path('departments/<uuid:external_id>/', views.DepartmentDetailView.as_view(), name='departments_detail'),
     path('departments/<uuid:external_id>/edit/', views.DepartmentUpdateView.as_view(), name='departments_edit'),
     path('departments/<uuid:external_id>/delete/', views.DepartmentDeleteView.as_view(), name='departments_delete'),
+    path('departments/bulk-delete/', views.bulk_delete_departments, name='departments_bulk_delete'),
     
     # Enrollment CRUD views
     path('enrollments/create/', views.EnrollmentCreateView.as_view(), name='enrollments_create'),
