@@ -34,11 +34,11 @@
                     </svg>
                     Edit Enrollment
                 </a>
-                <button onclick="showArchiveModal('{{ enrollment.external_id }}', '{{ enrollment.client.first_name }} {{ enrollment.client.last_name }}')" class="inline-flex items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200">
+                <button onclick="showDeleteModal('{{ enrollment.external_id }}', '{{ enrollment.client.first_name }} {{ enrollment.client.last_name }}')" class="inline-flex items-center px-4 py-2 border border-red-300 rounded-lg text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200">
                     <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                     </svg>
-                    Archive Enrollment
+                    Delete Enrollment
                 </button>
                 {% endif %}
                 {% else %}
@@ -175,36 +175,36 @@
     </div>
 </div>
 
-<!-- Archive Confirmation Modal -->
-<div id="archiveModal" class="fixed inset-0 z-50 overflow-y-auto hidden" style="display: none;">
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="fixed inset-0 z-50 overflow-y-auto hidden" style="display: none;">
     <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="hideArchiveModal()"></div>
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onclick="hideDeleteModal()"></div>
         
         <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
             <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div class="sm:flex sm:items-start">
-                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-orange-100 sm:mx-0 sm:h-10 sm:w-10">
-                        <svg class="h-6 w-6 text-orange-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div class="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 sm:mx-0 sm:h-10 sm:w-10">
+                        <svg class="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                         </svg>
                     </div>
                     <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
                         <h3 class="text-lg leading-6 font-medium text-gray-900">
-                            Archive Enrollment
+                            Delete Enrollment
                         </h3>
                         <div class="mt-2">
                             <p class="text-sm text-gray-500">
-                                Are you sure you want to archive the enrollment for <span id="clientName" class="font-medium"></span>? This action will move the enrollment to archived status and it cannot be undone.
+                                Are you sure you want to delete the enrollment for <span id="clientName" class="font-medium"></span>? This action cannot be undone.
                             </p>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-                <button onclick="confirmArchive()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-orange-600 text-base font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 sm:ml-3 sm:w-auto sm:text-sm">
-                    Archive Enrollment
+                <button onclick="confirmDelete()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:ml-3 sm:w-auto sm:text-sm">
+                    Delete Enrollment
                 </button>
-                <button onclick="hideArchiveModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                <button onclick="hideDeleteModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
                     Cancel
                 </button>
             </div>
@@ -215,22 +215,22 @@
 <script>
 let currentEnrollmentId = null;
 
-function showArchiveModal(enrollmentId, clientName) {
+function showDeleteModal(enrollmentId, clientName) {
     currentEnrollmentId = enrollmentId;
     document.getElementById('clientName').textContent = clientName;
-    document.getElementById('archiveModal').classList.remove('hidden');
-    document.getElementById('archiveModal').style.display = 'block';
+    document.getElementById('deleteModal').classList.remove('hidden');
+    document.getElementById('deleteModal').style.display = 'block';
 }
 
-function hideArchiveModal() {
-    document.getElementById('archiveModal').classList.add('hidden');
-    document.getElementById('archiveModal').style.display = 'none';
+function hideDeleteModal() {
+    document.getElementById('deleteModal').classList.add('hidden');
+    document.getElementById('deleteModal').style.display = 'none';
     currentEnrollmentId = null;
 }
 
-function confirmArchive() {
+function confirmDelete() {
     if (currentEnrollmentId) {
-        console.log('Archiving enrollment:', currentEnrollmentId);
+        console.log('Deleting enrollment:', currentEnrollmentId);
         
         // Create a form and submit it to the delete URL
         const form = document.createElement('form');

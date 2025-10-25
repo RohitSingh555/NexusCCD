@@ -1414,9 +1414,9 @@ class EnrollmentDeleteView(AnalystAccessMixin, ProgramManagerAccessMixin, Delete
         return context
     
     def form_valid(self, form):
-        """Override to archive enrollment instead of deleting"""
+        """Override to actually delete enrollment"""
         try:
-            print(f"Form valid method called for enrollment archiving")
+            print(f"Form valid method called for enrollment deletion")
             print(f"Request method: {self.request.method}")
             print(f"Request POST data: {self.request.POST}")
             
@@ -1427,37 +1427,31 @@ class EnrollmentDeleteView(AnalystAccessMixin, ProgramManagerAccessMixin, Delete
             client_name = f"{enrollment.client.first_name} {enrollment.client.last_name}"
             program_name = enrollment.program.name
             
-            # Archive the enrollment instead of deleting
-            enrollment.is_archived = True
-            enrollment.status = 'archived'
-            enrollment.updated_by = self.request.user.get_full_name() or self.request.user.username
-            enrollment.save()
-            
-            print(f"Enrollment archived successfully: {client_name} - {program_name}")
-            print(f"is_archived: {enrollment.is_archived}, status: {enrollment.status}")
-            
-            # Create audit log entry for archiving
+            # Create audit log entry before deletion
             from .models import create_audit_log
             create_audit_log(
                 entity_name='Enrollment',
                 entity_id=enrollment.external_id,
-                action='update',
+                action='delete',
                 changed_by=self.request.user,
                 diff_data={
                     'client': str(enrollment.client),
                     'program': str(enrollment.program),
                     'start_date': str(enrollment.start_date),
                     'end_date': str(enrollment.end_date) if enrollment.end_date else None,
-                    'status': 'archived',
-                    'is_archived': True
+                    'status': enrollment.status,
+                    'deleted_by': self.request.user.get_full_name() or self.request.user.username
                 }
             )
             
-            print(f"Archived enrollment: {client_name} - {program_name}")
+            # Actually delete the enrollment
+            enrollment.delete()
+            
+            print(f"Enrollment deleted successfully: {client_name} - {program_name}")
             
             messages.success(
                 self.request, 
-                f'Enrollment for {client_name} in {program_name} has been archived successfully.'
+                f'Enrollment for {client_name} in {program_name} has been deleted successfully.'
             )
             return redirect(self.success_url)
             
@@ -2046,6 +2040,74 @@ def bulk_delete_restrictions(request):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+def bulk_delete_departments(request):
+    """Bulk delete departments"""
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        department_ids = data.get('department_ids', [])
+        
+        if not department_ids:
+            return JsonResponse({
+                'success': False,
+                'error': 'No departments selected for deletion'
+            }, status=400)
+        
+        # Get the departments to delete
+        departments_to_delete = Department.objects.filter(external_id__in=department_ids)
+        deleted_count = departments_to_delete.count()
+        
+        if deleted_count == 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'No departments found with the provided IDs'
+            }, status=404)
+        
+        # Actually delete the departments
+        from .models import create_audit_log
+        for department in departments_to_delete:
+            # Create audit log entry before deletion
+            create_audit_log(
+                entity_name='Department',
+                entity_id=department.external_id,
+                action='delete',
+                changed_by=request.user,
+                diff_data={
+                    'name': department.name,
+                    'owner': department.owner,
+                    'deleted_by': request.user.get_full_name() or request.user.username
+                }
+            )
+            
+            # Actually delete the department
+            department.delete()
+        
+        return JsonResponse({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'Successfully deleted {deleted_count} department(s)'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error deleting departments: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
 def bulk_delete_enrollments(request):
     """Bulk delete client program enrollments"""
     # Check if user is authenticated
@@ -2075,35 +2137,32 @@ def bulk_delete_enrollments(request):
                 'error': 'No enrollments found with the provided IDs'
             }, status=404)
         
-        # Archive the enrollments instead of deleting
+        # Actually delete the enrollments
         from .models import create_audit_log
         for enrollment in enrollments_to_delete:
-            # Archive the enrollment
-            enrollment.is_archived = True
-            enrollment.status = 'archived'
-            enrollment.updated_by = request.user.get_full_name() or request.user.username
-            enrollment.save()
-            
-            # Create audit log entry for archiving
+            # Create audit log entry before deletion
             create_audit_log(
                 entity_name='Enrollment',
                 entity_id=enrollment.external_id,
-                action='update',
+                action='delete',
                 changed_by=request.user,
                 diff_data={
                     'client': str(enrollment.client),
                     'program': str(enrollment.program),
                     'start_date': str(enrollment.start_date),
                     'end_date': str(enrollment.end_date) if enrollment.end_date else None,
-                    'status': 'archived',
-                    'is_archived': True
+                    'status': enrollment.status,
+                    'deleted_by': request.user.get_full_name() or request.user.username
                 }
             )
+            
+            # Actually delete the enrollment
+            enrollment.delete()
         
         return JsonResponse({
             'success': True,
             'deleted_count': deleted_count,
-            'message': f'Successfully archived {deleted_count} enrollment(s)'
+            'message': f'Successfully deleted {deleted_count} enrollment(s)'
         })
         
     except json.JSONDecodeError:

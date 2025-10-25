@@ -896,3 +896,119 @@ class ProgramCSVExportView(ProgramManagerAccessMixin, ListView):
             ])
         
         return response
+
+@method_decorator(jwt_required, name='dispatch')
+class ProgramBulkDeleteView(ProgramManagerAccessMixin, View):
+    """Handle bulk deletion of programs"""
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to delete programs"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Only SuperAdmin and Admin users can bulk delete programs
+                if not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    from django.http import JsonResponse
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'You do not have permission to delete programs. Contact your administrator.'
+                    }, status=403)
+            except Exception:
+                from django.http import JsonResponse
+                return JsonResponse({
+                    'success': False,
+                    'error': 'You do not have permission to delete programs.'
+                }, status=403)
+        
+        return super().dispatch(request, *args, **kwargs)
+    
+    def post(self, request):
+        from core.models import Program, ClientProgramEnrollment, ProgramManagerAssignment
+        from django.http import JsonResponse
+        from django.db import transaction
+        import json
+        
+        try:
+            # Parse JSON data from request body
+            data = json.loads(request.body)
+            program_ids = data.get('program_ids', [])
+            
+            if not program_ids:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No programs selected for deletion.'
+                })
+            
+            # Get programs to delete
+            programs_to_delete = Program.objects.filter(external_id__in=program_ids)
+            
+            if not programs_to_delete.exists():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No valid programs found to delete.'
+                })
+            
+            deleted_count = 0
+            errors = []
+            
+            with transaction.atomic():
+                for program in programs_to_delete:
+                    try:
+                        # Create audit log entry before deletion
+                        try:
+                            from core.models import create_audit_log
+                            create_audit_log(
+                                entity_name='Program',
+                                entity_id=program.external_id,
+                                action='delete',
+                                changed_by=request.user,
+                                diff_data={
+                                    'name': program.name,
+                                    'department': str(program.department),
+                                    'location': program.location or '',
+                                    'capacity_current': program.capacity_current,
+                                    'capacity_effective_date': str(program.capacity_effective_date) if program.capacity_effective_date else None,
+                                    'deleted_by': f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username,
+                                    'source': 'bulk_delete'
+                                }
+                            )
+                        except Exception as e:
+                            print(f"Error creating audit log for program deletion: {e}")
+                        
+                        # Delete related data first
+                        ClientProgramEnrollment.objects.filter(program=program).delete()
+                        ProgramManagerAssignment.objects.filter(program=program).delete()
+                        
+                        # Delete the program
+                        program.delete()
+                        deleted_count += 1
+                        
+                    except Exception as e:
+                        errors.append(f"Error deleting {program.name}: {str(e)}")
+            
+            if deleted_count > 0:
+                return JsonResponse({
+                    'success': True,
+                    'deleted_count': deleted_count,
+                    'message': f'Successfully deleted {deleted_count} program(s).'
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Failed to delete any programs.',
+                    'errors': errors
+                })
+                
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON data.'
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'An error occurred: {str(e)}'
+            })
