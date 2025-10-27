@@ -17,13 +17,14 @@ class PermissionErrorView(View):
         
         # Determine the appropriate message based on error type
         messages = {
-            'access_denied': f"You don't have permission to access this {resource_type}.",
+            'access_denied': f"You don't have access to this {resource_type}. Only {resource_type}s assigned to you are accessible.",
             'program_not_assigned': f"You don't have access to this program. Only programs assigned to you are accessible.",
             'client_not_related': f"You don't have access to this client. You can only view clients you have a relationship with.",
             'client_not_assigned': f"You don't have access to this client. You can only view clients enrolled in your assigned programs or departments.",
             'restriction_not_related': f"You don't have access to this restriction. You can only view restrictions for clients you manage.",
             'restriction_not_found': f"The requested restriction could not be found.",
             'enrollment_not_related': f"You don't have access to this enrollment. You can only view enrollments for clients you manage.",
+            'enrollment_not_found': f"The requested enrollment could not be found.",
         }
         
         message = messages.get(error_type, messages['access_denied'])
@@ -59,13 +60,14 @@ def permission_error_ajax(request):
     resource_name = request.GET.get('name', '')
     
     messages = {
-        'access_denied': f"You don't have permission to access this {resource_type}.",
+        'access_denied': f"You don't have access to this {resource_type}. Only {resource_type}s assigned to you are accessible.",
         'program_not_assigned': f"You don't have access to this program. Only programs assigned to you are accessible.",
         'client_not_related': f"You don't have access to this client. You can only view clients you have a relationship with.",
         'client_not_assigned': f"You don't have access to this client. You can only view clients enrolled in your assigned programs or departments.",
         'restriction_not_related': f"You don't have access to this restriction. You can only view restrictions for clients you manage.",
         'restriction_not_found': f"The requested restriction could not be found.",
         'enrollment_not_related': f"You don't have access to this enrollment. You can only view enrollments for clients you manage.",
+        'enrollment_not_found': f"The requested enrollment could not be found.",
     }
     
     message = messages.get(error_type, messages['access_denied'])
