@@ -17,6 +17,7 @@ from django.db import IntegrityError
 from django.http import HttpResponse
 import csv
 from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate
+from datetime import datetime, date
 from core.views import ProgramManagerAccessMixin, AnalystAccessMixin, jwt_required
 from core.fuzzy_matching import fuzzy_matcher
 from .forms import ClientForm
@@ -39,6 +40,30 @@ from functools import wraps
 from core.security import require_permission, SecurityManager
 
 logger = logging.getLogger(__name__)
+
+
+def get_date_range_filter(request):
+    """Helper function to get date range filter parameters from request"""
+    start_date = request.GET.get('start_date', '').strip()
+    end_date = request.GET.get('end_date', '').strip()
+    
+    # Parse dates if provided
+    parsed_start_date = None
+    parsed_end_date = None
+    
+    if start_date:
+        try:
+            parsed_start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        except ValueError:
+            parsed_start_date = None
+    
+    if end_date:
+        try:
+            parsed_end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+        except ValueError:
+            parsed_end_date = None
+    
+    return start_date, end_date, parsed_start_date, parsed_end_date
 
 
 def admin_or_superuser_required(view_func):
@@ -82,6 +107,14 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         # Start with base queryset - don't use ProgramManagerAccessMixin's get_queryset
         # because it tries to select_related('program') which doesn't exist on Client model
         queryset = Client.objects.all().order_by('-created_at')
+        
+        # Apply date range filtering
+        start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
+        
+        if parsed_start_date:
+            queryset = queryset.filter(created_at__date__gte=parsed_start_date)
+        if parsed_end_date:
+            queryset = queryset.filter(created_at__date__lte=parsed_end_date)
         
         # For program managers and staff-only users, we need to filter clients based on their relationships
         if self.request.user.is_authenticated:
@@ -252,6 +285,56 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         
         return queryset.order_by('-created_at')
     
+    def get_accessible_programs(self):
+        """Get all programs that the current user has access to based on their roles"""
+        if not self.request.user or not self.request.user.is_authenticated:
+            return Program.objects.filter(status='active').order_by('name')
+        
+        try:
+            staff = self.request.user.staff_profile
+            user_roles = staff.staffrole_set.select_related('role').all()
+            role_names = [staff_role.role.name for staff_role in user_roles]
+            
+            # SuperAdmin and Admin see all programs
+            if any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                return Program.objects.filter(status='active').order_by('name')
+            
+            # Analyst sees all programs (for reporting purposes)
+            elif 'Analyst' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader', 'Staff'] for role in role_names):
+                return Program.objects.filter(status='active').order_by('name')
+            
+            # Manager sees programs they're assigned to
+            elif staff.is_program_manager():
+                return staff.get_assigned_programs().filter(status='active').order_by('name')
+            
+            # Leader sees programs in departments they lead
+            elif staff.is_leader():
+                assigned_departments = staff.get_assigned_departments()
+                return Program.objects.filter(
+                    department__in=assigned_departments,
+                    status='active'
+                ).distinct().order_by('name')
+            
+            # Staff sees programs where their assigned clients are enrolled
+            elif 'Staff' in role_names:
+                from staff.models import StaffClientAssignment
+                assigned_client_ids = StaffClientAssignment.objects.filter(
+                    staff=staff,
+                    is_active=True
+                ).values_list('client_id', flat=True)
+                return Program.objects.filter(
+                    clientprogramenrollment__client_id__in=assigned_client_ids,
+                    status='active'
+                ).distinct().order_by('name')
+            
+            # Default: show all active programs
+            else:
+                return Program.objects.filter(status='active').order_by('name')
+                
+        except Exception:
+            # If there's any error, show all active programs
+            return Program.objects.filter(status='active').order_by('name')
+    
     def get_context_data(self, **kwargs):
         # Don't use ProgramManagerAccessMixin's get_context_data to avoid conflicts
         context = super(ProgramManagerAccessMixin, self).get_context_data(**kwargs)
@@ -262,21 +345,17 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         context['manager_filter'] = self.request.GET.get('manager', '')
         context['per_page'] = self.request.GET.get('per_page', '10')
         
+        # Add date range filter parameters
+        start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
+        context['start_date'] = start_date
+        context['end_date'] = end_date
+        
         # Add gender choices for the filter dropdown
         from .forms import GENDER_CHOICES
         context['gender_choices'] = GENDER_CHOICES
-        # Filter programs for program managers
-        if self.request.user.is_authenticated:
-            try:
-                staff = self.request.user.staff_profile
-                if staff.is_program_manager():
-                    context['programs'] = staff.get_assigned_programs().filter(status='active').order_by('name')
-                else:
-                    context['programs'] = Program.objects.filter(status='active').order_by('name')
-            except Exception:
-                context['programs'] = Program.objects.filter(status='active').order_by('name')
-        else:
-            context['programs'] = Program.objects.filter(status='active').order_by('name')
+        
+        # Get programs based on user's access level
+        context['programs'] = self.get_accessible_programs()
         
         # Force pagination to be enabled if there are any results
         if context.get('paginator') and context['paginator'].count > 0:
@@ -483,11 +562,17 @@ class ClientCreateView(AnalystAccessMixin, CreateView):
         
         client = form.save(commit=False)
         
-        # Set updated_by field
+        # Set created_by and updated_by fields
         if self.request.user.is_authenticated:
-            client.updated_by = f"{self.request.user.first_name} {self.request.user.last_name}".strip()
-            if not client.updated_by:
-                client.updated_by = self.request.user.username or self.request.user.email
+            user_name = f"{self.request.user.first_name} {self.request.user.last_name}".strip()
+            if not user_name or user_name == ' ':
+                user_name = self.request.user.username or self.request.user.email or 'System'
+            
+            client.created_by = user_name
+            client.updated_by = user_name
+        else:
+            client.created_by = 'System'
+            client.updated_by = 'System'
         
         # Check for potential duplicates using fuzzy matching
         client_data = {
@@ -2229,6 +2314,21 @@ def upload_clients(request):
                                 if hasattr(client, field) and field not in extended_fields_list:
                                     setattr(client, field, value)
                             
+                            # Set updated_by field for the update
+                            if request.user.is_authenticated:
+                                # Try to get user's full name
+                                first_name = request.user.first_name or ''
+                                last_name = request.user.last_name or ''
+                                user_name = f"{first_name} {last_name}".strip()
+                                
+                                # If no full name, fall back to username or email
+                                if not user_name or user_name == ' ':
+                                    user_name = request.user.username or request.user.email or 'System'
+                                
+                                client.updated_by = user_name
+                            else:
+                                client.updated_by = 'System'
+                            
                             # Save the updated client
                             client.save()
                             logger.info(f"Updated existing client by Client ID {client_data['client_id']}: {client.first_name} {client.last_name}")
@@ -2380,6 +2480,23 @@ def upload_clients(request):
                     for field, value in client_data.items():
                         if field not in extended_fields_list:
                             client_fields[field] = value
+                    
+                    # Set user fields for created_by and updated_by
+                    if request.user.is_authenticated:
+                        # Try to get user's full name
+                        first_name = request.user.first_name or ''
+                        last_name = request.user.last_name or ''
+                        user_name = f"{first_name} {last_name}".strip()
+                        
+                        # If no full name, fall back to username or email
+                        if not user_name or user_name == ' ':
+                            user_name = request.user.username or request.user.email or 'System'
+                        
+                        client_fields['created_by'] = user_name
+                        client_fields['updated_by'] = user_name
+                    else:
+                        client_fields['created_by'] = 'System'
+                        client_fields['updated_by'] = 'System'
                     
                     # Create the client with only client fields
                     print(f"Row {index + 1}: About to create client with fields: {list(client_fields.keys())}")
