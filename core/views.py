@@ -23,6 +23,30 @@ from .forms import UserProfileForm, StaffProfileForm, PasswordChangeForm, Servic
 User = get_user_model()
 
 
+def get_date_range_filter(request):
+    """Helper function to get date range filter parameters from request"""
+    start_date = request.GET.get('start_date', '').strip()
+    end_date = request.GET.get('end_date', '').strip()
+    
+    # Parse dates if provided
+    parsed_start_date = None
+    parsed_end_date = None
+    
+    if start_date:
+        try:
+            parsed_start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+        except ValueError:
+            parsed_start_date = None
+    
+    if end_date:
+        try:
+            parsed_end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+        except ValueError:
+            parsed_end_date = None
+    
+    return start_date, end_date, parsed_start_date, parsed_end_date
+
+
 class AnalystAccessMixin:
     """Mixin to block Analyst users from accessing individual pages"""
     
@@ -1023,6 +1047,21 @@ class EnrollmentListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView
         # First apply the ProgramManagerAccessMixin filtering
         queryset = super().get_queryset()
         
+        # Apply date range filtering (start_date maps to intake_date, end_date maps to discharge_date)
+        start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
+        
+        if parsed_start_date:
+            queryset = queryset.filter(start_date__gte=parsed_start_date)
+        if parsed_end_date:
+            # Include enrollments that either:
+            # 1. Have a discharge date on or before the end date, OR
+            # 2. Don't have a discharge date (NULL) but their intake date is on or before the end date
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(end_date__lte=parsed_end_date) | 
+                Q(end_date__isnull=True, start_date__lte=parsed_end_date)
+            )
+        
         # Apply additional filters
         department_filter = self.request.GET.get('department', '')
         status_filter = self.request.GET.get('status', '')
@@ -1122,6 +1161,11 @@ class EnrollmentListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView
             ('archived', 'Archived'),
             ('active_only', 'All Non-Archived'),
         ]
+        
+        # Add date range filter parameters
+        start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
+        context['start_date'] = start_date
+        context['end_date'] = end_date
         
         # Add current filter values
         context['current_department'] = self.request.GET.get('department', '')

@@ -898,6 +898,113 @@ class ProgramCSVExportView(ProgramManagerAccessMixin, ListView):
         return response
 
 @method_decorator(jwt_required, name='dispatch')
+class ProgramBulkChangeDepartmentView(ProgramManagerAccessMixin, View):
+    """Handle bulk department change for programs"""
+    
+    def dispatch(self, request, *args, **kwargs):
+        # Check if user has permission to change departments
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Only SuperAdmin, Admin, and Manager can change departments
+                if not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'You do not have permission to change program departments.'
+                    }, status=403)
+            except Exception:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Unable to verify user permissions.'
+                }, status=403)
+        
+        return super().dispatch(request, *args, **kwargs)
+    
+    def post(self, request):
+        from core.models import Program, Department
+        from django.http import JsonResponse
+        from django.db import transaction
+        import json
+        
+        try:
+            # Parse JSON data from request body
+            data = json.loads(request.body)
+            program_ids = data.get('program_ids', [])
+            new_department_id = data.get('new_department_id', '')
+            
+            if not program_ids:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No programs selected for department change.'
+                })
+            
+            if not new_department_id:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No department selected.'
+                })
+            
+            # Get the new department
+            try:
+                new_department = Department.objects.get(id=new_department_id)
+            except Department.DoesNotExist:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Selected department does not exist.'
+                })
+            
+            # Get programs to update
+            programs_to_update = Program.objects.filter(external_id__in=program_ids)
+            
+            if not programs_to_update.exists():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No valid programs found to update.'
+                })
+            
+            updated_count = 0
+            errors = []
+            
+            with transaction.atomic():
+                for program in programs_to_update:
+                    try:
+                        old_department = program.department
+                        program.department = new_department
+                        program.save()
+                        updated_count += 1
+                    except Exception as e:
+                        errors.append(f"Failed to update {program.name}: {str(e)}")
+            
+            if updated_count > 0:
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Successfully updated department for {updated_count} program(s) to {new_department.name}.',
+                    'updated_count': updated_count,
+                    'errors': errors
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No programs were updated.',
+                    'errors': errors
+                })
+                
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON data.'
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'An error occurred: {str(e)}'
+            })
+
+
+@method_decorator(jwt_required, name='dispatch')
 class ProgramBulkDeleteView(ProgramManagerAccessMixin, View):
     """Handle bulk deletion of programs"""
     

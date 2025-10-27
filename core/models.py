@@ -497,6 +497,7 @@ class Client(BaseModel):
     sexual_orientation = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     
     # Audit fields
+    created_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who created this record")
     updated_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who last updated this record")
     
     def save(self, *args, **kwargs):
