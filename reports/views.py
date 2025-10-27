@@ -597,7 +597,7 @@ class ReportExportView(TemplateView):
         department_id = request.GET.get('department')
         
         # Get program manager and staff-only filtering
-        is_program_manager, is_leader, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(request)
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(request)
         
         # Filter programs based on user role
         if is_analyst:
@@ -1431,7 +1431,7 @@ class ClientDemographicsExportView(TemplateView):
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(request)
         
         # Get the same data as the main view
-        is_program_manager, is_leader, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(request)
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(request)
         
         # Filter clients based on user role
         if (is_program_manager or is_leader) and assigned_programs:
@@ -1558,7 +1558,7 @@ class ClientOutcomesExportView(TemplateView):
     
     def get(self, request, *args, **kwargs):
         # Get the same data as the main view
-        is_program_manager, is_leader, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(request)
+        is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(request)
         
         # Filter enrollments based on user role
         if (is_program_manager or is_leader) and assigned_programs:

@@ -8,7 +8,7 @@ import json
 import csv
 from django.contrib import messages
 from .message_utils import success_message, error_message, warning_message, info_message, create_success, update_success, delete_success, validation_error, permission_error, not_found_error
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -1144,6 +1144,77 @@ class EnrollmentDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, Detail
     context_object_name = 'enrollment'
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
+    
+    def get(self, request, *args, **kwargs):
+        """Override get method to check access before showing enrollment details"""
+        try:
+            # Get the enrollment object
+            self.object = self.get_object()
+            
+            # Check if user has access to this enrollment
+            if not self.user_has_access_to_enrollment(request, self.object):
+                return redirect(f"{reverse('core:permission_error')}?type=access_denied&resource=enrollment")
+            
+            # If user has access, proceed with normal rendering
+            context = self.get_context_data(object=self.object)
+            return self.render_to_response(context)
+            
+        except ClientProgramEnrollment.DoesNotExist:
+            # If enrollment doesn't exist, show 404
+            return redirect(f"{reverse('core:permission_error')}?type=enrollment_not_found&resource=enrollment")
+        except Exception as e:
+            # For any other error, show access denied
+            return redirect(f"{reverse('core:permission_error')}?type=access_denied&resource=enrollment")
+    
+    def user_has_access_to_enrollment(self, request, enrollment):
+        """Check if user has access to view this specific enrollment"""
+        if not request.user.is_authenticated:
+            return False
+        
+        # Superadmin can access everything
+        if request.user.is_superuser:
+            return True
+        
+        try:
+            staff = request.user.staff_profile
+            user_roles = staff.staffrole_set.select_related('role').all()
+            role_names = [staff_role.role.name for staff_role in user_roles]
+            
+            # Check if user is Analyst - they can see all enrollments
+            if 'Analyst' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader', 'Staff'] for role in role_names):
+                return True
+            
+            # Check if user is Program Manager
+            if staff.is_program_manager():
+                assigned_programs = staff.get_assigned_programs()
+                return enrollment.program in assigned_programs
+            
+            # Check if user is Leader
+            elif staff.is_leader():
+                assigned_departments = Department.objects.filter(
+                    leader_assignments__staff=staff,
+                    leader_assignments__is_active=True
+                ).distinct()
+                assigned_programs = Program.objects.filter(
+                    department__in=assigned_departments
+                ).distinct()
+                return enrollment.program in assigned_programs
+            
+            # Check if user is Staff
+            elif 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
+                # Staff users can only see enrollments for their assigned clients
+                from staff.models import StaffClientAssignment
+                assigned_clients = Client.objects.filter(
+                    staff_assignments__staff=staff,
+                    staff_assignments__is_active=True
+                ).distinct()
+                return enrollment.client in assigned_clients
+            
+            # If no specific role matched, deny access
+            return False
+            
+        except Exception:
+            return False
 
 
 @method_decorator(jwt_required, name='dispatch')
