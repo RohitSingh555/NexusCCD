@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Checkbox Test</title>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body>
+    <div x-data="testData()">
+        <h2>Test Checkbox Functionality</h2>
+        
+        <div>
+            <input type="checkbox" @change="toggleAll()" :checked="selectedItems.length === items.length && items.length > 0">
+            <label>Select All</label>
+        </div>
+        
+        <div>
+            <p>Selected items: <span x-text="selectedItems.length"></span></p>
+            <p>Selected IDs: <span x-text="selectedItems.join(', ')"></span></p>
+        </div>
+        
+        <div>
+            <button @click="clearSelection()">Clear Selection</button>
+        </div>
+        
+        <div>
+            <h3>Items:</h3>
+            <div x-repeat="item in items" :key="item.id">
+                <input type="checkbox" 
+                       :checked="selectedItems.includes(item.id)"
+                       @change.stop="toggleItem(item.id)"
+                       @click.stop>
+                <label x-text="item.name"></label>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function testData() {
+            return {
+                selectedItems: [],
+                items: [
+                    { id: '1', name: 'Item 1' },
+                    { id: '2', name: 'Item 2' },
+                    { id: '3', name: 'Item 3' }
+                ],
+                
+                toggleItem(itemId) {
+                    if (this.selectedItems.includes(itemId)) {
+                        this.selectedItems = this.selectedItems.filter(id => id !== itemId);
+                    } else {
+                        this.selectedItems.push(itemId);
+                    }
+                },
+                
+                toggleAll() {
+                    if (this.selectedItems.length === this.items.length) {
+                        this.selectedItems = [];
+                    } else {
+                        this.selectedItems = this.items.map(item => item.id);
+                    }
+                },
+                
+                clearSelection() {
+                    this.selectedItems = [];
+                }
+            }
+        }
+    </script>
+</body>
+</html>

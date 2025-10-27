@@ -1293,7 +1293,7 @@ def upload_clients(request):
         # Check for intake-related columns using case-insensitive mapping
         has_intake_data = False
         for col in df.columns:
-            if column_mapping.get(col) in ['program_name', 'admission_date']:
+            if column_mapping.get(col) in ['program_name', 'intake_date']:
                 has_intake_data = True
                 break
         
@@ -1338,8 +1338,15 @@ def upload_clients(request):
         def parse_combined_client_field(client_field_value, client_id_field_value=None):
             """
             Parse client field that can be in two formats:
-            1. Combined: 'A Aly, Said (13687)' - everything in one field
-            2. Separate: 'A Aly, Said' + client_id from separate field
+            1. Combined: 'Last, First (ID)' - everything in one field
+            2. Separate: 'Last, First' + client_id from separate field
+            
+            Handles various name formats:
+            - Abdul-Azim,  Safi
+            - Abdirazaq Warsame,  Mohamed  
+            - A. Hussein,  Mohamud
+            - Abbakar,  Tagwa Seddig Adam
+            - Abdoun Mohamed,  Sarah Hassan
             
             Returns: (first_name, last_name, client_id)
             """
@@ -1349,69 +1356,24 @@ def upload_clients(request):
             client_str = str(client_field_value).strip()
             client_id = None
             
-            # First, try to extract client_id from the combined field (format 1)
             import re
             
-            # Pattern 1: "A Aly, Said (13687)" - First Last, First (ID)
-            pattern1 = r'^([A-Za-z\s]+),\s*([A-Za-z\s]+)\s*\((\d+)\)$'
+            # Pattern 1: "Last, First (ID)" - Last, First with ID in parentheses
+            pattern1 = r'^([A-Za-z\s.-]+),\s+([A-Za-z\s.-]+)\s*\((\d+)\)$'
             match1 = re.match(pattern1, client_str)
             if match1:
-                first_part = match1.group(1).strip()  # "A Aly"
-                second_part = match1.group(2).strip()  # "Said"
-                client_id = match1.group(3).strip()    # "13687"
-                
-                # Split first part to get individual names
-                first_part_names = first_part.split()
-                if len(first_part_names) >= 2:
-                    first_name = first_part_names[0]  # "A"
-                    last_name = ' '.join(first_part_names[1:])  # "Aly"
-                else:
-                    first_name = first_part
-                    last_name = second_part
+                last_name = match1.group(1).strip()    # "Abdul-Azim"
+                first_name = match1.group(2).strip()   # "Safi"
+                client_id = match1.group(3).strip()    # "12345"
                 
                 return first_name, last_name, client_id
             
-            # Pattern 2: "Abarca, Florentina (24591)" - Last, First (ID)
-            pattern2 = r'^([A-Za-z\s]+),\s*([A-Za-z\s]+)\s*\((\d+)\)$'
+            # Pattern 2: "Last, First" - Last, First without ID (ID from separate field)
+            pattern2 = r'^([A-Za-z\s.-]+),\s+([A-Za-z\s.-]+)$'
             match2 = re.match(pattern2, client_str)
             if match2:
-                last_name = match2.group(1).strip()    # "Abarca"
-                first_name = match2.group(2).strip()   # "Florentina"
-                client_id = match2.group(3).strip()    # "24591"
-                
-                return first_name, last_name, client_id
-            
-            # If no combined pattern matches, try separate format (format 2)
-            # Pattern 3: "A Aly, Said" - First Last, First (no ID in field)
-            pattern3 = r'^([A-Za-z\s]+),\s*([A-Za-z\s]+)$'
-            match3 = re.match(pattern3, client_str)
-            if match3:
-                first_part = match3.group(1).strip()  # "A Aly"
-                second_part = match3.group(2).strip()  # "Said"
-                
-                # Split first part to get individual names
-                first_part_names = first_part.split()
-                if len(first_part_names) >= 2:
-                    first_name = first_part_names[0]  # "A"
-                    last_name = ' '.join(first_part_names[1:])  # "Aly"
-                else:
-                    first_name = first_part
-                    last_name = second_part
-                
-                # Use client_id from separate field if provided
-                if client_id_field_value and str(client_id_field_value).strip():
-                    client_id = str(client_id_field_value).strip()
-                    return first_name, last_name, client_id
-                else:
-                    # Return names but no client_id
-                    return first_name, last_name, None
-            
-            # Pattern 4: "Abarca, Florentina" - Last, First (no ID in field)
-            pattern4 = r'^([A-Za-z\s]+),\s*([A-Za-z\s]+)$'
-            match4 = re.match(pattern4, client_str)
-            if match4:
-                last_name = match4.group(1).strip()    # "Abarca"
-                first_name = match4.group(2).strip()   # "Florentina"
+                last_name = match2.group(1).strip()    # "Abdul-Azim"
+                first_name = match2.group(2).strip()   # "Safi"
                 
                 # Use client_id from separate field if provided
                 if client_id_field_value and str(client_id_field_value).strip():
@@ -1516,7 +1478,7 @@ def upload_clients(request):
                 # Use the source from the form (upload type selection), not from CSV
                 
                 print(f"DEBUG: Program enrollment data - program_name: '{program_name}', source: '{source}'")
-                intake_date_value = get_field_data('admission_date')
+                intake_date_value = get_field_data('intake_date')
                 if intake_date_value:
                     intake_date = pd.to_datetime(intake_date_value).date()
                 else:
@@ -1528,6 +1490,34 @@ def upload_clients(request):
                 if not program_name:
                     logger.warning(f"No program name provided for client {client.first_name} {client.last_name}")
                     return
+                
+                # Handle multiple programs in a single cell (separated by newlines)
+                program_names = [name.strip() for name in str(program_name).split('\n') if name.strip()]
+                print(f"DEBUG: Split program names: {program_names}")
+                
+                # Handle multiple dates in a single cell (separated by newlines)
+                intake_dates = []
+                if intake_date_value:
+                    date_strings = [date.strip() for date in str(intake_date_value).split('\n') if date.strip()]
+                    for date_str in date_strings:
+                        try:
+                            intake_dates.append(pd.to_datetime(date_str).date())
+                        except:
+                            intake_dates.append(intake_date)  # fallback to default
+                else:
+                    intake_dates = [intake_date]  # use default date
+                
+                print(f"DEBUG: Split intake dates: {intake_dates}")
+                
+                # Ensure we have the same number of programs and dates
+                # If we have more programs than dates, repeat the last date
+                # If we have more dates than programs, repeat the last program
+                while len(intake_dates) < len(program_names):
+                    intake_dates.append(intake_dates[-1] if intake_dates else intake_date)
+                while len(program_names) < len(intake_dates):
+                    program_names.append(program_names[-1] if program_names else program_name)
+                
+                print(f"DEBUG: Final program-date pairs: {list(zip(program_names, intake_dates))}")
                 
                 # Get or create department
                 department = None
@@ -1545,44 +1535,7 @@ def upload_clients(request):
                         defaults={'owner': 'System'}
                     )
                 
-                # Get or create program
-                program, created = Program.objects.get_or_create(
-                    name=program_name,
-                    department=department,
-                    defaults={
-                        'location': 'TBD',
-                        'status': 'suggested' if created else 'active',
-                        'description': f'Program created from intake data - {source}'
-                    }
-                )
-                
-                if created:
-                    logger.info(f"Created new program: {program_name} (status: suggested)")
-                else:
-                    # If program exists but is suggested, keep it as suggested
-                    if program.status == 'suggested':
-                        logger.info(f"Program {program_name} already exists with suggested status")
-                
-                # Create intake record
-                intake, created = Intake.objects.get_or_create(
-                    client=client,
-                    program=program,
-                    defaults={
-                        'department': department,
-                        'intake_date': intake_date,
-                        'intake_database': intake_database,
-                        'referral_source': referral_source,
-                        'intake_housing_status': intake_housing_status,
-                        'notes': f'Intake created from {source} upload'
-                    }
-                )
-                
-                if created:
-                    logger.info(f"Created intake record for {client.first_name} {client.last_name} in {program_name}")
-                else:
-                    logger.info(f"Intake record already exists for {client.first_name} {client.last_name} in {program_name}")
-                
-                # Get additional enrollment fields using field mapping
+                # Get additional enrollment fields using field mapping (outside loop for efficiency)
                 sub_program = get_field_data('sub_program')
                 support_workers = get_field_data('support_workers')
                 level_of_support = get_field_data('level_of_support')
@@ -1602,58 +1555,99 @@ def upload_clients(request):
                 # Parse receiving services
                 receiving_services = parse_boolean(receiving_services_value)
                 
-                # Create enrollment with only existing model fields
-                # Build notes with additional information
-                notes_parts = [f'Enrollment created from {source} intake']
-                if level_of_support:
-                    notes_parts.append(f'Level of Support: {level_of_support}')
-                if client_type:
-                    notes_parts.append(f'Client Type: {client_type}')
-                if referral_source:
-                    notes_parts.append(f'Referral Source: {referral_source}')
-                if support_workers:
-                    notes_parts.append(f'Support Workers: {support_workers}')
-                if reason_discharge:
-                    notes_parts.append(f'Reason for Discharge: {reason_discharge}')
-                
-                enrollment, created = ClientProgramEnrollment.objects.get_or_create(
-                    client=client,
-                    program=program,
-                    defaults={
-                        'start_date': intake_date,
-                        'end_date': discharge_date,
-                        'status': program_status,
-                        'days_elapsed': days_elapsed,
-                        'notes': ' | '.join(notes_parts),
-                        'created_by': request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
-                    }
-                )
-                
-                if created:
-                    logger.info(f"Created pending enrollment for {client.first_name} {client.last_name} in {program_name}")
-                    print(f"DEBUG: Successfully created enrollment for {client.first_name} {client.last_name} in {program_name}")
+                # Process each program-date pair
+                for i, (current_program_name, current_intake_date) in enumerate(zip(program_names, intake_dates)):
+                    print(f"DEBUG: Processing program {i+1}/{len(program_names)}: '{current_program_name}' with date {current_intake_date}")
                     
-                    # Create audit log entry for enrollment creation
-                    try:
-                        from core.models import create_audit_log
-                        create_audit_log(
-                            entity_name='Enrollment',
-                            entity_id=enrollment.external_id,
-                            action='create',
-                            changed_by=None,  # Bulk import, no specific user
-                            diff_data={
-                                'client': str(enrollment.client),
-                                'program': str(enrollment.program),
-                                'start_date': str(enrollment.start_date),
-                                'status': enrollment.status,
-                                'source': 'bulk_import'
-                            }
+                    # Get or create program
+                    program, created = Program.objects.get_or_create(
+                        name=current_program_name,
+                        department=department,
+                        defaults={
+                            'location': 'TBD',
+                            'status': 'suggested' if created else 'active',
+                            'description': f'Program created from intake data - {source}'
+                        }
+                    )
+                    
+                    if created:
+                        logger.info(f"Created new program: {current_program_name} (status: suggested)")
+                    else:
+                        # If program exists but is suggested, keep it as suggested
+                        if program.status == 'suggested':
+                            logger.info(f"Program {current_program_name} already exists with suggested status")
+                    
+                    # Create intake record
+                    intake, created = Intake.objects.get_or_create(
+                        client=client,
+                        program=program,
+                        defaults={
+                            'department': department,
+                            'intake_date': current_intake_date,
+                            'intake_database': intake_database,
+                            'referral_source': referral_source,
+                            'intake_housing_status': intake_housing_status,
+                            'notes': f'Intake created from {source} upload (program {i+1})'
+                        }
+                    )
+                    
+                    if created:
+                        logger.info(f"Created intake record for {client.first_name} {client.last_name} in {current_program_name}")
+                    else:
+                        logger.info(f"Intake record already exists for {client.first_name} {client.last_name} in {current_program_name}")
+                    
+                    # Create enrollment for this program
+                    # Build notes with additional information
+                    notes_parts = [f'Enrollment created from {source} intake']
+                    if level_of_support:
+                        notes_parts.append(f'Level of Support: {level_of_support}')
+                    if client_type:
+                        notes_parts.append(f'Client Type: {client_type}')
+                    if referral_source:
+                        notes_parts.append(f'Referral Source: {referral_source}')
+                    if support_workers:
+                        notes_parts.append(f'Support Workers: {support_workers}')
+                    if reason_discharge:
+                        notes_parts.append(f'Reason for Discharge: {reason_discharge}')
+                    
+                    enrollment, created = ClientProgramEnrollment.objects.get_or_create(
+                        client=client,
+                        program=program,
+                        defaults={
+                            'start_date': current_intake_date,  # Use current_intake_date instead of intake_date
+                            'end_date': discharge_date,
+                            'status': program_status,
+                            'days_elapsed': days_elapsed,
+                            'notes': ' | '.join(notes_parts),
+                            'created_by': request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
+                        }
                         )
-                    except Exception as e:
-                        logger.error(f"Error creating audit log for enrollment: {e}")
-                else:
-                    print(f"DEBUG: Enrollment already exists for {client.first_name} {client.last_name} in {program_name}")
-                    logger.info(f"Enrollment already exists for {client.first_name} {client.last_name} in {program_name}")
+                    
+                    if created:
+                        logger.info(f"Created pending enrollment for {client.first_name} {client.last_name} in {current_program_name}")
+                        print(f"DEBUG: Successfully created enrollment for {client.first_name} {client.last_name} in {current_program_name}")
+                        
+                        # Create audit log entry for enrollment creation
+                        try:
+                            from core.models import create_audit_log
+                            create_audit_log(
+                                entity_name='Enrollment',
+                                entity_id=enrollment.external_id,
+                                action='create',
+                                changed_by=None,  # Bulk import, no specific user
+                                diff_data={
+                                    'client': str(enrollment.client),
+                                    'program': str(enrollment.program),
+                                    'start_date': str(enrollment.start_date),
+                                    'status': enrollment.status,
+                                    'source': 'bulk_import'
+                                }
+                            )
+                        except Exception as e:
+                            logger.error(f"Error creating audit log for enrollment: {e}")
+                    else:
+                        print(f"DEBUG: Enrollment already exists for {client.first_name} {client.last_name} in {current_program_name}")
+                        logger.info(f"Enrollment already exists for {client.first_name} {client.last_name} in {current_program_name}")
                     
             except Exception as e:
                 logger.error(f"Error processing intake data for row {index + 2}: {str(e)}")

@@ -216,8 +216,7 @@
                     {% for program_data in programs_with_capacity %}
                     <tr class="hover:bg-neutral-50 relative cursor-pointer" 
                         @contextmenu.prevent="showContextMenu($event, '{{ program_data.program.external_id }}', '{{ program_data.program.name }}')"
-                        @click="console.log('Row clicked!'); viewProgram('{{ program_data.program.external_id }}')"
-                        onclick="console.log('Direct click handler'); window.location.href='/programs/{{ program_data.program.external_id }}/'"
+                        @click="viewProgram('{{ program_data.program.external_id }}')"
                         :class="{ 'bg-blue-50': selectedPrograms.includes('{{ program_data.program.external_id }}') }"
                         data-program-id="{{ program_data.program.external_id }}"
                         data-program-name="{{ program_data.program.name }}">
@@ -400,7 +399,7 @@ function programManager() {
             {% for program in programs %}
             {
                 id: '{{ program.external_id }}',
-                name: '{{ program.name }}'
+                name: '{{ program.name|escapejs }}'
             }{% if not forloop.last %},{% endif %}
             {% endfor %}
         ],
@@ -466,11 +465,8 @@ function programManager() {
         
         deleteProgram() {
             if (this.contextMenu.programId) {
-                this.deleteModal = {
-                    visible: true,
-                    message: `Are you sure you want to delete "${this.contextMenu.programName}"? This action cannot be undone.`,
-                    programIds: [this.contextMenu.programId]
-                };
+                // Navigate to individual delete confirmation page
+                window.location.href = `/programs/${this.contextMenu.programId}/delete/`;
             }
             this.hideContextMenu();
         },

@@ -500,7 +500,7 @@ function enrollmentManager() {
             {
                 id: '{{ enrollment.external_id }}',
                 db_id: {{ enrollment.id }},
-                name: '{{ enrollment.client.first_name }} {{ enrollment.client.last_name }} - {{ enrollment.program.name }}'
+                name: '{{ enrollment.client.first_name|add:" "|add:enrollment.client.last_name|add:" - "|add:enrollment.program.name|escapejs }}'
             }{% if not forloop.last %},{% endif %}
             {% endfor %}
         ],
@@ -559,11 +559,8 @@ function enrollmentManager() {
         
         deleteEnrollment() {
             if (this.contextMenu.enrollmentId) {
-                this.deleteModal = {
-                    visible: true,
-                    message: `Are you sure you want to delete "${this.contextMenu.enrollmentName}"? This action cannot be undone.`,
-                    enrollmentIds: [this.contextMenu.enrollmentId]
-                };
+                // Navigate to individual delete confirmation page
+                window.location.href = `/core/enrollments/${this.contextMenu.enrollmentId}/delete/`;
             }
             this.hideContextMenu();
         },
