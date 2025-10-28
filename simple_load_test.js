@@ -11,7 +11,7 @@ import { Rate, Trend, Counter } from 'k6/metrics';
 // Configuration
 const CONFIG = {
     API_URL: 'http://localhost:8000/clients/upload/process/',
-    BATCH_SIZE: 100,  // Small batch for safety
+    BATCH_SIZE: 1000,  // Larger batch to test bulk operations
     CONCURRENCY: 1,   // Single user
     DURATION: '30s'   // 30 seconds
 };
@@ -142,3 +142,4 @@ export const options = {
         'upload_latency': ['avg<5000', 'p(95)<10000']  // Average < 5s, P95 < 10s
     }
 };
+
