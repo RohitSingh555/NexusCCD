@@ -1568,16 +1568,32 @@ def upload_clients(request):
                     except (ValueError, TypeError):
                         return default
                 
+                # Helper function to parse multi-line date values safely
+                def parse_multiline_dates(value, default=None):
+                    """Parse multiple dates from a single cell (separated by newlines)"""
+                    if not value or value.strip() == '':
+                        return [default] if default else []
+                    
+                    date_strings = [date.strip() for date in str(value).split('\n') if date.strip()]
+                    parsed_dates = []
+                    
+                    for date_str in date_strings:
+                        try:
+                            parsed_dates.append(pd.to_datetime(date_str).date())
+                        except (ValueError, TypeError):
+                            if default:
+                                parsed_dates.append(default)
+                    
+                    return parsed_dates if parsed_dates else ([default] if default else [])
+                
                 program_name = get_field_data('program_name')
                 program_department = get_field_data('program_department')
                 # Use the source from the form (upload type selection), not from CSV
                 
                 print(f"DEBUG: Program enrollment data - program_name: '{program_name}', source: '{source}'")
                 intake_date_value = get_field_data('intake_date')
-                if intake_date_value:
-                    intake_date = pd.to_datetime(intake_date_value).date()
-                else:
-                    intake_date = datetime.now().date()
+                # Set default intake date - will be overridden by split logic below
+                intake_date = datetime.now().date()
                 intake_database = get_field_data('intake_database', 'CCD')
                 referral_source = get_field_data('referral_source', source)
                 intake_housing_status = get_field_data('intake_housing_status', 'unknown')
@@ -1591,16 +1607,7 @@ def upload_clients(request):
                 print(f"DEBUG: Split program names: {program_names}")
                 
                 # Handle multiple dates in a single cell (separated by newlines)
-                intake_dates = []
-                if intake_date_value:
-                    date_strings = [date.strip() for date in str(intake_date_value).split('\n') if date.strip()]
-                    for date_str in date_strings:
-                        try:
-                            intake_dates.append(pd.to_datetime(date_str).date())
-                        except:
-                            intake_dates.append(intake_date)  # fallback to default
-                else:
-                    intake_dates = [intake_date]  # use default date
+                intake_dates = parse_multiline_dates(intake_date_value, intake_date)
                 
                 print(f"DEBUG: Split intake dates: {intake_dates}")
                 
@@ -2927,14 +2934,19 @@ def download_sample(request, file_type):
 
 @csrf_protect
 @require_http_methods(["POST"])
+@jwt_required
 def bulk_delete_clients(request):
     """Bulk delete clients"""
     try:
         import json
+        logger.info(f"Bulk delete request from user: {request.user}")
+        
         data = json.loads(request.body)
         client_ids = data.get('client_ids', [])
+        logger.info(f"Client IDs to delete: {client_ids}")
         
         if not client_ids:
+            logger.warning("No client IDs provided for bulk delete")
             return JsonResponse({
                 'success': False, 
                 'error': 'No client IDs provided'
@@ -2943,8 +2955,10 @@ def bulk_delete_clients(request):
         # Get clients to delete
         clients_to_delete = Client.objects.filter(external_id__in=client_ids)
         deleted_count = clients_to_delete.count()
+        logger.info(f"Found {deleted_count} clients to delete")
         
         if deleted_count == 0:
+            logger.warning(f"No clients found with provided IDs: {client_ids}")
             return JsonResponse({
                 'success': False, 
                 'error': 'No clients found with provided IDs'
