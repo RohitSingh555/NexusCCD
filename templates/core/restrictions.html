@@ -187,9 +187,20 @@
         </div>
     </div>
     
+    <!-- Date Range Filter -->
+    {% include 'components/date_range_filter.html' with start_date=start_date end_date=end_date clear_url='core:restrictions' %}
+    
     <!-- Search and Filters -->
     <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
         <form method="GET" class="space-y-4">
+            <!-- Preserve date filter parameters -->
+            {% if start_date %}
+                <input type="hidden" name="start_date" value="{{ start_date }}">
+            {% endif %}
+            {% if end_date %}
+                <input type="hidden" name="end_date" value="{{ end_date }}">
+            {% endif %}
+            
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <!-- Client Search -->
                 <div>
@@ -263,7 +274,7 @@
                         </svg>
                         Search
                     </button>
-                    {% if client_search or program_search or current_restriction_type or current_status and current_status != 'all' %}
+                    {% if client_search or program_search or current_restriction_type or current_status and current_status != 'all' or start_date or end_date %}
                     <a href="{% url 'core:restrictions' %}" class="inline-flex items-center justify-center px-4 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -276,7 +287,7 @@
         </form>
         
         <!-- Results Count -->
-        {% if client_search or program_search or current_restriction_type or current_status and current_status != 'all' %}
+        {% if client_search or program_search or current_restriction_type or current_status and current_status != 'all' or start_date or end_date %}
         <div class="flex justify-between items-center pt-4 border-t border-neutral-200">
             <div class="text-sm text-neutral-600 font-body">
                 <span class="font-bold">{{ total_filtered_count }}</span> restriction(s) found

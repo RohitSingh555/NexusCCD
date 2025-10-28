@@ -707,6 +707,21 @@ class RestrictionListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListVie
         # First apply the ProgramManagerAccessMixin filtering
         queryset = super().get_queryset()
         
+        # Apply date range filtering
+        start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
+        
+        if parsed_start_date:
+            queryset = queryset.filter(start_date__gte=parsed_start_date)
+        if parsed_end_date:
+            # Include restrictions that either:
+            # 1. Have an end date on or before the end date, OR
+            # 2. Don't have an end date (NULL) but their start date is on or before the end date
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(end_date__lte=parsed_end_date) | 
+                Q(end_date__isnull=True, start_date__lte=parsed_end_date)
+            )
+        
         # Apply additional filters
         restriction_type_filter = self.request.GET.get('restriction_type', '')
         scope_filter = self.request.GET.get('scope', '')
@@ -890,6 +905,11 @@ class RestrictionListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListVie
         # Add search parameters
         context['client_search'] = self.request.GET.get('client_search', '')
         context['program_search'] = self.request.GET.get('program_search', '')
+        
+        # Add date filter parameters
+        start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
+        context['start_date'] = start_date
+        context['end_date'] = end_date
         
         # Override pagination context
         context['is_paginated'] = True  # Always show pagination controls
@@ -1755,6 +1775,9 @@ class RestrictionDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, Detai
         if self.request.user.is_authenticated:
             try:
                 staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
                 if staff.is_program_manager():
                     # Managers can edit restrictions for their assigned clients
                     assigned_programs = staff.get_assigned_programs()
@@ -1778,8 +1801,8 @@ class RestrictionDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, Detai
                 elif staff.is_staff_only():
                     # Staff users can view all restrictions but cannot edit them
                     can_edit = False
-                elif self.request.user.is_superuser:
-                    # SuperAdmin can edit all restrictions
+                elif 'Admin' in role_names or self.request.user.is_superuser:
+                    # Admin and SuperAdmin can edit all restrictions
                     can_edit = True
             except Exception:
                 pass
@@ -1903,8 +1926,8 @@ class RestrictionUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, Updat
                 user_roles = staff.staffrole_set.select_related('role').all()
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
-                # Staff role users cannot edit restrictions
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
+                # Staff role users cannot edit restrictions (unless they have Admin, SuperAdmin, Manager, or Leader roles)
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
                     messages.error(request, 'You do not have permission to edit restrictions. Contact your administrator.')
                     return redirect('core:restrictions')
             except Exception:
@@ -1918,7 +1941,14 @@ class RestrictionUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, Updat
         if self.request.user.is_authenticated:
             try:
                 staff = self.request.user.staff_profile
-                if staff.is_program_manager():
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Admin and SuperAdmin can access all programs
+                if 'Admin' in role_names or self.request.user.is_superuser:
+                    # No program filtering - they can access all programs
+                    pass
+                elif staff.is_program_manager():
                     # Filter programs to only assigned ones
                     assigned_programs = staff.get_assigned_programs()
                     kwargs['program_queryset'] = assigned_programs

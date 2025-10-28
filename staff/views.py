@@ -1,6 +1,6 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.contrib import messages
 from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
@@ -554,7 +554,7 @@ def manage_program_assignments(request, external_id):
             
             form.save(staff, assigned_by)
             messages.success(request, f'Program assignments updated successfully for {staff.first_name} {staff.last_name}')
-            return redirect('staff:detail', external_id=staff.external_id)
+            return redirect(reverse('staff:manage_programs', args=[staff.external_id]) + '?submitted=true')
     else:
         form = ProgramManagerAssignmentForm(staff=staff)
     
@@ -564,17 +564,46 @@ def manage_program_assignments(request, external_id):
         is_active=True
     ).select_related('program', 'program__department')
     
-    # Get all available programs grouped by department
+    # Get all available programs grouped by department with pagination
     from collections import defaultdict
+    from django.core.paginator import Paginator
+    
+    # Get programs per page from request, default to 5
+    programs_per_page = request.GET.get('programs_per_page', '5')
+    try:
+        programs_per_page = int(programs_per_page)
+        if programs_per_page not in [3, 5, 10, 15, 20]:
+            programs_per_page = 5
+    except (ValueError, TypeError):
+        programs_per_page = 5
+    
+    # Group programs by department
     programs_by_department = defaultdict(list)
-    for program in Program.objects.filter(status='active').select_related('department'):
+    for program in Program.objects.filter(status='active').select_related('department').order_by('department__name', 'name'):
         programs_by_department[program.department].append(program)
+    
+    # Create paginated departments
+    paginated_departments = {}
+    for department, programs in programs_by_department.items():
+        paginator = Paginator(programs, programs_per_page)
+        page_number = request.GET.get(f'dept_{department.id}_page', 1)
+        try:
+            page_obj = paginator.get_page(page_number)
+        except:
+            page_obj = paginator.get_page(1)
+        
+        paginated_departments[department] = {
+            'programs': page_obj,
+            'paginator': paginator,
+            'page_obj': page_obj,
+        }
     
     context = {
         'staff_member': staff,
         'form': form,
         'current_program_assignments': current_program_assignments,
-        'programs_by_department': dict(programs_by_department),
+        'programs_by_department': paginated_departments,
+        'programs_per_page': programs_per_page,
     }
     
     return render(request, 'staff/staff_program_assignments.html', context)
@@ -704,7 +733,7 @@ def manage_client_assignments(request, external_id):
                 assigned_by = request.user.staff_profile
                 form.save(staff, assigned_by)
                 messages.success(request, f'Client assignments updated successfully for {staff.first_name} {staff.last_name}')
-                return redirect('staff:detail', external_id=staff.external_id)
+                return redirect(reverse('staff:manage_client_assignments', args=[staff.external_id]) + '?submitted=true')
             except Exception as e:
                 messages.error(request, f'Error updating client assignments: {str(e)}')
         else:
@@ -718,14 +747,35 @@ def manage_client_assignments(request, external_id):
         is_active=True
     ).select_related('client')
     
-    # Get all available clients (showing all clients for now to debug)
-    available_clients = Client.objects.all().order_by('first_name', 'last_name')
+    # Get all available clients with pagination
+    from django.core.paginator import Paginator
+    
+    available_clients_queryset = Client.objects.all().order_by('first_name', 'last_name')
+    
+    # Add pagination for available clients
+    clients_per_page = request.GET.get('clients_per_page', '10')
+    try:
+        clients_per_page = int(clients_per_page)
+        if clients_per_page not in [5, 10, 50, 100]:
+            clients_per_page = 10
+    except (ValueError, TypeError):
+        clients_per_page = 10
+        
+    clients_paginator = Paginator(available_clients_queryset, clients_per_page)
+    clients_page_number = request.GET.get('clients_page', 1)
+    try:
+        available_clients_page = clients_paginator.get_page(clients_page_number)
+    except:
+        available_clients_page = clients_paginator.get_page(1)
     
     context = {
         'staff_member': staff,
         'form': form,
         'current_client_assignments': current_client_assignments,
-        'available_clients': available_clients,
+        'available_clients': available_clients_page,
+        'clients_paginator': clients_paginator,
+        'clients_page_obj': available_clients_page,
+        'clients_per_page': clients_per_page,
     }
     
     return render(request, 'staff/manage_client_assignments.html', context)
