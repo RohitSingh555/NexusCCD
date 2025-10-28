@@ -193,3 +193,4 @@ output:
     path: './artillery-results.json'
   - type: html
     path: './artillery-report.html'
+
