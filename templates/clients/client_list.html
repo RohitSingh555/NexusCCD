@@ -6,6 +6,7 @@
 {% block page_title %}Clients{% endblock %}
 
 {% block content %}
+{% csrf_token %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="clientManager()" x-init="init()">
     <div>
         <!-- Header -->
@@ -967,19 +968,30 @@ function clientManager() {
         
         async confirmDelete() {
             try {
+                console.log('Starting delete process...');
+                console.log('Client IDs to delete:', this.deleteModal.clientIds);
+                
+                const csrfToken = this.getCookie('csrftoken');
+                console.log('CSRF Token:', csrfToken);
+                
                 const response = await fetch('/clients/bulk-delete/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRFToken': this.getCookie('csrftoken')
+                        'X-CSRFToken': csrfToken
                     },
                     body: JSON.stringify({
                         client_ids: this.deleteModal.clientIds
                     })
                 });
                 
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+                
                 if (response.ok) {
                     const result = await response.json();
+                    console.log('Response result:', result);
+                    
                     if (result.success) {
                         // Remove deleted clients from allSelectedClients
                         this.deleteModal.clientIds.forEach(id => this.allSelectedClients.delete(id));
@@ -997,9 +1009,13 @@ function clientManager() {
                             window.location.reload();
                         }, 1000);
                     } else {
+                        console.error('Delete failed:', result.error);
                         this.showNotification(result.error || 'Failed to delete clients', 'error');
                     }
                 } else {
+                    console.error('Response not ok:', response.status, response.statusText);
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
                     this.showNotification('Failed to delete clients', 'error');
                 }
             } catch (error) {
@@ -1025,6 +1041,15 @@ function clientManager() {
         },
         
         getCookie(name) {
+            // First try to get from DOM (for CSRF token)
+            if (name === 'csrftoken') {
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (csrfToken) {
+                    return csrfToken.value;
+                }
+            }
+            
+            // Fallback to cookie method
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
                 const cookies = document.cookie.split(';');
