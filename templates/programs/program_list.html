@@ -49,6 +49,7 @@
 {% block page_title %}Programs & Services{% endblock %}
 
 {% block content %}
+{% csrf_token %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="programManager()" x-init="console.log('Alpine.js initialized')">
     <div class="flex justify-between items-center mb-8">
         <div>
@@ -618,43 +619,36 @@ function programManager() {
             }
         },
         
-        async confirmDepartmentChange() {
-            try {
-                const response = await fetch('/programs/bulk-change-department/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': this.getCookie('csrftoken')
-                    },
-                    body: JSON.stringify({
-                        program_ids: this.departmentModal.programIds,
-                        new_department_id: this.departmentModal.selectedDepartmentId
-                    })
-                });
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    if (result.success) {
-                        this.selectedPrograms = [];
-                        this.hideDepartmentModal();
-                        
-                        // Show success message
-                        this.showNotification(result.message, 'success');
-                        
-                        // Reload the page to refresh the data
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
-                    } else {
-                        this.showNotification(result.error || 'Failed to change department', 'error');
-                    }
-                } else {
-                    this.showNotification('Failed to change department', 'error');
-                }
-            } catch (error) {
-                console.error('Error changing department:', error);
-                this.showNotification('An error occurred while changing department', 'error');
-            }
+        confirmDepartmentChange() {
+            // Create a form to submit the data
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/programs/bulk-change-department/';
+            
+            // Add CSRF token
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = this.getCookie('csrftoken');
+            form.appendChild(csrfInput);
+            
+            // Add program IDs
+            const programIdsInput = document.createElement('input');
+            programIdsInput.type = 'hidden';
+            programIdsInput.name = 'program_ids';
+            programIdsInput.value = JSON.stringify(this.departmentModal.programIds);
+            form.appendChild(programIdsInput);
+            
+            // Add department ID
+            const departmentIdInput = document.createElement('input');
+            departmentIdInput.type = 'hidden';
+            departmentIdInput.name = 'new_department_id';
+            departmentIdInput.value = this.departmentModal.selectedDepartmentId;
+            form.appendChild(departmentIdInput);
+            
+            // Submit the form (this will follow the redirect and show messages)
+            document.body.appendChild(form);
+            form.submit();
         },
         
         showNotification(message, type) {
@@ -676,6 +670,15 @@ function programManager() {
         },
         
         getCookie(name) {
+            // First try to get from DOM (for CSRF token)
+            if (name === 'csrftoken') {
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (csrfToken) {
+                    return csrfToken.value;
+                }
+            }
+            
+            // Fallback to cookie method
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
                 const cookies = document.cookie.split(';');

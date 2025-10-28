@@ -1,0 +1,58 @@
+{
+  "summary": {
+    "totalRecords": 370000,
+    "totalDuration": 30.4646027,
+    "throughputRps": 12145.242911702242,
+    "avgLatency": 13.513513513513514,
+    "p95Latency": 29.199999999999996,
+    "p99Latency": 0,
+    "errorRate": 0,
+    "totalRequests": 39,
+    "failedRequests": 0.9487179487179487
+  },
+  "thresholds": {
+    "errorRateThreshold": 0.01,
+    "avgLatencyThreshold": 10000,
+    "p95LatencyThreshold": 20000,
+    "p99LatencyThreshold": 30000
+  },
+  "config": {
+    "API_URL": "http://localhost:8000/clients/upload/process/",
+    "AUTH_TOKEN": "",
+    "BATCH_SIZE": 10000,
+    "TOTAL_RECORDS": 1000000,
+    "CONCURRENCY": 5,
+    "STAGES": [
+      {
+        "duration": "2m",
+        "target": 1,
+        "batchSize": 1000,
+        "name": "Stage 1: 1k records"
+      },
+      {
+        "duration": "3m",
+        "target": 3,
+        "batchSize": 5000,
+        "name": "Stage 2: 5k records"
+      },
+      {
+        "duration": "5m",
+        "target": 5,
+        "batchSize": 10000,
+        "name": "Stage 3: 10k records"
+      },
+      {
+        "duration": "10m",
+        "target": 10,
+        "batchSize": 10000,
+        "name": "Stage 4: 1M records simulation"
+      }
+    ],
+    "THRESHOLDS": {
+      "errorRate": 0.01,
+      "avgLatency": 10000,
+      "p95Latency": 20000,
+      "p99Latency": 30000
+    }
+  }
+}

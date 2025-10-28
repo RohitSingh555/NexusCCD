@@ -971,45 +971,43 @@ class ProgramBulkChangeDepartmentView(ProgramManagerAccessMixin, View):
     
     def post(self, request):
         from core.models import Program, Department
-        from django.http import JsonResponse
+        from django.contrib import messages
         from django.db import transaction
+        from django.shortcuts import redirect
         import json
         
         try:
-            # Parse JSON data from request body
-            data = json.loads(request.body)
-            program_ids = data.get('program_ids', [])
-            new_department_id = data.get('new_department_id', '')
+            # Get data from form POST
+            program_ids_json = request.POST.get('program_ids', '[]')
+            new_department_id = request.POST.get('new_department_id', '')
+            
+            # Parse program IDs from JSON string
+            try:
+                program_ids = json.loads(program_ids_json)
+            except json.JSONDecodeError:
+                program_ids = []
             
             if not program_ids:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No programs selected for department change.'
-                })
+                messages.error(request, 'No programs selected for department change.')
+                return redirect('programs:list')
             
             if not new_department_id:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No department selected.'
-                })
+                messages.error(request, 'No department selected.')
+                return redirect('programs:list')
             
             # Get the new department
             try:
                 new_department = Department.objects.get(id=new_department_id)
             except Department.DoesNotExist:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Selected department does not exist.'
-                })
+                messages.error(request, 'Selected department does not exist.')
+                return redirect('programs:list')
             
             # Get programs to update
             programs_to_update = Program.objects.filter(external_id__in=program_ids)
             
             if not programs_to_update.exists():
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No valid programs found to update.'
-                })
+                messages.error(request, 'No valid programs found to update.')
+                return redirect('programs:list')
             
             updated_count = 0
             errors = []
@@ -1025,29 +1023,23 @@ class ProgramBulkChangeDepartmentView(ProgramManagerAccessMixin, View):
                         errors.append(f"Failed to update {program.name}: {str(e)}")
             
             if updated_count > 0:
-                return JsonResponse({
-                    'success': True,
-                    'message': f'Successfully updated department for {updated_count} program(s) to {new_department.name}.',
-                    'updated_count': updated_count,
-                    'errors': errors
-                })
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No programs were updated.',
-                    'errors': errors
-                })
+                messages.success(request, f'Successfully updated department for {updated_count} program(s) to {new_department.name}.')
                 
-        except json.JSONDecodeError:
-            return JsonResponse({
-                'success': False,
-                'error': 'Invalid JSON data.'
-            })
+                # Show warnings for any errors that occurred
+                if errors:
+                    for error in errors:
+                        messages.warning(request, error)
+            else:
+                messages.error(request, 'No programs were updated.')
+                if errors:
+                    for error in errors:
+                        messages.warning(request, error)
+            
+            return redirect('programs:list')
+                
         except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': f'An error occurred: {str(e)}'
-            })
+            messages.error(request, f'An error occurred: {str(e)}')
+            return redirect('programs:list')
 
 
 @method_decorator(jwt_required, name='dispatch')

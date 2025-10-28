@@ -1137,6 +1137,10 @@ class ClientUploadView(TemplateView):
 @require_http_methods(["POST"])
 def upload_clients(request):
     """Handle CSV/Excel file upload and process client data"""
+    
+    # Check for load test mode - skip database writes if X-Load-Test header is present
+    is_load_test = request.headers.get('X-Load-Test', '').lower() == 'true'
+    
     # Check if user has permission to upload clients
     if request.user.is_authenticated:
         try:
@@ -1805,6 +1809,32 @@ def upload_clients(request):
                         return client, f"dob_name_similarity_{similarity:.2f}"
             
             return None, None
+        
+        # Load test mode: process data but skip database writes
+        if is_load_test:
+            # Simulate processing without database writes
+            processed_count = len(df)
+            print(f"[LOAD TEST] Processing {processed_count} clients (no DB writes)")
+            
+            # Return load test response
+            return JsonResponse({
+                'success': True,
+                'message': f'Load test mode: {processed_count} clients processed (no DB writes)',
+                'load_test_mode': True,
+                'processed_count': processed_count,
+                'stats': {
+                    'total_rows': processed_count,
+                    'created': 0,
+                    'updated': 0,
+                    'skipped': 0,
+                    'duplicates_flagged': 0,
+                    'errors': 0
+                },
+                'notes': [
+                    'Load test mode: Data was processed but not saved to database',
+                    'This is a safe test run with no data persistence'
+                ]
+            })
         
         for index, row in df.iterrows():
             try:

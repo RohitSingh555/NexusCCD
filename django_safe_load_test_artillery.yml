@@ -1,0 +1,195 @@
+# Django Client Upload Load Testing Suite - Artillery Version
+# 
+# This is an alternative to the k6 version for users who prefer Artillery
+# 
+# Usage:
+#   artillery run django_safe_load_test_artillery.yml
+# 
+# Prerequisites:
+#   npm install -g artillery
+
+config:
+  target: 'https://your-api-domain.com'
+  phases:
+    # Stage 1: 1k records, 1 user, 2 minutes
+    - duration: 120
+      arrivalRate: 1
+      name: "Stage 1: 1k records warm-up"
+    
+    # Stage 2: 5k records, 3 users, 3 minutes  
+    - duration: 180
+      arrivalRate: 3
+      name: "Stage 2: 5k records ramp-up"
+    
+    # Stage 3: 10k records, 5 users, 5 minutes
+    - duration: 300
+      arrivalRate: 5
+      name: "Stage 3: 10k records sustained load"
+    
+    # Stage 4: 10k records, 10 users, 10 minutes (1M simulation)
+    - duration: 600
+      arrivalRate: 10
+      name: "Stage 4: 1M records stress test"
+  
+  # Performance thresholds
+  ensure:
+    p95: 20000  # 20 seconds
+    p99: 30000  # 30 seconds
+    maxErrorRate: 0.01  # 1%
+  
+  # Default headers for all requests
+  defaults:
+    headers:
+      X-Load-Test: true
+      User-Agent: 'artillery-load-test/1.0'
+      # Add your auth token here if needed
+      # Authorization: 'Bearer your-jwt-token-here'
+
+# Test scenarios
+scenarios:
+  - name: "Client Upload Load Test"
+    weight: 100
+    flow:
+      - function: generateClientData
+      - function: convertToCSV
+      - post:
+          url: "/clients/upload/process/"
+          headers:
+            Content-Type: "multipart/form-data"
+          formData:
+            file: "{{ csvData }}"
+            source: "load_test"
+          capture:
+            - json: "$.success"
+              as: "uploadSuccess"
+            - json: "$.message"
+              as: "uploadMessage"
+          expect:
+            - statusCode: [200, 201]
+            - hasProperty: "success"
+
+# Custom functions for data generation
+functions:
+  generateClientData: |
+    function(context, events, done) {
+      const batchSize = context.vars.batchSize || 10000;
+      const clients = [];
+      
+      const firstNames = ['John', 'Jane', 'Michael', 'Sarah', 'David', 'Emily', 'Robert', 'Jessica', 'William', 'Ashley'];
+      const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez'];
+      const genders = ['Male', 'Female', 'Other', 'Unknown'];
+      const provinces = ['ON', 'BC', 'AB', 'QC', 'MB', 'SK', 'NS', 'NB', 'NL', 'PE'];
+      const cities = ['Toronto', 'Vancouver', 'Calgary', 'Montreal', 'Ottawa', 'Winnipeg', 'Saskatoon', 'Halifax', 'St. John\'s', 'Charlottetown'];
+      const languages = ['English', 'French', 'Spanish', 'Mandarin', 'Arabic', 'Punjabi', 'Tagalog', 'Italian', 'Portuguese', 'German'];
+      const maritalStatuses = ['Single', 'Married', 'Divorced', 'Widowed', 'Separated'];
+      const citizenshipStatuses = ['Citizen', 'Permanent Resident', 'Refugee', 'Temporary Resident', 'Other'];
+      
+      function generateRandomDate() {
+        const now = new Date();
+        const minAge = 18;
+        const maxAge = 80;
+        const age = Math.floor(Math.random() * (maxAge - minAge + 1)) + minAge;
+        const birthDate = new Date(now.getFullYear() - age, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1);
+        return birthDate.toISOString().split('T')[0];
+      }
+      
+      function generateRandomPhone() {
+        const areaCode = Math.floor(Math.random() * 900) + 100;
+        const exchange = Math.floor(Math.random() * 900) + 100;
+        const number = Math.floor(Math.random() * 9000) + 1000;
+        return `+1${areaCode}${exchange}${number}`;
+      }
+      
+      function generateRandomPostalCode() {
+        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const numbers = '0123456789';
+        let postal = '';
+        postal += letters[Math.floor(Math.random() * letters.length)];
+        postal += numbers[Math.floor(Math.random() * numbers.length)];
+        postal += letters[Math.floor(Math.random() * letters.length)];
+        postal += ' ';
+        postal += numbers[Math.floor(Math.random() * numbers.length)];
+        postal += letters[Math.floor(Math.random() * letters.length)];
+        postal += numbers[Math.floor(Math.random() * numbers.length)];
+        return postal;
+      }
+      
+      for (let i = 0; i < batchSize; i++) {
+        const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+        const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+        const clientId = `LOAD_TEST_${Date.now()}_${i}`;
+        
+        clients.push({
+          'Client ID': clientId,
+          'First Name': firstName,
+          'Last Name': lastName,
+          'Middle Name': Math.random() > 0.7 ? firstNames[Math.floor(Math.random() * firstNames.length)] : '',
+          'Preferred Name': Math.random() > 0.8 ? `${firstName}${Math.floor(Math.random() * 100)}` : '',
+          'Date of Birth': generateRandomDate(),
+          'Gender': genders[Math.floor(Math.random() * genders.length)],
+          'Phone': generateRandomPhone(),
+          'Email': `${firstName.toLowerCase()}.${lastName.toLowerCase()}${i}@loadtest.com`,
+          'Address': `${Math.floor(Math.random() * 9999) + 1} Test Street`,
+          'City': cities[Math.floor(Math.random() * cities.length)],
+          'Province': provinces[Math.floor(Math.random() * provinces.length)],
+          'Postal Code': generateRandomPostalCode(),
+          'Language': languages[Math.floor(Math.random() * languages.length)],
+          'Marital Status': maritalStatuses[Math.floor(Math.random() * maritalStatuses.length)],
+          'Citizenship Status': citizenshipStatuses[Math.floor(Math.random() * citizenshipStatuses.length)],
+          'Emergency Contact Name': `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`,
+          'Emergency Contact Phone': generateRandomPhone(),
+          'Comments': `Load test data - Batch ${Math.floor(i / batchSize) + 1}, Record ${i + 1}`
+        });
+      }
+      
+      context.vars.clients = clients;
+      context.vars.batchSize = batchSize;
+      return done();
+    }
+
+  convertToCSV: |
+    function(context, events, done) {
+      const clients = context.vars.clients;
+      if (clients.length === 0) {
+        context.vars.csvData = '';
+        return done();
+      }
+      
+      const headers = Object.keys(clients[0]);
+      const csvRows = [headers.join(',')];
+      
+      for (const client of clients) {
+        const values = headers.map(header => {
+          const value = client[header];
+          // Escape commas and quotes in CSV
+          if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value;
+        });
+        csvRows.push(values.join(','));
+      }
+      
+      context.vars.csvData = csvRows.join('\n');
+      return done();
+    }
+
+# Custom metrics and reporting
+plugins:
+  metrics-by-endpoint:
+    useOnlyRequestNames: true
+  publish-metrics:
+    - type: cloudwatch
+      region: us-east-1
+      namespace: 'DjangoLoadTest'
+    - type: datadog
+      apiKey: 'your-datadog-api-key'
+      appKey: 'your-datadog-app-key'
+      site: 'datadoghq.com'
+
+# Output configuration
+output:
+  - type: json
+    path: './artillery-results.json'
+  - type: html
+    path: './artillery-report.html'
