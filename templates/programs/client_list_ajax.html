@@ -1,0 +1,55 @@
+<!-- Client List Container for AJAX loading -->
+<div id="clientListContainer">
+    {% for client in available_clients %}
+    <label class="flex items-center p-2 hover:bg-green-50 cursor-pointer client-item" 
+           data-client-id="{{ client.id }}">
+        <input type="checkbox" 
+               name="client_ids" 
+               value="{{ client.id }}" 
+               class="mr-3 text-green-600 focus:ring-green-500 client-checkbox">
+        <div class="flex items-center">
+            <div class="w-6 h-6 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center shadow-sm mr-3">
+                <span class="text-xs font-bold text-white">
+                    {{ client.first_name|default:""|first|upper }}{{ client.last_name|default:""|first|upper }}
+                </span>
+            </div>
+            <div>
+                <div class="text-sm font-medium text-neutral-900">{{ client.first_name }} {{ client.last_name }}</div>
+                {% if client.preferred_name %}
+                <div class="text-xs text-neutral-500">Preferred: {{ client.preferred_name }}</div>
+                {% endif %}
+            </div>
+        </div>
+    </label>
+    {% empty %}
+    <div class="p-4 text-center text-neutral-500">
+        <p class="text-sm">All clients are already enrolled in this program.</p>
+    </div>
+    {% endfor %}
+    
+    <!-- Client Pagination -->
+    {% if clients_page_obj.has_other_pages %}
+    <div class="flex items-center justify-between mt-3 px-2 border-t border-green-200 pt-3">
+        <div class="text-sm text-neutral-600">
+            Showing {{ clients_page_obj.start_index }} to {{ clients_page_obj.end_index }} of {{ clients_paginator.count }} clients
+        </div>
+        <div class="flex items-center space-x-1">
+            {% if clients_page_obj.has_previous %}
+                <button onclick="loadClientList({{ clients_page_obj.previous_page_number }}, {{ clients_per_page }})" class="px-2 py-1 text-sm text-green-600 hover:text-green-800 border border-green-300 rounded hover:bg-green-50">Previous</button>
+            {% endif %}
+            
+            {% for num in clients_page_obj.paginator.page_range %}
+                {% if clients_page_obj.number == num %}
+                    <span class="px-2 py-1 text-sm bg-green-600 text-white rounded">{{ num }}</span>
+                {% elif num > clients_page_obj.number|add:'-3' and num < clients_page_obj.number|add:'3' %}
+                    <button onclick="loadClientList({{ num }}, {{ clients_per_page }})" class="px-2 py-1 text-sm text-green-600 hover:text-green-800 border border-green-300 rounded hover:bg-green-50">{{ num }}</button>
+                {% endif %}
+            {% endfor %}
+            
+            {% if clients_page_obj.has_next %}
+                <button onclick="loadClientList({{ clients_page_obj.next_page_number }}, {{ clients_per_page }})" class="px-2 py-1 text-sm text-green-600 hover:text-green-800 border border-green-300 rounded hover:bg-green-50">Next</button>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>

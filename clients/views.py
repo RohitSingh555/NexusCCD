@@ -1389,6 +1389,67 @@ def upload_clients(request):
         errors = []
         duplicate_details = []  # Track duplicate details for user feedback
         
+        # Batch processing configuration for performance optimization
+        BATCH_SIZE = 500  # Configurable batch size for bulk operations
+        clients_to_create = []  # List to accumulate clients for batch creation
+        clients_to_update = []  # List to accumulate clients for batch update
+        
+        def process_batch_operations():
+            """Process accumulated clients in batches for better performance."""
+            nonlocal created_count, updated_count
+            
+            # Process client creations in batches
+            if clients_to_create:
+                try:
+                    created_clients = Client.objects.bulk_create(clients_to_create, batch_size=BATCH_SIZE)
+                    created_count += len(created_clients)
+                    logger.info(f"Batch created {len(created_clients)} clients")
+                except Exception as e:
+                    logger.error(f"Error in batch client creation: {e}")
+                    # Fall back to individual creation if batch fails
+                    for client_data in clients_to_create:
+                        try:
+                            client = Client.objects.create(**client_data)
+                            created_count += 1
+                        except Exception as individual_error:
+                            logger.error(f"Error creating individual client: {individual_error}")
+            
+            # Process client updates in batches
+            if clients_to_update:
+                try:
+                    Client.objects.bulk_update(clients_to_update, 
+                        ['first_name', 'last_name', 'middle_name', 'preferred_name', 'alias', 
+                         'dob', 'gender', 'gender_identity', 'pronoun', 'marital_status', 
+                         'citizenship_status', 'location_county', 'province', 'city', 
+                         'postal_code', 'address', 'address_2', 'language', 'preferred_language',
+                         'mother_tongue', 'official_language', 'language_interpreter_required',
+                         'self_identification_race_ethnicity', 'lgbtq_status', 'highest_level_education',
+                         'children_home', 'children_number', 'lhin', 'client_id', 'phone', 'email',
+                         'source', 'level_of_support', 'client_type', 'referral_source', 'phone_work',
+                         'phone_alt', 'permission_to_phone', 'permission_to_email', 'medical_conditions',
+                         'primary_diagnosis', 'family_doctor', 'health_card_number', 'health_card_version',
+                         'health_card_exp_date', 'health_card_issuing_province', 'no_health_card_reason',
+                         'next_of_kin', 'emergency_contact', 'comments', 'chart_number', 'contact_information',
+                         'addresses', 'languages_spoken', 'indigenous_status', 'country_of_birth',
+                         'sexual_orientation', 'updated_by'],
+                        batch_size=BATCH_SIZE
+                    )
+                    updated_count += len(clients_to_update)
+                    logger.info(f"Batch updated {len(clients_to_update)} clients")
+                except Exception as e:
+                    logger.error(f"Error in batch client update: {e}")
+                    # Fall back to individual updates if batch fails
+                    for client in clients_to_update:
+                        try:
+                            client.save()
+                            updated_count += 1
+                        except Exception as individual_error:
+                            logger.error(f"Error updating individual client: {individual_error}")
+            
+            # Clear the batch lists after processing
+            clients_to_create.clear()
+            clients_to_update.clear()
+
         def normalize_name(name):
             """Normalize name for comparison"""
             if not name:
@@ -2329,9 +2390,15 @@ def upload_clients(request):
                             else:
                                 client.updated_by = 'System'
                             
-                            # Save the updated client
-                            client.save()
-                            logger.info(f"Updated existing client by Client ID {client_data['client_id']}: {client.first_name} {client.last_name}")
+                            # BATCH PROCESSING: Add client to batch update list instead of saving immediately
+                            clients_to_update.append(client)
+                            
+                            # Process batch if we've reached the batch size
+                            if len(clients_to_update) >= BATCH_SIZE:
+                                print(f"DEBUG: Processing batch of {len(clients_to_update)} client updates")
+                                process_batch_operations()
+                            
+                            logger.info(f"Queued existing client for batch update by Client ID {client_data['client_id']}: {client.first_name} {client.last_name} (Batch size: {len(clients_to_update)}/{BATCH_SIZE})")
                             
                             # Update or create ClientExtended record
                             from core.models import ClientExtended
@@ -2498,15 +2565,20 @@ def upload_clients(request):
                         client_fields['created_by'] = 'System'
                         client_fields['updated_by'] = 'System'
                     
-                    # Create the client with only client fields
-                    print(f"Row {index + 1}: About to create client with fields: {list(client_fields.keys())}")
-                    client = Client.objects.create(**client_fields)
-                    created_count += 1
-                    print(f"Row {index + 1}: Successfully created client: {client.first_name} {client.last_name}")
+                    # BATCH PROCESSING: Add client to batch creation list instead of creating immediately
+                    print(f"Row {index + 1}: Adding client to batch creation with fields: {list(client_fields.keys())}")
+                    clients_to_create.append(Client(**client_fields))
+                    
+                    # Process batch if we've reached the batch size
+                    if len(clients_to_create) >= BATCH_SIZE:
+                        print(f"DEBUG: Processing batch of {len(clients_to_create)} new clients")
+                        process_batch_operations()
+                    
+                    print(f"Row {index + 1}: Client queued for batch creation: {client_fields.get('first_name')} {client_fields.get('last_name')} (Batch size: {len(clients_to_create)}/{BATCH_SIZE})")
                     if duplicate_client:
-                        logger.info(f"Created new client with duplicate flag: {client.email or client.phone}")
+                        logger.info(f"Queued new client with duplicate flag: {client_fields.get('email') or client_fields.get('phone')}")
                     else:
-                        logger.info(f"Created new client: {client.email or client.phone}")
+                        logger.info(f"Queued new client: {client_fields.get('email') or client_fields.get('phone')}")
                     
                     # Create ClientExtended record if there are extended fields
                     extended_data = {}
@@ -2591,6 +2663,11 @@ def upload_clients(request):
                     errors.append(f"Row {index + 2}: Unable to process this client. Please check the data and try again.")
                 
                 logger.error(f"Error processing row {index + 2}: {str(e)}")
+        
+        # Process any remaining batches after the main loop
+        if len(clients_to_create) > 0 or len(clients_to_update) > 0:
+            print(f"DEBUG: Processing final batches - {len(clients_to_create)} new clients, {len(clients_to_update)} updates")
+            process_batch_operations()
         
         # Prepare response
         duplicate_created_count = len([d for d in duplicate_details if d['type'] == 'created_with_duplicate'])
