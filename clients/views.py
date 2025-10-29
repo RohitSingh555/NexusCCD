@@ -1172,6 +1172,10 @@ class ClientUploadView(TemplateView):
 @require_http_methods(["POST"])
 def upload_clients(request):
     """Handle CSV/Excel file upload and process client data"""
+    
+    # Check for load test mode - skip database writes if X-Load-Test header is present
+    is_load_test = request.headers.get('X-Load-Test', '').lower() == 'true'
+    
     # Check if user has permission to upload clients
     if request.user.is_authenticated:
         try:
@@ -1293,58 +1297,26 @@ def upload_clients(request):
         # Create field mapping
         column_mapping = create_field_mapping(df.columns)
         
-        # Debug: Log the column mapping
-        print(f"DEBUG: Column mapping: {column_mapping}")
-        print(f"DEBUG: DataFrame columns: {list(df.columns)}")
-        
-        # Debug: Check if phone_number column is being mapped correctly
-        if 'phone_number' in df.columns:
-            print(f"DEBUG: phone_number column found in CSV")
-            print(f"DEBUG: phone_number column mapped to: '{column_mapping.get('phone_number', 'NOT_MAPPED')}'")
-        else:
-            print(f"DEBUG: phone_number column NOT found in CSV")
-            print(f"DEBUG: Available columns with 'phone' in name: {[col for col in df.columns if 'phone' in col.lower()]}")
-        
-        # Debug: Check if client_id column is being mapped correctly
-        if 'client_id' in df.columns:
-            print(f"DEBUG: client_id column found in CSV")
-            print(f"DEBUG: client_id column mapped to: '{column_mapping.get('client_id', 'NOT_MAPPED')}'")
-        else:
-            print(f"DEBUG: client_id column NOT found in CSV")
-            print(f"DEBUG: Available columns with 'client' in name: {[col for col in df.columns if 'client' in col.lower()]}")
-        
-        # Debug: Check if we have client_id column (now required for all uploads)
+        # Check if we have client_id column (now required for all uploads)
         # Check if any column maps to client_id (not just exact column name)
         has_client_id = any(column_mapping.get(col) == 'client_id' for col in df.columns)
-        print(f"DEBUG: Has client_id column: {has_client_id}")
-        if has_client_id:
-            client_id_col = next((col for col in df.columns if column_mapping.get(col) == 'client_id'), None)
-            print(f"DEBUG: client_id column found: '{client_id_col}' - will check for existing clients with matching client_id + source to determine if update or new creation")
-        else:
-            print(f"DEBUG: client_id column NOT found - this will cause validation error")
         
         # Check if any row has a Client ID + Source combination that exists in the database - if so, we'll allow updates with partial data
         has_existing_client_ids = False
         for col in df.columns:
             if column_mapping.get(col) == 'client_id':
-                print(f"DEBUG: Found client_id column: '{col}'")
                 # Check if any of the client_ids + source combinations in the CSV actually exist in the database
                 for index, row in df.iterrows():
                     client_id_value = row[col]
-                    print(f"DEBUG: Row {index + 1}: Checking client_id value: '{client_id_value}' with source: '{source}'")
                     if pd.notna(client_id_value) and str(client_id_value).strip():
                         client_id_clean = str(client_id_value).strip()
-                        print(f"DEBUG: Row {index + 1}: Looking up client_id '{client_id_clean}' with source '{source}' in database")
                         existing_client = Client.objects.filter(client_id=client_id_clean, source=source).first()
-                        print(f"DEBUG: Row {index + 1}: Database lookup result: {existing_client}")
                         if existing_client:
                             has_existing_client_ids = True
-                            print(f"DEBUG: Found existing client with ID '{client_id_value}' and source '{source}' - will allow updates")
                             break
                 if has_existing_client_ids:
                     break
         
-        print(f"DEBUG: Final has_existing_client_ids: {has_existing_client_ids}")
         
         # Check for required fields using case-insensitive mapping
         # Note: client_id is now required for ALL uploads (both new and updates)
@@ -1401,8 +1373,6 @@ def upload_clients(request):
             has_phone = any(column_mapping.get(col) == 'phone' for col in df.columns)
             has_dob = any(column_mapping.get(col) == 'dob' for col in df.columns)
             
-            print(f"DEBUG: Has phone column: {has_phone}")
-            print(f"DEBUG: Has dob column: {has_dob}")
             
             if not has_phone and not has_dob:
                 return JsonResponse({
@@ -1457,9 +1427,11 @@ def upload_clients(request):
         
         def parse_combined_client_field(client_field_value, client_id_field_value=None):
             """
-            Parse client field that can be in two formats:
+            Parse client field that can be in various formats:
             1. Combined: 'Last, First (ID)' - everything in one field
             2. Separate: 'Last, First' + client_id from separate field
+            3. Complex: 'Last, First (Preferred)' - with preferred names
+            4. Complex: 'First (Previous), Last' - with previous names
             
             Handles various name formats:
             - Abdul-Azim,  Safi
@@ -1467,6 +1439,12 @@ def upload_clients(request):
             - A. Hussein,  Mohamud
             - Abbakar,  Tagwa Seddig Adam
             - Abdoun Mohamed,  Sarah Hassan
+            - Adeshigbin,  Babatunde (Ganiu)
+            - Adeware,  Olubunni (Elizabeth)
+            - Adrian (Prev. Langton),  Naomi
+            - Ahmed,  Tasaddhuque (Duke)
+            - Archibald_2,  Reina
+            - Al-Khair,  A'shafie
             
             Returns: (first_name, last_name, client_id)
             """
@@ -1479,7 +1457,7 @@ def upload_clients(request):
             import re
             
             # Pattern 1: "Last, First (ID)" - Last, First with ID in parentheses
-            pattern1 = r'^([A-Za-z\s.-]+),\s+([A-Za-z\s.-]+)\s*\((\d+)\)$'
+            pattern1 = r'^([A-Za-z0-9\s._\'-]+),\s*([A-Za-z0-9\s._\'-]+)\s*\((\d+)\)$'
             match1 = re.match(pattern1, client_str)
             if match1:
                 last_name = match1.group(1).strip()    # "Abdul-Azim"
@@ -1488,12 +1466,44 @@ def upload_clients(request):
                 
                 return first_name, last_name, client_id
             
-            # Pattern 2: "Last, First" - Last, First without ID (ID from separate field)
-            pattern2 = r'^([A-Za-z\s.-]+),\s+([A-Za-z\s.-]+)$'
+            # Pattern 2: "Last, First (Preferred)" - Last, First with preferred name in parentheses
+            pattern2 = r'^([A-Za-z0-9\s._\'-]+),\s*([A-Za-z0-9\s._\'-]+)\s*\(([A-Za-z0-9\s._\'-]+)\)$'
             match2 = re.match(pattern2, client_str)
             if match2:
-                last_name = match2.group(1).strip()    # "Abdul-Azim"
-                first_name = match2.group(2).strip()   # "Safi"
+                last_name = match2.group(1).strip()    # "Adeshigbin"
+                first_name = match2.group(2).strip()   # "Babatunde"
+                preferred_name = match2.group(3).strip()  # "Ganiu"
+                
+                # Use client_id from separate field if provided
+                if client_id_field_value and str(client_id_field_value).strip():
+                    client_id = str(client_id_field_value).strip()
+                    return first_name, last_name, client_id
+                else:
+                    # Return names but no client_id
+                    return first_name, last_name, None
+            
+            # Pattern 3: "First (Previous), Last" - First with previous name, Last
+            pattern3 = r'^([A-Za-z0-9\s._\'-]+)\s*\(([A-Za-z0-9\s._\'-]+)\)\s*,\s*([A-Za-z0-9\s._\'-]+)$'
+            match3 = re.match(pattern3, client_str)
+            if match3:
+                first_name = match3.group(1).strip()    # "Adrian"
+                previous_name = match3.group(2).strip()  # "Prev. Langton"
+                last_name = match3.group(3).strip()     # "Naomi"
+                
+                # Use client_id from separate field if provided
+                if client_id_field_value and str(client_id_field_value).strip():
+                    client_id = str(client_id_field_value).strip()
+                    return first_name, last_name, client_id
+                else:
+                    # Return names but no client_id
+                    return first_name, last_name, None
+            
+            # Pattern 4: "Last, First" - Simple Last, First without parentheses
+            pattern4 = r'^([A-Za-z0-9\s._\'-]+),\s*([A-Za-z0-9\s._\'-]+)$'
+            match4 = re.match(pattern4, client_str)
+            if match4:
+                last_name = match4.group(1).strip()    # "Abdul-Azim"
+                first_name = match4.group(2).strip()   # "Safi"
                 
                 # Use client_id from separate field if provided
                 if client_id_field_value and str(client_id_field_value).strip():
@@ -1593,16 +1603,32 @@ def upload_clients(request):
                     except (ValueError, TypeError):
                         return default
                 
+                # Helper function to parse multi-line date values safely
+                def parse_multiline_dates(value, default=None):
+                    """Parse multiple dates from a single cell (separated by newlines)"""
+                    if not value or value.strip() == '':
+                        return [default] if default else []
+                    
+                    date_strings = [date.strip() for date in str(value).split('\n') if date.strip()]
+                    parsed_dates = []
+                    
+                    for date_str in date_strings:
+                        try:
+                            parsed_dates.append(pd.to_datetime(date_str).date())
+                        except (ValueError, TypeError):
+                            if default:
+                                parsed_dates.append(default)
+                    
+                    return parsed_dates if parsed_dates else ([default] if default else [])
+                
                 program_name = get_field_data('program_name')
                 program_department = get_field_data('program_department')
                 # Use the source from the form (upload type selection), not from CSV
                 
                 print(f"DEBUG: Program enrollment data - program_name: '{program_name}', source: '{source}'")
                 intake_date_value = get_field_data('intake_date')
-                if intake_date_value:
-                    intake_date = pd.to_datetime(intake_date_value).date()
-                else:
-                    intake_date = datetime.now().date()
+                # Set default intake date - will be overridden by split logic below
+                intake_date = datetime.now().date()
                 intake_database = get_field_data('intake_database', 'CCD')
                 referral_source = get_field_data('referral_source', source)
                 intake_housing_status = get_field_data('intake_housing_status', 'unknown')
@@ -1616,16 +1642,7 @@ def upload_clients(request):
                 print(f"DEBUG: Split program names: {program_names}")
                 
                 # Handle multiple dates in a single cell (separated by newlines)
-                intake_dates = []
-                if intake_date_value:
-                    date_strings = [date.strip() for date in str(intake_date_value).split('\n') if date.strip()]
-                    for date_str in date_strings:
-                        try:
-                            intake_dates.append(pd.to_datetime(date_str).date())
-                        except:
-                            intake_dates.append(intake_date)  # fallback to default
-                else:
-                    intake_dates = [intake_date]  # use default date
+                intake_dates = parse_multiline_dates(intake_date_value, intake_date)
                 
                 print(f"DEBUG: Split intake dates: {intake_dates}")
                 
@@ -1856,6 +1873,36 @@ def upload_clients(request):
             
             return None, None
         
+        # Load test mode: process data but skip database writes
+        if is_load_test:
+            # Simulate processing without database writes
+            processed_count = len(df)
+            
+            # Return load test response
+            return JsonResponse({
+                'success': True,
+                'message': f'Load test mode: {processed_count} clients processed (no DB writes)',
+                'load_test_mode': True,
+                'processed_count': processed_count,
+                'stats': {
+                    'total_rows': processed_count,
+                    'created': 0,
+                    'updated': 0,
+                    'skipped': 0,
+                    'duplicates_flagged': 0,
+                    'errors': 0
+                },
+                'notes': [
+                    'Load test mode: Data was processed but not saved to database',
+                    'This is a safe test run with no data persistence'
+                ]
+            })
+        
+        # Initialize lists for bulk operations
+        clients_to_create = []
+        extended_records_to_create = []
+        duplicate_relationships_to_create = []
+        
         for index, row in df.iterrows():
             try:
                 # Helper function to get data using field mapping
@@ -1925,52 +1972,11 @@ def upload_clients(request):
                 phone = get_field_data('phone')
                 client_id = get_field_data('client_id')
                 
-                # Debug: Log what we're getting for phone and client_id
-                print(f"Row {index + 1}: phone value from get_field_data('phone'): '{phone}'")
-                print(f"Row {index + 1}: client_id value from get_field_data('client_id'): '{client_id}'")
-                
-                # Debug: Log the actual row data for phone_number and client_id columns
-                print(f"Row {index + 1}: Raw row data for phone_number column: '{row.get('phone_number', 'NOT_FOUND')}'")
-                print(f"Row {index + 1}: Raw row data for client_id column: '{row.get('client_id', 'NOT_FOUND')}'")
-                
-                # Debug: Log the column mapping for phone-related fields
-                print(f"Row {index + 1}: Column mapping for phone fields:")
-                for col in df.columns:
-                    if 'phone' in col.lower() or column_mapping.get(col) == 'phone':
-                        print(f"  Column '{col}' -> Field '{column_mapping.get(col)}'")
-                
-                # Debug: Test get_field_data function directly
-                print(f"Row {index + 1}: Testing get_field_data function:")
-                for col in df.columns:
-                    if column_mapping.get(col) == 'phone':
-                        value = row[col]
-                        print(f"  Found column '{col}' mapped to 'phone', value: '{value}', type: {type(value)}")
-                        print(f"  pd.notna(value): {pd.notna(value)}")
-                        print(f"  str(value).strip(): '{str(value).strip()}'")
-                        if pd.notna(value) and str(value).strip():
-                            print(f"  -> Would return: '{str(value).strip()}'")
-                        else:
-                            print(f"  -> Would return default: ''")
-                
-                # Debug: Log phone and client ID extraction
-                debug_phone_info = f"Row {index + 1}: phone extracted = '{phone}'"
-                debug_client_id_info = f"Row {index + 1}: client_id extracted = '{client_id}'"
-                print(debug_phone_info)
-                print(debug_client_id_info)
-                
-                # Debug: Log column mapping for phone
-                phone_mapping_debug = f"Row {index + 1}: Column mapping for phone: {[(col, column_mapping.get(col)) for col in df.columns if 'phone' in col.lower() or 'Phone' in col]}"
-                print(phone_mapping_debug)
-                if not hasattr(debug_info, 'phone_debug'):
-                    debug_info['phone_debug'] = []
-                debug_info['phone_debug'].append(debug_phone_info)
-                debug_info['phone_debug'].append(debug_client_id_info)
                 
                 # Handle date of birth - required for new clients, optional for updates
                 dob = None
                 try:
                     dob_value = get_field_data('dob')
-                    print(f"DEBUG: Row {index + 1}: DOB value from get_field_data('dob'): {repr(dob_value)}")
                     if dob_value:
                         # Check if the value looks like a valid date format
                         dob_str = str(dob_value).strip().lower()
@@ -2548,18 +2554,21 @@ def upload_clients(request):
                         client_fields['created_by'] = 'System'
                         client_fields['updated_by'] = 'System'
                     
-                    # Create the client with only client fields
-                    print(f"Row {index + 1}: About to create client with fields: {list(client_fields.keys())}")
-                    client = Client.objects.create(**client_fields)
-                    created_count += 1
-                    print(f"Row {index + 1}: Successfully created client: {client.first_name} {client.last_name}")
-                    if duplicate_client:
-                        logger.info(f"Created new client with duplicate flag: {client.email or client.phone}")
-                    else:
-                        logger.info(f"Created new client: {client.email or client.phone}")
-                    
-                    # Create ClientExtended record if there are extended fields
-                    extended_data = {}
+                    # Add client to bulk create list instead of creating immediately
+                    clients_to_create.append({
+                        'client_fields': client_fields,
+                        'extended_data': {},
+                        'duplicate_info': {
+                            'is_duplicate': duplicate_client is not None,
+                            'duplicate_client': duplicate_client,
+                            'match_type': match_type,
+                            'original_email': original_email,
+                            'original_phone': original_phone,
+                            'original_client_id': original_client_id,
+                            'client_data': client_data
+                        },
+                        'row_index': index
+                    })
                     
                     # Extract extended fields from original client_data
                     for field in extended_fields_list:
@@ -2567,66 +2576,11 @@ def upload_clients(request):
                             value = client_data[field]
                             if value is not None and value != '':
                                 if isinstance(value, str) and value.strip() != '':
-                                    extended_data[field] = value.strip()
+                                    clients_to_create[-1]['extended_data'][field] = value.strip()
                                 elif not isinstance(value, str):
-                                    extended_data[field] = value
-                    
-                    # Create ClientExtended record if there's any extended data
-                    if extended_data:
-                        from core.models import ClientExtended
-                        extended_data['client'] = client
-                        ClientExtended.objects.create(**extended_data)
-                        logger.info(f"Created ClientExtended record for client {client.client_id}")
+                                    clients_to_create[-1]['extended_data'][field] = value
                 
-                # If we have a client and found a potential duplicate, create duplicate relationship for review
-                # Only do this for newly created clients, not updated ones
-                if client and duplicate_client and not is_update:
-                    client_name = f"{client_data.get('first_name', '')} {client_data.get('last_name', '')}".strip()
-                    existing_name = f"{duplicate_client.first_name} {duplicate_client.last_name}".strip()
-                    
-                    # Always create duplicate relationship for review when potential duplicate is found
-                    similarity = 1.0 if match_type in ["exact_email", "exact_phone", "email_phone"] else 0.8
-                    confidence_level = fuzzy_matcher.get_duplicate_confidence_level(similarity)
-                    
-                    try:
-                        ClientDuplicate.objects.update_or_create(
-                            primary_client=duplicate_client,
-                            duplicate_client=client,
-                            defaults={
-                                'similarity_score': similarity,
-                                'match_type': match_type,
-                                'confidence_level': confidence_level,
-                                'match_details': {
-                                    'primary_name': f"{duplicate_client.first_name} {duplicate_client.last_name}",
-                                    'duplicate_name': f"{client.first_name} {client.last_name}",
-                                    'primary_email': duplicate_client.email,
-                                    'primary_phone': duplicate_client.phone,
-                                    'primary_client_id': duplicate_client.client_id,
-                                    'duplicate_original_email': original_email,
-                                    'duplicate_original_phone': original_phone,
-                                    'duplicate_original_client_id': original_client_id,
-                                }
-                            }
-                        )
-                        print(f"Created duplicate relationship: {duplicate_client} <-> {client}")
-                        
-                        duplicate_details.append({
-                            'type': 'created_with_duplicate',
-                            'reason': f'{match_type.replace("_", " ").title()} match - created with duplicate flag for review',
-                            'client_name': client_name,
-                            'existing_name': existing_name,
-                            'match_field': f"Match: {match_type}"
-                        })
-                        logger.info(f"Created client with {match_type} duplicate flag")
-                    except Exception as e:
-                        print(f"Error creating duplicate relationship: {e}")
-                
-                # Process intake data if available and we have a client
-                if has_intake_data and client is not None:
-                    print(f"DEBUG: Processing intake data for client {client.first_name} {client.last_name}")
-                    process_intake_data(client, row, index, column_mapping, df.columns)
-                else:
-                    print(f"DEBUG: Skipping intake data - has_intake_data: {has_intake_data}, client: {client is not None}")
+                # Note: Duplicate relationships and intake data will be created after bulk client creation
                     
             except Exception as e:
                 error_message = str(e)
@@ -2641,6 +2595,99 @@ def upload_clients(request):
                     errors.append(f"Row {index + 2}: Unable to process this client. Please check the data and try again.")
                 
                 logger.error(f"Error processing row {index + 2}: {str(e)}")
+        
+        # Bulk create all clients
+        if clients_to_create:
+            try:
+                # Extract just the client fields for bulk creation
+                client_objects = []
+                for client_data in clients_to_create:
+                    client_objects.append(Client(**client_data['client_fields']))
+                
+                # Bulk create clients
+                created_clients = Client.objects.bulk_create(client_objects, batch_size=1000)
+                created_count = len(created_clients)
+                
+                # Create ClientExtended records
+                from core.models import ClientExtended
+                extended_objects = []
+                for i, client_data in enumerate(clients_to_create):
+                    if client_data['extended_data']:
+                        extended_data = client_data['extended_data'].copy()
+                        extended_data['client'] = created_clients[i]
+                        extended_objects.append(ClientExtended(**extended_data))
+                
+                if extended_objects:
+                    ClientExtended.objects.bulk_create(extended_objects, batch_size=1000)
+                
+                # Create duplicate relationships
+                from core.models import ClientDuplicate
+                duplicate_objects = []
+                for i, client_data in enumerate(clients_to_create):
+                    duplicate_info = client_data['duplicate_info']
+                    if duplicate_info['is_duplicate'] and not is_update:
+                        duplicate_client = duplicate_info['duplicate_client']
+                        match_type = duplicate_info['match_type']
+                        client = created_clients[i]
+                        
+                        similarity = 1.0 if match_type in ["exact_email", "exact_phone", "email_phone"] else 0.8
+                        confidence_level = fuzzy_matcher.get_duplicate_confidence_level(similarity)
+                        
+                        duplicate_objects.append(ClientDuplicate(
+                            primary_client=duplicate_client,
+                            duplicate_client=client,
+                            similarity_score=similarity,
+                            match_type=match_type,
+                            confidence_level=confidence_level,
+                            match_details={
+                                'primary_name': f"{duplicate_client.first_name} {duplicate_client.last_name}",
+                                'duplicate_name': f"{client.first_name} {client.last_name}",
+                                'primary_email': duplicate_client.email,
+                                'primary_phone': duplicate_client.phone,
+                                'primary_client_id': duplicate_client.client_id,
+                                'duplicate_original_email': duplicate_info['original_email'],
+                                'duplicate_original_phone': duplicate_info['original_phone'],
+                                'duplicate_original_client_id': duplicate_info['original_client_id'],
+                            }
+                        ))
+                        
+                        # Add to duplicate details for response
+                        client_name = f"{duplicate_info['client_data'].get('first_name', '')} {duplicate_info['client_data'].get('last_name', '')}".strip()
+                        existing_name = f"{duplicate_client.first_name} {duplicate_client.last_name}".strip()
+                        
+                        duplicate_details.append({
+                            'type': 'created_with_duplicate',
+                            'reason': f'{match_type.replace("_", " ").title()} match - created with duplicate flag for review',
+                            'client_name': client_name,
+                            'existing_name': existing_name,
+                            'match_field': f"Match: {match_type}"
+                        })
+                
+                if duplicate_objects:
+                    ClientDuplicate.objects.bulk_create(duplicate_objects, batch_size=1000)
+                
+                logger.info(f"Bulk created {created_count} clients successfully")
+                
+                # Process intake data for all created clients
+                if has_intake_data and created_clients:
+                    print(f"DEBUG: Processing intake data for {len(created_clients)} created clients")
+                    for i, client in enumerate(created_clients):
+                        try:
+                            # Get the original row data for this client
+                            client_data = clients_to_create[i]
+                            row_index = client_data['row_index']
+                            row = df.iloc[row_index]
+                            
+                            print(f"DEBUG: Processing intake data for client {client.first_name} {client.last_name} (row {row_index + 2})")
+                            process_intake_data(client, row, row_index, column_mapping, df.columns)
+                        except Exception as e:
+                            logger.error(f"Error processing intake data for client {client.first_name} {client.last_name}: {str(e)}")
+                            errors.append(f"Row {row_index + 2}: Error processing intake data - {str(e)}")
+                
+            except Exception as e:
+                logger.error(f"Error in bulk creation: {str(e)}")
+                errors.append(f"Bulk creation failed: {str(e)}")
+                created_count = 0
         
         # Prepare response
         duplicate_created_count = len([d for d in duplicate_details if d['type'] == 'created_with_duplicate'])
@@ -2937,14 +2984,19 @@ def download_sample(request, file_type):
 
 @csrf_protect
 @require_http_methods(["POST"])
+@jwt_required
 def bulk_delete_clients(request):
     """Bulk delete clients"""
     try:
         import json
+        logger.info(f"Bulk delete request from user: {request.user}")
+        
         data = json.loads(request.body)
         client_ids = data.get('client_ids', [])
+        logger.info(f"Client IDs to delete: {client_ids}")
         
         if not client_ids:
+            logger.warning("No client IDs provided for bulk delete")
             return JsonResponse({
                 'success': False, 
                 'error': 'No client IDs provided'
@@ -2953,8 +3005,10 @@ def bulk_delete_clients(request):
         # Get clients to delete
         clients_to_delete = Client.objects.filter(external_id__in=client_ids)
         deleted_count = clients_to_delete.count()
+        logger.info(f"Found {deleted_count} clients to delete")
         
         if deleted_count == 0:
+            logger.warning(f"No clients found with provided IDs: {client_ids}")
             return JsonResponse({
                 'success': False, 
                 'error': 'No clients found with provided IDs'

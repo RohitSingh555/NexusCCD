@@ -1,5 +1,5 @@
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.shortcuts import redirect
 from django.utils import timezone
 from django.db import models
@@ -119,7 +119,14 @@ class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
             })
         
         # Get the total count of filtered programs (not just current page)
-        total_filtered_count = self.get_queryset().count()
+        queryset = self.get_queryset()
+        from django.db.models.query import QuerySet
+        if isinstance(queryset, QuerySet):
+            # It's a QuerySet
+            total_filtered_count = queryset.count()
+        else:
+            # It's a list (from capacity filtering)
+            total_filtered_count = len(queryset)
         
         # Add filter options to context
         context['programs_with_capacity'] = programs_with_capacity
@@ -232,6 +239,14 @@ class ProgramDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, DetailVie
         
         # If we get here, user has access, proceed with normal rendering
         context = self.get_context_data(object=self.object)
+        
+        # Check if this is an AJAX request for client list
+        if request.GET.get('ajax') == '1':
+            from django.template.loader import render_to_string
+            client_list_html = render_to_string('programs/client_list_ajax.html', context)
+            from django.http import HttpResponse
+            return HttpResponse(client_list_html)
+        
         return self.render_to_response(context)
     
     def get_context_data(self, **kwargs):
@@ -260,13 +275,40 @@ class ProgramDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, DetailVie
         
         # Get available clients (not currently enrolled in this program)
         from core.models import Client
+        from django.core.paginator import Paginator
+        
         enrolled_client_ids = current_enrollments.values_list('client_id', flat=True)
-        available_clients = Client.objects.exclude(id__in=enrolled_client_ids).order_by('first_name', 'last_name')
+        available_clients_queryset = Client.objects.exclude(id__in=enrolled_client_ids).order_by('first_name', 'last_name')
+        
+        # Add pagination for available clients
+        clients_per_page = self.request.GET.get('clients_per_page', '10')
+        try:
+            clients_per_page = int(clients_per_page)
+            if clients_per_page not in [5, 10, 50, 100]:
+                clients_per_page = 10
+        except (ValueError, TypeError):
+            clients_per_page = 10
+            
+        clients_paginator = Paginator(available_clients_queryset, clients_per_page)
+        clients_page_number = self.request.GET.get('clients_page', 1)
+        try:
+            available_clients_page = clients_paginator.get_page(clients_page_number)
+        except:
+            available_clients_page = clients_paginator.get_page(1)
+        
+        available_clients = available_clients_page
         
         # Get available staff members who can be assigned as program managers
         from core.models import Staff
+        
         assigned_manager_ids = program_managers.values_list('staff_id', flat=True)
-        available_staff = Staff.objects.exclude(id__in=assigned_manager_ids).order_by('first_name', 'last_name')
+        # Only show staff members who have the Manager role
+        available_staff_queryset = Staff.objects.filter(
+            staffrole__role__name='Manager'
+        ).exclude(id__in=assigned_manager_ids).order_by('first_name', 'last_name').distinct()
+        
+        # Get all available staff (no pagination)
+        available_staff = available_staff_queryset
         
         # Ensure all querysets are properly initialized (defensive programming)
         if current_enrollments is None:
@@ -323,6 +365,9 @@ class ProgramDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, DetailVie
             'available_clients': available_clients,
             'available_staff': available_staff,
             'recent_enrollments': recent_enrollments,
+            'clients_paginator': clients_paginator,
+            'clients_page_obj': available_clients_page,
+            'clients_per_page': clients_per_page,
         })
         
         return context
@@ -436,7 +481,7 @@ class ProgramBulkEnrollView(ProgramManagerAccessMixin, View):
         except Exception as e:
             messages.error(request, f'An error occurred: {str(e)}')
         
-        return redirect('programs:detail', external_id=external_id)
+        return redirect(reverse('programs:detail', args=[external_id]) + '?enrolled=true')
 
 @method_decorator(jwt_required, name='dispatch')
 class ProgramBulkAssignManagersView(ProgramManagerAccessMixin, View):
@@ -525,7 +570,7 @@ class ProgramBulkAssignManagersView(ProgramManagerAccessMixin, View):
 class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
     model = Program
     template_name = 'programs/program_form.html'
-    fields = ['name', 'department', 'location', 'capacity_current', 'capacity_effective_date']
+    fields = ['name', 'department', 'location', 'capacity_current', 'capacity_effective_date', 'status']
     success_url = reverse_lazy('programs:list')
     
     def dispatch(self, request, *args, **kwargs):
@@ -555,6 +600,7 @@ class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
             defaults={'owner': 'System'}
         )
         initial['department'] = na_department
+        initial['status'] = 'active'  # Set default status to active
         return initial
     
     def form_valid(self, form):
@@ -603,7 +649,7 @@ class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
 class ProgramUpdateView(ProgramManagerAccessMixin, UpdateView):
     model = Program
     template_name = 'programs/program_form.html'
-    fields = ['name', 'department', 'location', 'capacity_current', 'capacity_effective_date']
+    fields = ['name', 'department', 'location', 'capacity_current', 'capacity_effective_date', 'status']
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('programs:list')
@@ -951,45 +997,43 @@ class ProgramBulkChangeDepartmentView(ProgramManagerAccessMixin, View):
     
     def post(self, request):
         from core.models import Program, Department
-        from django.http import JsonResponse
+        from django.contrib import messages
         from django.db import transaction
+        from django.shortcuts import redirect
         import json
         
         try:
-            # Parse JSON data from request body
-            data = json.loads(request.body)
-            program_ids = data.get('program_ids', [])
-            new_department_id = data.get('new_department_id', '')
+            # Get data from form POST
+            program_ids_json = request.POST.get('program_ids', '[]')
+            new_department_id = request.POST.get('new_department_id', '')
+            
+            # Parse program IDs from JSON string
+            try:
+                program_ids = json.loads(program_ids_json)
+            except json.JSONDecodeError:
+                program_ids = []
             
             if not program_ids:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No programs selected for department change.'
-                })
+                messages.error(request, 'No programs selected for department change.')
+                return redirect('programs:list')
             
             if not new_department_id:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No department selected.'
-                })
+                messages.error(request, 'No department selected.')
+                return redirect('programs:list')
             
             # Get the new department
             try:
                 new_department = Department.objects.get(id=new_department_id)
             except Department.DoesNotExist:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Selected department does not exist.'
-                })
+                messages.error(request, 'Selected department does not exist.')
+                return redirect('programs:list')
             
             # Get programs to update
             programs_to_update = Program.objects.filter(external_id__in=program_ids)
             
             if not programs_to_update.exists():
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No valid programs found to update.'
-                })
+                messages.error(request, 'No valid programs found to update.')
+                return redirect('programs:list')
             
             updated_count = 0
             errors = []
@@ -1005,29 +1049,23 @@ class ProgramBulkChangeDepartmentView(ProgramManagerAccessMixin, View):
                         errors.append(f"Failed to update {program.name}: {str(e)}")
             
             if updated_count > 0:
-                return JsonResponse({
-                    'success': True,
-                    'message': f'Successfully updated department for {updated_count} program(s) to {new_department.name}.',
-                    'updated_count': updated_count,
-                    'errors': errors
-                })
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No programs were updated.',
-                    'errors': errors
-                })
+                messages.success(request, f'Successfully updated department for {updated_count} program(s) to {new_department.name}.')
                 
-        except json.JSONDecodeError:
-            return JsonResponse({
-                'success': False,
-                'error': 'Invalid JSON data.'
-            })
+                # Show warnings for any errors that occurred
+                if errors:
+                    for error in errors:
+                        messages.warning(request, error)
+            else:
+                messages.error(request, 'No programs were updated.')
+                if errors:
+                    for error in errors:
+                        messages.warning(request, error)
+            
+            return redirect('programs:list')
+                
         except Exception as e:
-            return JsonResponse({
-                'success': False,
-                'error': f'An error occurred: {str(e)}'
-            })
+            messages.error(request, f'An error occurred: {str(e)}')
+            return redirect('programs:list')
 
 
 @method_decorator(jwt_required, name='dispatch')

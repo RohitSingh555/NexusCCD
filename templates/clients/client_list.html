@@ -6,7 +6,8 @@
 {% block page_title %}Clients{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="clientManager()">
+{% csrf_token %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="clientManager()" x-init="init()">
     <div>
         <!-- Header -->
         <div class="mb-6">
@@ -174,11 +175,11 @@
     </div>
     
     <!-- Bulk Actions Bar -->
-    <div x-show="selectedClients.length > 0" x-transition class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+    <div x-show="allSelectedClients.size > 0" x-transition class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <div class="flex items-center justify-between">
             <div class="flex items-center">
                 <span class="text-sm font-bold text-blue-800 font-body">
-                    <span x-text="selectedClients.length"></span> client(s) selected
+                    <span x-text="allSelectedClients.size"></span> client(s) selected
                 </span>
             </div>
             <div class="flex space-x-2">
@@ -693,6 +694,7 @@
 function clientManager() {
     return {
         selectedClients: [],
+        allSelectedClients: new Set(), // Track all selected clients across pages
         contextMenu: {
             visible: false,
             x: 0,
@@ -737,24 +739,71 @@ function clientManager() {
             {% endfor %}
         ],
         
-        toggleClient(clientId) {
-            if (this.selectedClients.includes(clientId)) {
-                this.selectedClients = this.selectedClients.filter(id => id !== clientId);
-            } else {
-                this.selectedClients.push(clientId);
+        init() {
+            // Load selected clients from localStorage on page load
+            this.loadSelectedClients();
+            // Update selectedClients array based on current page clients
+            this.updateSelectedClients();
+        },
+        
+        loadSelectedClients() {
+            try {
+                const saved = localStorage.getItem('selectedClients');
+                if (saved) {
+                    const clientIds = JSON.parse(saved);
+                    this.allSelectedClients = new Set(clientIds);
+                }
+            } catch (error) {
+                console.error('Error loading selected clients:', error);
+                this.allSelectedClients = new Set();
             }
+        },
+        
+        saveSelectedClients() {
+            try {
+                const clientIds = Array.from(this.allSelectedClients);
+                localStorage.setItem('selectedClients', JSON.stringify(clientIds));
+            } catch (error) {
+                console.error('Error saving selected clients:', error);
+            }
+        },
+        
+        updateSelectedClients() {
+            // Update selectedClients array to show current page selections
+            this.selectedClients = this.clients
+                .filter(client => this.allSelectedClients.has(client.id))
+                .map(client => client.id);
+        },
+        
+        toggleClient(clientId) {
+            if (this.allSelectedClients.has(clientId)) {
+                this.allSelectedClients.delete(clientId);
+            } else {
+                this.allSelectedClients.add(clientId);
+            }
+            this.saveSelectedClients();
+            this.updateSelectedClients();
         },
         
         toggleAll() {
-            if (this.selectedClients.length === this.clients.length) {
-                this.selectedClients = [];
+            const currentPageClientIds = this.clients.map(client => client.id);
+            const allCurrentPageSelected = currentPageClientIds.every(id => this.allSelectedClients.has(id));
+            
+            if (allCurrentPageSelected) {
+                // Deselect all clients on current page
+                currentPageClientIds.forEach(id => this.allSelectedClients.delete(id));
             } else {
-                this.selectedClients = this.clients.map(client => client.id);
+                // Select all clients on current page
+                currentPageClientIds.forEach(id => this.allSelectedClients.add(id));
             }
+            this.saveSelectedClients();
+            this.updateSelectedClients();
         },
         
         clearSelection() {
-            this.selectedClients = [];
+            this.allSelectedClients.clear();
+            this.saveSelectedClients();
+            this.updateSelectedClients();
         },
         
         showContextMenu(event, clientId, clientName) {
@@ -903,16 +952,12 @@ function clientManager() {
         },
         
         bulkDelete() {
-            if (this.selectedClients.length > 0) {
-                const clientNames = this.selectedClients.map(id => {
-                    const client = this.clients.find(c => c.id === id);
-                    return client ? client.name : 'Unknown';
-                });
-                
+            const totalSelectedCount = this.allSelectedClients.size;
+            if (totalSelectedCount > 0) {
                 this.deleteModal = {
                     visible: true,
-                    message: `Are you sure you want to delete ${this.selectedClients.length} client(s)? This action cannot be undone.`,
-                    clientIds: [...this.selectedClients]
+                    message: `Are you sure you want to delete ${totalSelectedCount} client(s)? This action cannot be undone.`,
+                    clientIds: Array.from(this.allSelectedClients)
                 };
             }
         },
@@ -923,25 +968,37 @@ function clientManager() {
         
         async confirmDelete() {
             try {
+                console.log('Starting delete process...');
+                console.log('Client IDs to delete:', this.deleteModal.clientIds);
+                
+                const csrfToken = this.getCookie('csrftoken');
+                console.log('CSRF Token:', csrfToken);
+                
                 const response = await fetch('/clients/bulk-delete/', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRFToken': this.getCookie('csrftoken')
+                        'X-CSRFToken': csrfToken
                     },
                     body: JSON.stringify({
                         client_ids: this.deleteModal.clientIds
                     })
                 });
                 
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+                
                 if (response.ok) {
                     const result = await response.json();
+                    console.log('Response result:', result);
+                    
                     if (result.success) {
-                        // Remove deleted clients from the list
-                        this.clients = this.clients.filter(client => 
-                            !this.deleteModal.clientIds.includes(client.id)
-                        );
-                        this.selectedClients = [];
+                        // Remove deleted clients from allSelectedClients
+                        this.deleteModal.clientIds.forEach(id => this.allSelectedClients.delete(id));
+                        this.saveSelectedClients();
+                        
+                        // Update selectedClients array
+                        this.updateSelectedClients();
                         this.hideDeleteModal();
                         
                         // Show success message
@@ -954,9 +1011,13 @@ function clientManager() {
                             window.location.href = url.toString();
                         }, 1000);
                     } else {
+                        console.error('Delete failed:', result.error);
                         this.showNotification(result.error || 'Failed to delete clients', 'error');
                     }
                 } else {
+                    console.error('Response not ok:', response.status, response.statusText);
+                    const errorText = await response.text();
+                    console.error('Error response:', errorText);
                     this.showNotification('Failed to delete clients', 'error');
                 }
             } catch (error) {
@@ -982,6 +1043,15 @@ function clientManager() {
         },
         
         getCookie(name) {
+            // First try to get from DOM (for CSRF token)
+            if (name === 'csrftoken') {
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+                if (csrfToken) {
+                    return csrfToken.value;
+                }
+            }
+            
+            // Fallback to cookie method
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
                 const cookies = document.cookie.split(';');

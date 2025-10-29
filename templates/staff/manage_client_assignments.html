@@ -114,8 +114,32 @@
             <div class="mb-6">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-bold text-neutral-800 font-subheader">Available Clients</h3>
-                    <div class="text-sm text-neutral-500 font-body">
-                        <span id="client-count">{{ available_clients.count }} client(s)</span>
+                    <div class="flex items-center space-x-4">
+                        <div class="text-sm text-neutral-500 font-body">
+                            <span id="client-count">{{ clients_paginator.count }} client(s)</span>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm text-neutral-600">Selected:</span>
+                                <span id="selected-clients-count" class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-blue-600 text-white">
+                                    0
+                                </span>
+                                <button type="button" 
+                                        onclick="clearAllClientSelections()" 
+                                        class="text-xs text-neutral-500 hover:text-red-600 underline">
+                                    Clear All
+                                </button>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm text-neutral-600">Rows per page:</span>
+                                <select id="clients-per-page" class="text-sm border border-neutral-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="5" {% if clients_per_page == '5' %}selected{% endif %}>5</option>
+                                    <option value="10" {% if clients_per_page == '10' %}selected{% endif %}>10</option>
+                                    <option value="50" {% if clients_per_page == '50' %}selected{% endif %}>50</option>
+                                    <option value="100" {% if clients_per_page == '100' %}selected{% endif %}>100</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 
@@ -166,6 +190,32 @@
                     {% endfor %}
                 </div>
                 
+                <!-- Client Pagination -->
+                {% if clients_page_obj.has_other_pages %}
+                <div class="flex items-center justify-between mt-4 px-2">
+                    <div class="text-sm text-neutral-600">
+                        Showing {{ clients_page_obj.start_index }} to {{ clients_page_obj.end_index }} of {{ clients_paginator.count }} clients
+                    </div>
+                    <div class="flex items-center space-x-1">
+                        {% if clients_page_obj.has_previous %}
+                            <a href="?clients_page={{ clients_page_obj.previous_page_number }}&clients_per_page={{ clients_per_page }}" class="px-2 py-1 text-sm text-blue-600 hover:text-blue-800 border border-blue-300 rounded hover:bg-blue-50">Previous</a>
+                        {% endif %}
+                        
+                        {% for num in clients_page_obj.paginator.page_range %}
+                            {% if clients_page_obj.number == num %}
+                                <span class="px-2 py-1 text-sm bg-blue-600 text-white rounded">{{ num }}</span>
+                            {% elif num > clients_page_obj.number|add:'-3' and num < clients_page_obj.number|add:'3' %}
+                                <a href="?clients_page={{ num }}&clients_per_page={{ clients_per_page }}" class="px-2 py-1 text-sm text-blue-600 hover:text-blue-800 border border-blue-300 rounded hover:bg-blue-50">{{ num }}</a>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if clients_page_obj.has_next %}
+                            <a href="?clients_page={{ clients_page_obj.next_page_number }}&clients_per_page={{ clients_per_page }}" class="px-2 py-1 text-sm text-blue-600 hover:text-blue-800 border border-blue-300 rounded hover:bg-blue-50">Next</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                
                 <!-- No results message -->
                 <div id="no-results" class="hidden text-center py-12">
                     <div class="mx-auto w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-4">
@@ -195,6 +245,11 @@
                         <li>View client profile and contact information</li>
                         <li>Access client-related reports (read-only access)</li>
                     </ul>
+                    <div class="mt-3 p-2 bg-green-50 border border-green-200 rounded-lg">
+                        <p class="text-xs text-green-700 font-bold">
+                            <span id="total-selected-clients-count">0</span> client(s) will be assigned
+                        </p>
+                    </div>
                 </div>
             </div>
             <div class="flex space-x-4">
@@ -213,6 +268,87 @@
 </div>
 
 <script>
+// Global variables for selected clients
+let selectedClients = new Set();
+
+// Load saved selections from localStorage
+function loadClientSelections() {
+    const saved = localStorage.getItem('selectedClients');
+    if (saved) {
+        const clientIds = JSON.parse(saved);
+        clientIds.forEach(id => selectedClients.add(id));
+    }
+    
+    // Apply saved selections to checkboxes
+    document.querySelectorAll('input[name="clients"]').forEach(checkbox => {
+        if (selectedClients.has(checkbox.value)) {
+            checkbox.checked = true;
+        }
+    });
+    
+    updateClientSelectionCounts();
+}
+
+// Save selections to localStorage
+function saveClientSelections() {
+    const clientIds = Array.from(selectedClients);
+    localStorage.setItem('selectedClients', JSON.stringify(clientIds));
+}
+
+// Update selection count
+function updateClientSelectionCounts() {
+    const selectedCountElement = document.getElementById('selected-clients-count');
+    const totalCountElement = document.getElementById('total-selected-clients-count');
+    
+    if (selectedCountElement) {
+        selectedCountElement.textContent = selectedClients.size;
+    }
+    
+    if (totalCountElement) {
+        totalCountElement.textContent = selectedClients.size;
+    }
+}
+
+// Handle checkbox changes
+function handleClientCheckboxChange(checkbox) {
+    if (checkbox.checked) {
+        selectedClients.add(checkbox.value);
+    } else {
+        selectedClients.delete(checkbox.value);
+    }
+    saveClientSelections();
+    updateClientSelectionCounts();
+}
+
+// Clear all client selections
+function clearAllClientSelections() {
+    document.querySelectorAll('input[name="clients"]').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    selectedClients.clear();
+    saveClientSelections();
+    updateClientSelectionCounts();
+}
+
+// Add hidden inputs for all selected clients before form submission
+function addHiddenInputsForSelectedClients() {
+    const form = document.querySelector('form');
+    if (!form) return;
+    
+    // Remove any existing hidden inputs for clients (to avoid duplicates)
+    const existingHiddenInputs = form.querySelectorAll('input[name="clients"][type="hidden"]');
+    existingHiddenInputs.forEach(input => input.remove());
+    
+    // Add hidden inputs for all selected clients
+    selectedClients.forEach(clientId => {
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = 'clients';
+        hiddenInput.value = clientId;
+        form.appendChild(hiddenInput);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const searchInput = document.getElementById('client-search');
     const clearButton = document.getElementById('clear-search');
@@ -222,6 +358,13 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Get all client items
     const clientItems = document.querySelectorAll('.client-item');
+    
+    // Add event listeners to all checkboxes
+    document.querySelectorAll('input[name="clients"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            handleClientCheckboxChange(this);
+        });
+    });
     
     function updateSearch() {
         const searchTerm = searchInput.value.toLowerCase().trim();
@@ -280,8 +423,47 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Initial state
+    // Handle form submission
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            // Add hidden inputs for all selected clients before submission
+            addHiddenInputsForSelectedClients();
+            
+            // Show loading state
+            const submitButton = form.querySelector('button[type="submit"]');
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<svg class="w-4 h-4 inline mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>Updating...';
+            }
+        });
+    }
+    
+    // Handle clients per-page change
+    const clientsPerPageSelect = document.getElementById('clients-per-page');
+    if (clientsPerPageSelect) {
+        clientsPerPageSelect.addEventListener('change', function() {
+            const currentUrl = new URL(window.location);
+            currentUrl.searchParams.set('clients_per_page', this.value);
+            currentUrl.searchParams.set('clients_page', '1'); // Reset to first page
+            window.location.href = currentUrl.toString();
+        });
+    }
+    
+    // Initialize everything
+    loadClientSelections();
     updateSearch();
+    
+    // Check if we came from a successful form submission
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('submitted') === 'true') {
+        // Clear selections after successful submission
+        clearAllClientSelections();
+        // Remove the parameter from URL
+        urlParams.delete('submitted');
+        const newUrl = window.location.pathname + (urlParams.toString() ? '?' + urlParams.toString() : '');
+        window.history.replaceState({}, '', newUrl);
+    }
 });
 </script>
 {% endblock %}
