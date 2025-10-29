@@ -732,7 +732,7 @@ class Intake(BaseModel):
     department = models.ForeignKey(Department, on_delete=models.CASCADE, db_index=True, null=True, blank=True)
     intake_date = models.DateField(db_index=True)
     intake_database = models.CharField(max_length=100, db_index=True, default='CCD')
-    referral_source = models.CharField(max_length=20, choices=SOURCE_CHOICES, db_index=True, default='SMIS')
+    referral_source = models.CharField(max_length=255, null=True, blank=True, db_index=True)
     intake_housing_status = models.CharField(max_length=20, choices=HOUSING_STATUS_CHOICES, db_index=True, default='unknown')
     notes = models.TextField(null=True, blank=True)
     
