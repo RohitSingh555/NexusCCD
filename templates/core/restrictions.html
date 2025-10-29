@@ -318,7 +318,7 @@
                     {% for restriction in restrictions %}
                     <tr class="hover:bg-neutral-50 relative cursor-pointer" 
                         onclick="window.location.href='{% url 'core:restrictions_detail' restriction.external_id %}'"
-                        onmouseenter="showTooltip(this, '{{ restriction.created_by|default:"Unknown" }}', '{{ restriction.created_at|date:'M d, Y g:i A' }}', '{{ restriction.updated_by|default:"Unknown" }}', '{{ restriction.updated_at|date:'M d, Y g:i A' }}')"
+                        onmouseenter="showRestrictionTooltip(this, '{{ restriction.created_by|default:"System" }}', '{{ restriction.created_at|date:'M d, Y g:i A' }}', '{{ restriction.updated_by|default:"System" }}', '{{ restriction.updated_at|date:'M d, Y g:i A' }}', '{{ restriction.created_at|date:'U' }}', '{{ restriction.updated_at|date:'U' }}')"
                         onmouseleave="hideTooltip()">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <div class="flex items-center">
@@ -495,7 +495,7 @@ function changeRowsPerPage(perPage) {
 // Global functions for tooltip
 let tooltipTimeout;
 
-function showTooltip(element, createdBy, createdOn, updatedBy, updatedOn) {
+function showRestrictionTooltip(element, createdBy, createdOn, updatedBy, updatedOn, createdTimestamp, updatedTimestamp) {
     // Clear any existing timeout
     if (tooltipTimeout) {
         clearTimeout(tooltipTimeout);
@@ -509,10 +509,28 @@ function showTooltip(element, createdBy, createdOn, updatedBy, updatedOn) {
     const updatedOnSpan = document.getElementById('tooltip-updated-on');
     
     if (tooltip && createdBySpan && createdOnSpan && updatedBySpan && updatedOnSpan) {
-        createdBySpan.textContent = createdBy || 'Unknown';
+        createdBySpan.textContent = createdBy || 'System';
         createdOnSpan.textContent = createdOn;
-        updatedBySpan.textContent = updatedBy || 'Unknown';
-        updatedOnSpan.textContent = updatedOn;
+        
+        // Check if restriction has been updated (more than 1 second difference)
+        const timeDiff = Math.abs(parseInt(updatedTimestamp) - parseInt(createdTimestamp));
+        const hasBeenUpdated = timeDiff > 1;
+        
+        if (hasBeenUpdated) {
+            updatedBySpan.textContent = updatedBy || 'System';
+            updatedOnSpan.textContent = updatedOn;
+            updatedBySpan.style.color = '';
+            updatedBySpan.style.fontStyle = '';
+            updatedOnSpan.style.color = '';
+            updatedOnSpan.style.fontStyle = '';
+        } else {
+            updatedBySpan.textContent = '-';
+            updatedOnSpan.textContent = '-';
+            updatedBySpan.style.color = '#9CA3AF'; // gray color
+            updatedBySpan.style.fontStyle = 'italic';
+            updatedOnSpan.style.color = '#9CA3AF'; // gray color
+            updatedOnSpan.style.fontStyle = 'italic';
+        }
         
         // Position the tooltip
         const rect = element.getBoundingClientRect();

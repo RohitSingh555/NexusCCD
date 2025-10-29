@@ -300,7 +300,7 @@
                         @contextmenu.prevent="showContextMenu($event, '{{ enrollment.external_id }}', '{{ enrollment.client.first_name }} {{ enrollment.client.last_name }} - {{ enrollment.program.name }}')"
                         @click="viewEnrollment('{{ enrollment.external_id }}')"
                         :class="{ 'bg-blue-50': selectedEnrollments.includes('{{ enrollment.external_id }}') }"
-                        onmouseenter="showTooltip(this, '{{ enrollment.created_by|default:"Unknown" }}', '{{ enrollment.created_at|date:'M d, Y g:i A' }}', '{{ enrollment.updated_by|default:"Unknown" }}', '{{ enrollment.updated_at|date:'M d, Y g:i A' }}')"
+                        onmouseenter="showEnrollmentTooltip(this, '{{ enrollment.created_by|default:"System" }}', '{{ enrollment.created_at|date:'M d, Y g:i A' }}', '{{ enrollment.updated_by|default:"System" }}', '{{ enrollment.updated_at|date:'M d, Y g:i A' }}', '{{ enrollment.created_at|date:'U' }}', '{{ enrollment.updated_at|date:'U' }}')"
                         onmouseleave="hideTooltip()">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <input type="checkbox" 
@@ -673,7 +673,7 @@ function enrollmentManager() {
 // Global functions for tooltip
 let tooltipTimeout;
 
-function showTooltip(element, createdBy, createdOn, updatedBy, updatedOn) {
+function showEnrollmentTooltip(element, createdBy, createdOn, updatedBy, updatedOn, createdTimestamp, updatedTimestamp) {
     // Clear any existing timeout
     if (tooltipTimeout) {
         clearTimeout(tooltipTimeout);
@@ -687,10 +687,28 @@ function showTooltip(element, createdBy, createdOn, updatedBy, updatedOn) {
     const updatedOnSpan = document.getElementById('tooltip-updated-on');
     
     if (tooltip && createdBySpan && createdOnSpan && updatedBySpan && updatedOnSpan) {
-        createdBySpan.textContent = createdBy || 'Unknown';
+        createdBySpan.textContent = createdBy || 'System';
         createdOnSpan.textContent = createdOn;
-        updatedBySpan.textContent = updatedBy || 'Unknown';
-        updatedOnSpan.textContent = updatedOn;
+        
+        // Check if enrollment has been updated (more than 1 second difference)
+        const timeDiff = Math.abs(parseInt(updatedTimestamp) - parseInt(createdTimestamp));
+        const hasBeenUpdated = timeDiff > 1;
+        
+        if (hasBeenUpdated) {
+            updatedBySpan.textContent = updatedBy || 'System';
+            updatedOnSpan.textContent = updatedOn;
+            updatedBySpan.style.color = '';
+            updatedBySpan.style.fontStyle = '';
+            updatedOnSpan.style.color = '';
+            updatedOnSpan.style.fontStyle = '';
+        } else {
+            updatedBySpan.textContent = '-';
+            updatedOnSpan.textContent = '-';
+            updatedBySpan.style.color = '#9CA3AF'; // gray color
+            updatedBySpan.style.fontStyle = 'italic';
+            updatedOnSpan.style.color = '#9CA3AF'; // gray color
+            updatedOnSpan.style.fontStyle = 'italic';
+        }
         
         // Position the tooltip
         const rect = element.getBoundingClientRect();

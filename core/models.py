@@ -232,6 +232,10 @@ class Program(BaseModel):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', db_index=True)
     description = models.TextField(null=True, blank=True)
     
+    # Audit fields
+    created_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who created this record")
+    updated_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who last updated this record")
+    
     class Meta:
         db_table = 'programs'
     
