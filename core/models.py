@@ -61,7 +61,7 @@ class BaseModel(models.Model):
 
 class Department(BaseModel):
     name = models.CharField(max_length=255, unique=True, db_index=True)
-    owner = models.CharField(max_length=255, null=True, blank=True)
+    owner = models.ForeignKey('Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='owned_departments', help_text="Department leader/owner")
     
     class Meta:
         db_table = 'departments'

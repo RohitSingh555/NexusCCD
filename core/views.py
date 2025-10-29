@@ -1011,7 +1011,51 @@ class DepartmentCreateView(AnalystAccessMixin, CreateView):
     fields = ['name', 'owner']
     success_url = reverse_lazy('core:departments')
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Get all staff members with Leader role
+        from core.models import Staff, Role
+        try:
+            leader_role = Role.objects.get(name='Leader')
+            context['leaders'] = Staff.objects.filter(
+                staffrole__role=leader_role
+            ).distinct().order_by('first_name', 'last_name')
+        except Role.DoesNotExist:
+            context['leaders'] = Staff.objects.none()
+        return context
+    
     def form_valid(self, form):
+        department = form.save(commit=False)
+        
+        # Set audit fields
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                first_name = staff.first_name or ''
+                last_name = staff.last_name or ''
+                user_name = f"{first_name} {last_name}".strip()
+                if not user_name or user_name == ' ':
+                    user_name = staff.email or staff.user.username if staff.user else 'System'
+            except:
+                user_name = 'System'
+        else:
+            user_name = 'System'
+        
+        department.created_by = user_name
+        department.updated_by = user_name
+        department.save()
+        
+        # If an owner is selected, create DepartmentLeaderAssignment
+        if department.owner:
+            from core.models import DepartmentLeaderAssignment
+            DepartmentLeaderAssignment.objects.create(
+                staff=department.owner,
+                department=department,
+                assigned_by=staff if self.request.user.is_authenticated and hasattr(self.request.user, 'staff_profile') else None,
+                is_active=True,
+                notes=f"Auto-assigned as department owner during creation"
+            )
+        
         messages.success(self.request, 'Department created successfully.')
         return super().form_valid(form)
 
@@ -1024,7 +1068,70 @@ class DepartmentUpdateView(AnalystAccessMixin, UpdateView):
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:departments')
     
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Get all staff members with Leader role
+        from core.models import Staff, Role
+        try:
+            leader_role = Role.objects.get(name='Leader')
+            context['leaders'] = Staff.objects.filter(
+                staffrole__role=leader_role
+            ).distinct().order_by('first_name', 'last_name')
+        except Role.DoesNotExist:
+            context['leaders'] = Staff.objects.none()
+        return context
+    
     def form_valid(self, form):
+        department = form.save(commit=False)
+        old_owner = self.get_object().owner
+        
+        # Set audit fields
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                first_name = staff.first_name or ''
+                last_name = staff.last_name or ''
+                user_name = f"{first_name} {last_name}".strip()
+                if not user_name or user_name == ' ':
+                    user_name = staff.email or staff.user.username if staff.user else 'System'
+            except:
+                user_name = 'System'
+        else:
+            user_name = 'System'
+        
+        department.updated_by = user_name
+        department.save()
+        
+        # Handle DepartmentLeaderAssignment changes
+        from core.models import DepartmentLeaderAssignment
+        
+        # Deactivate old assignment if owner changed
+        if old_owner and old_owner != department.owner:
+            DepartmentLeaderAssignment.objects.filter(
+                staff=old_owner,
+                department=department,
+                is_active=True
+            ).update(is_active=False)
+        
+        # Create new assignment if new owner is selected
+        if department.owner and department.owner != old_owner:
+            # Check if assignment already exists (inactive)
+            assignment, created = DepartmentLeaderAssignment.objects.get_or_create(
+                staff=department.owner,
+                department=department,
+                defaults={
+                    'assigned_by': staff if self.request.user.is_authenticated and hasattr(self.request.user, 'staff_profile') else None,
+                    'is_active': True,
+                    'notes': f"Assigned as department owner during update"
+                }
+            )
+            if not created:
+                # Reactivate existing assignment
+                assignment.is_active = True
+                assignment.assigned_by = staff if self.request.user.is_authenticated and hasattr(self.request.user, 'staff_profile') else None
+                assignment.notes = f"Reassigned as department owner during update"
+                assignment.save()
+        
         messages.success(self.request, 'Department updated successfully.')
         return super().form_valid(form)
 
