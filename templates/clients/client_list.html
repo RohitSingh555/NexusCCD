@@ -217,7 +217,7 @@
                         @contextmenu.prevent="showContextMenu($event, '{{ client.external_id }}', '{{ client.first_name }} {{ client.last_name }}')"
                         @click="viewClient('{{ client.external_id }}')"
                         :class="{ 'bg-blue-50': selectedClients.includes('{{ client.external_id }}') }"
-                        onmouseenter="showTooltip(this, '{{ client.created_by|default:"Unknown" }}', '{{ client.created_at|date:'M d, Y g:i A' }}', '{{ client.updated_by|default:"Unknown" }}', '{{ client.updated_at|date:'M d, Y g:i A' }}')"
+                        onmouseenter="showTooltip(this, '{{ client.created_by|default:"System" }}', '{{ client.created_at|date:'M d, Y g:i A' }}', '{{ client.updated_by|default:"-" }}', '{{ client.updated_at|date:'M d, Y g:i A' }}', '{{ client.created_at|date:'U' }}', '{{ client.updated_at|date:'U' }}')"
                         onmouseleave="hideTooltip()">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <input type="checkbox" 
@@ -947,9 +947,11 @@ function clientManager() {
                         // Show success message
                         this.showNotification(`Successfully deleted ${result.deleted_count} client(s)`, 'success');
                         
-                        // Reload the page to refresh the data
+                        // Redirect to first page to avoid 404 when current page becomes empty
                         setTimeout(() => {
-                            window.location.reload();
+                            const url = new URL(window.location);
+                            url.searchParams.delete('page'); // Remove page parameter to go to first page
+                            window.location.href = url.toString();
                         }, 1000);
                     } else {
                         this.showNotification(result.error || 'Failed to delete clients', 'error');
@@ -1230,7 +1232,7 @@ function clientManager() {
 // Global functions for tooltip
 let tooltipTimeout;
 
-function showTooltip(element, createdBy, createdOn, updatedBy, updatedOn) {
+function showTooltip(element, createdBy, createdOn, updatedBy, updatedOn, createdTimestamp, updatedTimestamp) {
     // Clear any existing timeout
     if (tooltipTimeout) {
         clearTimeout(tooltipTimeout);
@@ -1244,10 +1246,28 @@ function showTooltip(element, createdBy, createdOn, updatedBy, updatedOn) {
     const updatedOnSpan = document.getElementById('tooltip-updated-on');
     
     if (tooltip && createdBySpan && createdOnSpan && updatedBySpan && updatedOnSpan) {
-        createdBySpan.textContent = createdBy || 'Unknown';
+        createdBySpan.textContent = createdBy || 'System';
         createdOnSpan.textContent = createdOn;
-        updatedBySpan.textContent = updatedBy || 'Unknown';
-        updatedOnSpan.textContent = updatedOn;
+        
+        // Check if client has been updated (more than 1 second difference)
+        const timeDiff = Math.abs(parseInt(updatedTimestamp) - parseInt(createdTimestamp));
+        const hasBeenUpdated = timeDiff > 1;
+        
+        if (hasBeenUpdated) {
+            updatedBySpan.textContent = updatedBy || 'System';
+            updatedOnSpan.textContent = updatedOn;
+            updatedBySpan.style.color = '';
+            updatedBySpan.style.fontStyle = '';
+            updatedOnSpan.style.color = '';
+            updatedOnSpan.style.fontStyle = '';
+        } else {
+            updatedBySpan.textContent = '-';
+            updatedOnSpan.textContent = '-';
+            updatedBySpan.style.color = '#9CA3AF'; // gray color
+            updatedBySpan.style.fontStyle = 'italic';
+            updatedOnSpan.style.color = '#9CA3AF'; // gray color
+            updatedOnSpan.style.fontStyle = 'italic';
+        }
         
         // Position the tooltip
         const rect = element.getBoundingClientRect();

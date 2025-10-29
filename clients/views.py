@@ -100,6 +100,41 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
             per_page = 10
         return per_page
     
+    def paginate_queryset(self, queryset, page_size):
+        """Override pagination to handle empty pages gracefully"""
+        result = super().paginate_queryset(queryset, page_size)
+        
+        # super().paginate_queryset returns a tuple: (page, paginator, is_paginated, object_list)
+        if result is None:
+            return None
+        
+        # Handle case where result might not be a tuple
+        if not isinstance(result, tuple) or len(result) != 4:
+            return result
+            
+        page, paginator, is_paginated, object_list = result
+        
+        # If the current page is empty and we're not on page 1, redirect to the last valid page
+        if paginator and hasattr(paginator, 'num_pages') and paginator.num_pages > 0:
+            current_page = self.request.GET.get('page', 1)
+            try:
+                current_page = int(current_page)
+                if current_page > paginator.num_pages:
+                    # Redirect to the last valid page
+                    from django.http import HttpResponseRedirect
+                    
+                    # Get current URL parameters
+                    params = self.request.GET.copy()
+                    params['page'] = paginator.num_pages
+                    
+                    # Build redirect URL
+                    redirect_url = f"{self.request.path}?{params.urlencode()}"
+                    return HttpResponseRedirect(redirect_url)
+            except (ValueError, TypeError):
+                pass
+        
+        return result
+    
     def get_queryset(self):
         from django.db.models import Q
         from datetime import date
@@ -1654,6 +1689,21 @@ def upload_clients(request):
                             'description': f'Program created from intake data - {source}'
                         }
                     )
+                    
+                    # Set audit fields for newly created programs
+                    if created:
+                        if request.user.is_authenticated:
+                            first_name = request.user.first_name or ''
+                            last_name = request.user.last_name or ''
+                            user_name = f"{first_name} {last_name}".strip()
+                            if not user_name or user_name == ' ':
+                                user_name = request.user.username or request.user.email or 'System'
+                            program.created_by = user_name
+                            program.updated_by = user_name
+                        else:
+                            program.created_by = 'System'
+                            program.updated_by = 'System'
+                        program.save()
                     
                     if created:
                         logger.info(f"Created new program: {current_program_name} (status: suggested)")

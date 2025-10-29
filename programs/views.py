@@ -560,6 +560,20 @@ class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
     def form_valid(self, form):
         """Handle program creation with audit logging"""
         program = form.save(commit=False)
+        
+        # Set created_by and updated_by fields
+        if self.request.user.is_authenticated:
+            first_name = self.request.user.first_name or ''
+            last_name = self.request.user.last_name or ''
+            user_name = f"{first_name} {last_name}".strip()
+            if not user_name or user_name == ' ':
+                user_name = self.request.user.username or self.request.user.email or 'System'
+            program.created_by = user_name
+            program.updated_by = user_name
+        else:
+            program.created_by = 'System'
+            program.updated_by = 'System'
+        
         program.save()
         
         # Create audit log entry for program creation
@@ -639,6 +653,18 @@ class ProgramUpdateView(ProgramManagerAccessMixin, UpdateView):
         
         # Set the updated_by field before saving
         program = form.save(commit=False)
+        
+        # Set updated_by field
+        if self.request.user.is_authenticated:
+            first_name = self.request.user.first_name or ''
+            last_name = self.request.user.last_name or ''
+            user_name = f"{first_name} {last_name}".strip()
+            if not user_name or user_name == ' ':
+                user_name = self.request.user.username or self.request.user.email or 'System'
+            program.updated_by = user_name
+        else:
+            program.updated_by = 'System'
+        
         program.save()
         
         # Create audit log entry for program update

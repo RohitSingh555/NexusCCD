@@ -225,7 +225,9 @@
                         @click="viewProgram('{{ program_data.program.external_id }}')"
                         :class="{ 'bg-blue-50': selectedPrograms.includes('{{ program_data.program.external_id }}') }"
                         data-program-id="{{ program_data.program.external_id }}"
-                        data-program-name="{{ program_data.program.name }}">
+                        data-program-name="{{ program_data.program.name }}"
+                        onmouseenter="showProgramTooltip(this, '{{ program_data.program.created_by|default:"System" }}', '{{ program_data.program.created_at|date:'M d, Y g:i A' }}', '{{ program_data.program.updated_by|default:"System" }}', '{{ program_data.program.updated_at|date:'M d, Y g:i A' }}', '{{ program_data.program.created_at|date:'U' }}', '{{ program_data.program.updated_at|date:'U' }}')"
+                        onmouseleave="hideProgramTooltip()">
                         <td class="px-6 py-4 whitespace-nowrap">
                             <input type="checkbox" 
                                    :checked="selectedPrograms.includes('{{ program_data.program.external_id }}')"
@@ -332,6 +334,31 @@
             </svg>
             Delete Program
         </button>
+    </div>
+    
+    <!-- Custom Tooltip -->
+    <div id="program-tooltip" class="fixed z-50 bg-neutral-800 text-white text-xs rounded-lg py-3 px-4 shadow-lg opacity-0 transition-opacity duration-200" style="display: none; pointer-events: none;">
+        <div class="flex flex-col space-y-2">
+            <div class="text-sm font-bold text-white border-b border-neutral-600 pb-1">
+                <span id="program-tooltip-heading">Program Details</span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-neutral-300">Created by:</span>
+                <span id="program-tooltip-created-by"></span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-neutral-300">Created on:</span>
+                <span id="program-tooltip-created-on"></span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-neutral-300">Updated by:</span>
+                <span id="program-tooltip-updated-by"></span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <span class="text-neutral-300">Updated on:</span>
+                <span id="program-tooltip-updated-on"></span>
+            </div>
+        </div>
     </div>
     
     <!-- Delete Confirmation Modal -->
@@ -876,6 +903,73 @@ function changeRowsPerPage(perPage) {
     url.searchParams.set('per_page', perPage);
     url.searchParams.delete('page'); // Reset to first page when changing rows per page
     window.location.href = url.toString();
+}
+
+// Global functions for program tooltip
+let programTooltipTimeout;
+
+function showProgramTooltip(element, createdBy, createdOn, updatedBy, updatedOn, createdTimestamp, updatedTimestamp) {
+    // Clear any existing timeout
+    if (programTooltipTimeout) {
+        clearTimeout(programTooltipTimeout);
+        programTooltipTimeout = null;
+    }
+    
+    const tooltip = document.getElementById('program-tooltip');
+    const createdBySpan = document.getElementById('program-tooltip-created-by');
+    const createdOnSpan = document.getElementById('program-tooltip-created-on');
+    const updatedBySpan = document.getElementById('program-tooltip-updated-by');
+    const updatedOnSpan = document.getElementById('program-tooltip-updated-on');
+    
+    if (tooltip && createdBySpan && createdOnSpan && updatedBySpan && updatedOnSpan) {
+        createdBySpan.textContent = createdBy || 'System';
+        createdOnSpan.textContent = createdOn;
+        
+        // Check if program has been updated (more than 1 second difference)
+        const timeDiff = Math.abs(parseInt(updatedTimestamp) - parseInt(createdTimestamp));
+        const hasBeenUpdated = timeDiff > 1;
+        
+        if (hasBeenUpdated) {
+            updatedBySpan.textContent = updatedBy || 'System';
+            updatedOnSpan.textContent = updatedOn;
+            updatedBySpan.style.color = '';
+            updatedBySpan.style.fontStyle = '';
+            updatedOnSpan.style.color = '';
+            updatedOnSpan.style.fontStyle = '';
+        } else {
+            updatedBySpan.textContent = '-';
+            updatedOnSpan.textContent = '-';
+            updatedBySpan.style.color = '#9CA3AF'; // gray color
+            updatedBySpan.style.fontStyle = 'italic';
+            updatedOnSpan.style.color = '#9CA3AF'; // gray color
+            updatedOnSpan.style.fontStyle = 'italic';
+        }
+        
+        // Position the tooltip
+        const rect = element.getBoundingClientRect();
+        const tooltipRect = tooltip.getBoundingClientRect();
+        
+        tooltip.style.left = (rect.left + rect.width / 2 - tooltipRect.width / 2) + 'px';
+        tooltip.style.top = (rect.top - tooltipRect.height - 10) + 'px';
+        
+        tooltip.style.display = 'block';
+        setTimeout(() => {
+            tooltip.style.opacity = '1';
+        }, 10);
+    }
+}
+
+function hideProgramTooltip() {
+    // Add a small delay before hiding to prevent flickering
+    programTooltipTimeout = setTimeout(() => {
+        const tooltip = document.getElementById('program-tooltip');
+        if (tooltip) {
+            tooltip.style.opacity = '0';
+            setTimeout(() => {
+                tooltip.style.display = 'none';
+            }, 200);
+        }
+    }, 100);
 }
 </script>
 {% endblock %}
