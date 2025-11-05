@@ -13,7 +13,7 @@ except ImportError:
 
 
 class Command(BaseCommand):
-    help = 'Delete all clients created today and all their related data'
+    help = 'Delete all clients created after October 27, 2024 and all their related data'
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -28,21 +28,20 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        # Get today's date
-        today = timezone.now().date()
+        # Set cutoff date to October 27, 2024
+        cutoff_date = date(2024, 10, 27)
         
-        # Create date range for today (start of day to end of day)
-        today_start = timezone.make_aware(datetime.combine(today, datetime.min.time()))
-        today_end = timezone.make_aware(datetime.combine(today, datetime.max.time()))
+        # Create datetime for end of October 27 (clients after this will be deleted)
+        cutoff_datetime = timezone.make_aware(datetime.combine(cutoff_date, datetime.max.time()))
         
-        self.stdout.write(f'Looking for clients created today ({today.strftime("%B %d, %Y")})...')
+        self.stdout.write(f'Looking for clients created after October 27, 2024...')
         
-        # Find clients created today
-        clients = Client.objects.filter(created_at__gte=today_start, created_at__lte=today_end)
+        # Find clients created after October 27
+        clients = Client.objects.filter(created_at__gt=cutoff_datetime)
         client_count = clients.count()
         
         if client_count == 0:
-            self.stdout.write(self.style.WARNING(f'No clients found created today ({today.strftime("%B %d, %Y")}).'))
+            self.stdout.write(self.style.WARNING(f'No clients found created after October 27, 2024.'))
             return
         
         # Get related data counts
@@ -65,13 +64,13 @@ class Command(BaseCommand):
         if StaffClientAssignment:
             staff_assignment_count = StaffClientAssignment.objects.filter(client_id__in=client_ids).count()
         
-        # Also check for duplicates where today's clients are involved
+        # Also check for duplicates where clients created after Oct 27 are involved
         duplicate_primary_count = ClientDuplicate.objects.filter(primary_client_id__in=client_ids).count()
         duplicate_duplicate_count = ClientDuplicate.objects.filter(duplicate_client_id__in=client_ids).count()
         
         self.stdout.write(self.style.WARNING(
             f'\nFound the following records to delete:\n'
-            f'  - {client_count} clients created today ({today.strftime("%B %d, %Y")})\n'
+            f'  - {client_count} clients created after October 27, 2024\n'
             f'  - {enrollment_count} client program enrollments\n'
             f'  - {intake_count} intake records\n'
             f'  - {discharge_count} discharge records\n'
@@ -144,7 +143,7 @@ class Command(BaseCommand):
                 
                 # Build summary message
                 summary_lines = [
-                    f'\n✅ Successfully deleted all clients created today ({today.strftime("%B %d, %Y")}) and related data!',
+                    f'\n✅ Successfully deleted all clients created after October 27, 2024 and related data!',
                     '   Total deleted:',
                     f'   - {deleted_clients} clients',
                     f'   - {deleted_enrollments} enrollments',

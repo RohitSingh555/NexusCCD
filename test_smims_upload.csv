@@ -1,0 +1,12 @@
+Client ID,First Name,Last Name,Date of Birth,Gender,Email,Phone,Address,City,Province,Postal Code
+SM001,John,Smith,1985-05-15,Male,john.smith@example.com,416-555-0101,123 Main St,Toronto,ON,M5H 2N2
+SM002,Michael,Brown,1990-03-22,Male,michael.brown@example.com,416-555-0102,456 Oak Ave,Toronto,ON,M5H 3K3
+SM003,Jennifer,Williams,1988-07-10,Female,jennifer.w@example.com,416-555-0103,789 Pine Rd,Mississauga,ON,L5A 1B2
+SM004,Robert,Johnson,1982-11-30,Male,robert.j@example.com,416-555-0104,321 Elm St,Hamilton,ON,L8N 2Y1
+SM005,Emily,Davis,1992-01-08,Female,emily.davis@example.com,416-555-0105,654 Maple Dr,Ottawa,ON,K1A 0B1
+SM006,David,Wilson,1987-09-14,Male,david.wilson@example.com,416-555-0106,987 Cedar Ln,London,ON,N6A 1C2
+SM007,Lisa,Anderson,1989-12-25,Female,lisa.anderson@example.com,416-555-0107,147 Birch St,Kitchener,ON,N2H 2N1
+SM008,Christopher,Taylor,1984-06-18,Male,chris.taylor@example.com,416-555-0108,258 Spruce Ave,Windsor,ON,N9A 2K5
+SM009,Sarah,Martinez,1991-04-03,Female,sarah.martinez@example.com,416-555-0109,369 Willow Way,Barrie,ON,L4M 3J1
+SM010,James,Thompson,1986-08-27,Male,james.thompson@example.com,416-555-0110,741 Ash Blvd,Thunder Bay,ON,P7B 5E3
+

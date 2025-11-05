@@ -716,6 +716,32 @@ class ClientProgramEnrollment(BaseModel):
     
     def __str__(self):
         return f"{self.client} - {self.program.name} ({self.status})"
+    
+    @property
+    def discharge_reason(self):
+        """Extract discharge reason from notes if present"""
+        if not self.notes or not self.end_date:
+            return None
+        
+        # Check if notes contain discharge information
+        if "Discharge Date:" in self.notes and "Reason:" in self.notes:
+            try:
+                # Format: "Discharge Date: YYYY-MM-DD | Reason: {reason}"
+                reason_part = self.notes.split("Reason:")[-1]
+                # Get everything after "Reason:" and before any next "|" separator
+                if "|" in reason_part:
+                    reason = reason_part.split("|")[0].strip()
+                else:
+                    reason = reason_part.strip()
+                return reason if reason else None
+            except (IndexError, AttributeError):
+                return None
+        
+        # If notes contain "discharge" but not in the standard format, return full notes
+        if "discharge" in self.notes.lower():
+            return self.notes
+        
+        return None
 
 
 class Intake(BaseModel):

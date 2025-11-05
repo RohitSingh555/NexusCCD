@@ -413,7 +413,7 @@ class ClientForm(forms.ModelForm):
             # Citizenship status dropdown
             'citizenship_status': forms.Select(attrs={'class': 'form-control'}, choices=CITIZENSHIP_STATUS_CHOICES),
             
-            # Ethnicity dropdown
+            # Ethnicity dropdown - use CharField widget but will convert to list in clean_ethnicity
             'ethnicity': forms.Select(attrs={'class': 'form-control'}, choices=ETHNICITY_CHOICES),
             
             # Hidden fields for JSON data
@@ -450,9 +450,16 @@ class ClientForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         
+        # Override ethnicity field to use CharField instead of JSONField for form handling
+        # This allows the Select widget to work properly, then clean_ethnicity converts to list
+        from django import forms as django_forms
+        self.fields['ethnicity'] = django_forms.CharField(
+            widget=django_forms.Select(attrs={'class': 'form-control'}, choices=ETHNICITY_CHOICES),
+            required=False
+        )
+        
         # Make JSON fields optional
         self.fields['languages_spoken'].required = False
-        self.fields['ethnicity'].required = False
         self.fields['contact_information'].required = False
         self.fields['addresses'].required = False
         self.fields['support_workers'].required = False
@@ -518,7 +525,9 @@ class ClientForm(forms.ModelForm):
             # Initialize ethnicity field for Select widget (convert list to first value)
             if self.ethnicity_data and isinstance(self.ethnicity_data, list) and len(self.ethnicity_data) > 0:
                 # Use the first ethnicity value for the Select widget
-                self.fields['ethnicity'].initial = self.ethnicity_data[0]
+                # Since ethnicity is now a CharField, we can set initial directly
+                if 'ethnicity' in self.fields:
+                    self.fields['ethnicity'].initial = self.ethnicity_data[0]
         else:
             self.addresses_data = []
             self.contact_data = {}

@@ -1,0 +1,12 @@
+Client ID,First Name,Last Name,Date of Birth,Gender,Email,Phone,Address,City,Province,Postal Code
+EM001,Jon,Smith,1985-05-15,Male,jon.smith@example.com,416-555-0201,123 Main Street,Toronto,ON,M5H 2N2
+EM002,Mike,Brown,1990-03-22,Male,mike.brown@example.com,416-555-0202,456 Oak Avenue,Toronto,ON,M5H 3K3
+EM003,Jennifer,Williams,1988-07-10,Female,jen.williams@example.com,416-555-0203,789 Pine Road,Mississauga,ON,L5A 1B2
+EM004,Robert,Johnson,1982-11-30,Male,rob.johnson@example.com,416-555-0204,321 Elm Street,Hamilton,ON,L8N 2Y1
+EM005,Patricia,Moore,1993-05-20,Female,patricia.moore@example.com,416-555-0205,852 Cherry Ave,Waterloo,ON,N2L 3T1
+EM006,Richard,Jackson,1983-07-12,Male,richard.jackson@example.com,416-555-0206,963 Fir St,Kingston,ON,K7L 4V2
+EM007,Amanda,White,1994-02-28,Female,amanda.white@example.com,416-555-0207,159 Pineapple Dr,Guelph,ON,N1H 6K9
+EM008,Daniel,Harris,1985-10-15,Male,daniel.harris@example.com,416-555-0208,753 Apple Way,Peterborough,ON,K9J 7M3
+EM009,Maria,Garcia,1990-06-08,Female,maria.garcia@example.com,416-555-0209,357 Orange Blvd,Sudbury,ON,P3A 4N8
+EM010,Matthew,Clark,1988-11-22,Male,matthew.clark@example.com,416-555-0210,951 Banana Ln,Burlington,ON,L7N 3W5
+

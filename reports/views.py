@@ -749,6 +749,59 @@ class ClientDemographicsView(TemplateView):
         # Sort gender counts by count (descending) for better display
         gender_counts = dict(sorted(gender_counts.items(), key=lambda x: x[1], reverse=True))
         
+        # Calculate demographic breakdowns
+        healthcare_coverage_counts = {}
+        citizenship_status_counts = {}
+        country_of_birth_counts = {}
+        sexual_orientation_counts = {}
+        indigenous_status_counts = {}
+        ethnicity_counts = {}
+        
+        for client in clients:
+            # Healthcare Coverage
+            if hasattr(client, 'healthcare_coverage') and client.healthcare_coverage:
+                hc = client.healthcare_coverage
+            elif client.health_card_number:
+                hc = 'Yes (Has Health Card)'
+            else:
+                hc = 'No/Unknown'
+            healthcare_coverage_counts[hc] = healthcare_coverage_counts.get(hc, 0) + 1
+            
+            # Citizenship Status
+            cs = client.citizenship_status or 'Unknown'
+            citizenship_status_counts[cs] = citizenship_status_counts.get(cs, 0) + 1
+            
+            # Country of Birth
+            cob = client.country_of_birth or 'Unknown'
+            country_of_birth_counts[cob] = country_of_birth_counts.get(cob, 0) + 1
+            
+            # Sexual Orientation
+            so = client.sexual_orientation or 'Unknown'
+            sexual_orientation_counts[so] = sexual_orientation_counts.get(so, 0) + 1
+            
+            # Indigenous Status
+            ind = client.indigenous_status or 'Unknown'
+            indigenous_status_counts[ind] = indigenous_status_counts.get(ind, 0) + 1
+            
+            # Ethnicity (can be a list)
+            if client.ethnicity:
+                if isinstance(client.ethnicity, list):
+                    for eth in client.ethnicity:
+                        if eth:
+                            ethnicity_counts[eth] = ethnicity_counts.get(eth, 0) + 1
+                else:
+                    ethnicity_counts[str(client.ethnicity)] = ethnicity_counts.get(str(client.ethnicity), 0) + 1
+            else:
+                ethnicity_counts['Unknown'] = ethnicity_counts.get('Unknown', 0) + 1
+        
+        # Sort all demographic counts by count (descending)
+        healthcare_coverage_counts = dict(sorted(healthcare_coverage_counts.items(), key=lambda x: x[1], reverse=True))
+        citizenship_status_counts = dict(sorted(citizenship_status_counts.items(), key=lambda x: x[1], reverse=True))
+        country_of_birth_counts = dict(sorted(country_of_birth_counts.items(), key=lambda x: x[1], reverse=True))
+        sexual_orientation_counts = dict(sorted(sexual_orientation_counts.items(), key=lambda x: x[1], reverse=True))
+        indigenous_status_counts = dict(sorted(indigenous_status_counts.items(), key=lambda x: x[1], reverse=True))
+        ethnicity_counts = dict(sorted(ethnicity_counts.items(), key=lambda x: x[1], reverse=True))
+        
         # Get all programs and departments for filter dropdowns
         if (is_program_manager or is_leader) and assigned_programs:
             available_programs = assigned_programs.order_by('name')
@@ -763,6 +816,12 @@ class ClientDemographicsView(TemplateView):
             'total_clients': clients.count(),
             'age_groups': age_groups,
             'gender_counts': gender_counts,
+            'healthcare_coverage_counts': healthcare_coverage_counts,
+            'citizenship_status_counts': citizenship_status_counts,
+            'country_of_birth_counts': country_of_birth_counts,
+            'sexual_orientation_counts': sexual_orientation_counts,
+            'indigenous_status_counts': indigenous_status_counts,
+            'ethnicity_counts': ethnicity_counts,
             'is_program_manager': is_program_manager,
             'start_date': start_date,
             'end_date': end_date,

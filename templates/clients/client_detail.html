@@ -20,10 +20,38 @@
                         </span>
                     {% endif %}
                 </div>
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-900">
-                        {{ client.first_name }} {{ client.last_name }}
-                    </h1>
+                <div class="flex-1">
+                    <div class="flex items-center gap-3 mb-2">
+                        <h1 class="text-2xl font-bold text-gray-900">
+                            {{ client.first_name }} {{ client.last_name }}
+                        </h1>
+                        <!-- Client Status Badge -->
+                        {% if client.discharge_date %}
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                                Discharged
+                            </span>
+                        {% else %}
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800 border border-green-200">
+                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                Active
+                            </span>
+                        {% endif %}
+                    </div>
+                    {% if client.discharge_date %}
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-sm font-medium text-red-700">Discharge Date:</span>
+                        <span class="text-sm text-red-900 font-semibold">{{ client.discharge_date|date:"M d, Y" }}</span>
+                        {% if client.reason_discharge %}
+                        <span class="text-sm text-gray-500">•</span>
+                        <span class="text-sm text-gray-600">{{ client.reason_discharge }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
                     {% if client.preferred_name %}
                     <p class="text-sm text-gray-600">Preferred Name: {{ client.preferred_name }}</p>
                     {% endif %}
@@ -74,7 +102,7 @@
                 <div class="space-y-3">
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Client ID:</span>
-                        <span class="text-sm text-neutral-900 font-body break-all font-mono">{{ client.client_id|floatformat:0|default:"—" }}</span>
+                        <span class="text-sm text-neutral-900 font-body break-all font-mono">{{ client.client_id|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">CCD UUID:</span>
@@ -108,6 +136,18 @@
                         <span class="text-sm font-medium text-neutral-500">Age:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.calculated_age|default:"—" }} years old</span>
                     </div>
+                    {% if client.discharge_date %}
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Discharge Date:</span>
+                        <span class="text-sm text-red-600 font-body font-semibold">{{ client.discharge_date|date:"M d, Y" }}</span>
+                    </div>
+                    {% if client.reason_discharge %}
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Discharge Reason:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.reason_discharge }}</span>
+                    </div>
+                    {% endif %}
+                    {% endif %}
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Gender:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.gender|default:"—" }}</span>
@@ -150,6 +190,24 @@
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Indigenous Status:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.indigenous_status|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Ethnicity:</span>
+                        <span class="text-sm text-neutral-900 font-body">
+                            {% if client.ethnicity %}
+                                {% if client.ethnicity|length > 0 %}
+                                    {% if client.ethnicity|length == 1 %}
+                                        {{ client.ethnicity|first }}
+                                    {% else %}
+                                        {{ client.ethnicity|join:", " }}
+                                    {% endif %}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </span>
                     </div>
                 </div>
             </div>
@@ -928,9 +986,9 @@
                     {% if client.clientprogramenrollment_set.all %}
                         <div class="space-y-3">
                             {% for enrollment in client.clientprogramenrollment_set.all %}
-                                <div class="border border-neutral-200 rounded-lg p-3 bg-neutral-50">
+                                <div class="border {% if enrollment.end_date %}border-red-200{% else %}border-neutral-200{% endif %} rounded-lg p-3 {% if enrollment.end_date %}bg-red-50{% else %}bg-neutral-50{% endif %}">
                                     <div class="flex items-center justify-between mb-2">
-                                        <div class="flex items-center space-x-2">
+                                        <div class="flex items-center space-x-2 flex-wrap">
                                             <h4 class="text-sm font-bold text-neutral-800">{{ enrollment.program.name }}</h4>
                                             <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium
                                                 {% if enrollment.status == 'active' %}bg-green-100 text-green-800
@@ -941,6 +999,14 @@
                                                 {% else %}bg-gray-100 text-gray-800{% endif %}">
                                                 {{ enrollment.get_status_display }}
                                             </span>
+                                            {% if enrollment.end_date %}
+                                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
+                                                <svg class="w-3 h-3 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                </svg>
+                                                Discharged
+                                            </span>
+                                            {% endif %}
                                         </div>
                                         <button onclick="viewProgram('{{ enrollment.program.external_id }}', '{{ enrollment.program.name }}')" class="text-xs text-brand-sky hover:text-brand-darkBlue font-medium cursor-pointer">
                                             View
@@ -949,9 +1015,34 @@
                                     
                                     <div class="text-sm text-neutral-600 space-y-1">
                                         <div><span class="font-medium">Start:</span> {{ enrollment.start_date|date:"M d, Y" }}</div>
-                                        <div><span class="font-medium">End:</span> {% if enrollment.end_date %}{{ enrollment.end_date|date:"M d, Y" }}{% else %}Ongoing{% endif %}</div>
+                                        <div>
+                                            <span class="font-medium">End:</span> 
+                                            {% if enrollment.end_date %}
+                                                <span class="text-red-600 font-semibold">{{ enrollment.end_date|date:"M d, Y" }}</span>
+                                            {% else %}
+                                                <span class="text-green-600">Ongoing</span>
+                                            {% endif %}
+                                        </div>
                                         <div><span class="font-medium">Dept:</span> {{ enrollment.program.department.name }}</div>
-                                        {% if enrollment.notes %}
+                                        {% if enrollment.end_date %}
+                                        <div class="pt-1 border-t border-red-200 mt-1 space-y-1">
+                                            <div class="flex items-start gap-2">
+                                                <span class="font-medium text-red-700 min-w-[120px]">Discharge Date:</span>
+                                                <span class="text-red-900 font-semibold">{{ enrollment.end_date|date:"M d, Y" }}</span>
+                                            </div>
+                                            {% if enrollment.discharge_reason %}
+                                            <div class="flex items-start gap-2">
+                                                <span class="font-medium text-red-700 min-w-[120px]">Discharge Reason:</span>
+                                                <span class="text-neutral-900">{{ enrollment.discharge_reason }}</span>
+                                            </div>
+                                            {% endif %}
+                                            {% if enrollment.notes and not enrollment.discharge_reason %}
+                                            <div class="mt-1">
+                                                <span class="font-medium">Notes:</span> {{ enrollment.notes|truncatechars:100 }}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        {% elif enrollment.notes %}
                                         <div class="pt-1 border-t border-neutral-200 mt-1">
                                             <span class="font-medium">Notes:</span> {{ enrollment.notes|truncatechars:50 }}
                                         </div>
@@ -973,6 +1064,240 @@
                 </div>
             </div>
 
+        </div>
+
+        <!-- Enrollment History - Material UI Inspired -->
+        <div class="bg-white rounded-xl shadow-lg border border-neutral-200 overflow-hidden mb-6">
+            <div class="bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-white bg-opacity-20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white font-header">Enrollment History</h2>
+                            <p class="text-sm text-indigo-100">Complete program enrollment timeline</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-2xl font-bold text-white">{% if enrollments %}{{ enrollments.count }}{% else %}0{% endif %}</div>
+                        <div class="text-xs text-indigo-100">Total Enrollments</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-6">
+                {% if enrollments %}
+                    <div class="relative">
+                        <!-- Timeline Line -->
+                        <div class="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-indigo-200 via-purple-200 to-pink-200"></div>
+                        
+                        <div class="space-y-6">
+                            {% for enrollment in enrollments %}
+                                <div class="relative flex items-start group hover:scale-[1.02] transition-all duration-300">
+                                    <!-- Timeline Dot -->
+                                    <div class="relative z-10 flex-shrink-0 w-16 h-16 flex items-center justify-center">
+                                        <div class="absolute w-4 h-4 rounded-full border-4 border-white shadow-lg
+                                            {% if enrollment.end_date %}
+                                                bg-red-500
+                                            {% elif enrollment.status == 'active' %}
+                                                bg-green-500 animate-pulse
+                                            {% elif enrollment.status == 'pending' %}
+                                                bg-yellow-500
+                                            {% elif enrollment.status == 'completed' %}
+                                                bg-blue-500
+                                            {% else %}
+                                                bg-gray-400
+                                            {% endif %}"></div>
+                                    </div>
+                                    
+                                    <!-- Card -->
+                                    <div class="flex-1 ml-4 bg-white rounded-xl shadow-md border border-neutral-200 overflow-hidden 
+                                        hover:shadow-xl transition-all duration-300
+                                        {% if enrollment.end_date %}border-l-4 border-l-red-500{% elif enrollment.status == 'active' %}border-l-4 border-l-green-500{% endif %}">
+                                        <div class="p-5">
+                                            <!-- Header -->
+                                            <div class="flex items-start justify-between mb-4">
+                                                <div class="flex-1">
+                                                    <div class="flex items-center space-x-3 mb-2">
+                                                        <h3 class="text-lg font-bold text-neutral-900 font-header">{{ enrollment.program.name }}</h3>
+                                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold shadow-sm
+                                                            {% if enrollment.status == 'active' %}bg-green-50 text-green-700 border border-green-200
+                                                            {% elif enrollment.status == 'pending' %}bg-yellow-50 text-yellow-700 border border-yellow-200
+                                                            {% elif enrollment.status == 'completed' %}bg-blue-50 text-blue-700 border border-blue-200
+                                                            {% elif enrollment.status == 'cancelled' %}bg-red-50 text-red-700 border border-red-200
+                                                            {% elif enrollment.status == 'suspended' %}bg-orange-50 text-orange-700 border border-orange-200
+                                                            {% else %}bg-gray-50 text-gray-700 border border-gray-200{% endif %}">
+                                                            {{ enrollment.get_status_display }}
+                                                        </span>
+                                                        {% if enrollment.end_date %}
+                                                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200 shadow-sm">
+                                                            <svg class="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                            </svg>
+                                                            Discharged
+                                                        </span>
+                                                        {% endif %}
+                                                    </div>
+                                                    <p class="text-sm text-neutral-600">{{ enrollment.program.department.name }}</p>
+                                                </div>
+                                                {% if enrollment.program.external_id %}
+                                                <button onclick="viewProgram('{{ enrollment.program.external_id }}', '{{ enrollment.program.name }}')" 
+                                                    class="flex-shrink-0 ml-4 px-4 py-2 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-colors duration-200 shadow-sm">
+                                                    View Program
+                                                </button>
+                                                {% endif %}
+                                            </div>
+                                            
+                                            <!-- Details Grid -->
+                                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                                <!-- Start Date -->
+                                                <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-100">
+                                                    <div class="flex items-center space-x-2 mb-1">
+                                                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                        </svg>
+                                                        <span class="text-xs font-semibold text-blue-700 uppercase tracking-wide">Start Date</span>
+                                                    </div>
+                                                    <p class="text-sm font-bold text-neutral-900">{{ enrollment.start_date|date:"M d, Y" }}</p>
+                                                </div>
+                                                
+                                                <!-- End Date -->
+                                                <div class="bg-gradient-to-br {% if enrollment.end_date %}from-red-50 to-pink-50 border-red-100{% else %}from-green-50 to-emerald-50 border-green-100{% endif %} rounded-lg p-3 border">
+                                                    <div class="flex items-center space-x-2 mb-1">
+                                                        <svg class="w-4 h-4 {% if enrollment.end_date %}text-red-600{% else %}text-green-600{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                                        </svg>
+                                                        <span class="text-xs font-semibold {% if enrollment.end_date %}text-red-700{% else %}text-green-700{% endif %} uppercase tracking-wide">End Date</span>
+                                                    </div>
+                                                    <p class="text-sm font-bold {% if enrollment.end_date %}text-red-900{% else %}text-green-900{% endif %}">
+                                                        {% if enrollment.end_date %}
+                                                            {{ enrollment.end_date|date:"M d, Y" }}
+                                                        {% else %}
+                                                            <span class="text-green-600">Ongoing</span>
+                                                        {% endif %}
+                                                    </p>
+                                                </div>
+                                                
+                                                <!-- Duration -->
+                                                <div class="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-3 border border-purple-100">
+                                                    <div class="flex items-center space-x-2 mb-1">
+                                                        <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                        </svg>
+                                                        <span class="text-xs font-semibold text-purple-700 uppercase tracking-wide">Duration</span>
+                                                    </div>
+                                                    <p class="text-sm font-bold text-neutral-900">
+                                                        {% if enrollment.days_elapsed %}
+                                                            {% if enrollment.days_elapsed >= 365 %}
+                                                                {% widthratio enrollment.days_elapsed 365 1 %} year{% if enrollment.days_elapsed >= 730 %}s{% endif %}
+                                                            {% else %}
+                                                                {{ enrollment.days_elapsed }} days
+                                                            {% endif %}
+                                                        {% elif enrollment.end_date %}
+                                                            Completed
+                                                        {% else %}
+                                                            Ongoing
+                                                        {% endif %}
+                                                    </p>
+                                                </div>
+                                                
+                                                <!-- Sub Program -->
+                                                {% if enrollment.sub_program %}
+                                                <div class="bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg p-3 border border-amber-100">
+                                                    <div class="flex items-center space-x-2 mb-1">
+                                                        <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                                                        </svg>
+                                                        <span class="text-xs font-semibold text-amber-700 uppercase tracking-wide">Sub Program</span>
+                                                    </div>
+                                                    <p class="text-sm font-bold text-neutral-900">{{ enrollment.sub_program.name }}</p>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            
+                                            <!-- Discharge Information (if discharged) -->
+                                            {% if enrollment.end_date %}
+                                            <div class="mt-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg">
+                                                <div class="flex items-center space-x-2 mb-2">
+                                                    <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                                    </svg>
+                                                    <h4 class="font-semibold text-red-900">Discharge Information</h4>
+                                                </div>
+                                                <div class="space-y-2">
+                                                    <div class="flex items-start space-x-2">
+                                                        <span class="text-sm font-medium text-red-700 min-w-[140px]">Discharge Date:</span>
+                                                        <span class="text-sm font-bold text-red-900">{{ enrollment.end_date|date:"M d, Y" }}</span>
+                                                    </div>
+                                                    {% if enrollment.discharge_reason %}
+                                                    <div class="flex items-start space-x-2">
+                                                        <span class="text-sm font-medium text-red-700 min-w-[140px]">Reason:</span>
+                                                        <span class="text-sm text-neutral-900">{{ enrollment.discharge_reason }}</span>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                            
+                                            <!-- Notes -->
+                                            {% if enrollment.notes and not enrollment.discharge_reason %}
+                                            <div class="mt-4 p-4 bg-neutral-50 border border-neutral-200 rounded-lg">
+                                                <div class="flex items-start space-x-2">
+                                                    <svg class="w-5 h-5 text-neutral-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                    </svg>
+                                                    <div>
+                                                        <span class="text-xs font-semibold text-neutral-600 uppercase tracking-wide block mb-1">Notes</span>
+                                                        <p class="text-sm text-neutral-700">{{ enrollment.notes|truncatechars:200 }}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endif %}
+                                            
+                                            <!-- Footer -->
+                                            <div class="mt-4 pt-4 border-t border-neutral-200 flex items-center justify-between text-xs text-neutral-500">
+                                                <div class="flex items-center space-x-4">
+                                                    {% if enrollment.created_by %}
+                                                    <span>Created by: <span class="font-medium text-neutral-700">{{ enrollment.created_by }}</span></span>
+                                                    {% endif %}
+                                                    {% if enrollment.receiving_services_date %}
+                                                    <span class="flex items-center space-x-1">
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                                        </svg>
+                                                        <span>Receiving services since {{ enrollment.receiving_services_date|date:"M d, Y" }}</span>
+                                                    </span>
+                                                    {% endif %}
+                                                </div>
+                                                {% if enrollment.updated_by %}
+                                                <span>Updated by: <span class="font-medium text-neutral-700">{{ enrollment.updated_by }}</span></span>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="text-center py-12">
+                        <div class="w-20 h-20 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-10 h-10 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-semibold text-neutral-700 mb-2">No Enrollment History</h3>
+                        <p class="text-sm text-neutral-500">This client has no program enrollments yet.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Program Enrollments & Service Restrictions -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- Service Restrictions -->
             <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 h-96 flex flex-col">
                 <div class="flex items-center mb-4">

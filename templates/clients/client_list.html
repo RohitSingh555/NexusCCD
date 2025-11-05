@@ -81,7 +81,7 @@
                 </div>
                 
                 <!-- First Row: Main Filters -->
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
                     <!-- Client Search -->
                     <div class="lg:col-span-2">
                         <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Client Search</label>
@@ -107,6 +107,16 @@
                             {% for program in programs %}
                             <option value="{{ program.id }}" {% if current_program == program.id|stringformat:"s" %}selected{% endif %}>{{ program.name }}</option>
                             {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <!-- Discharge Status Filter -->
+                    <div>
+                        <label class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Status</label>
+                        <select name="discharge_status" class="w-full px-3 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                            <option value="">All Clients</option>
+                            <option value="active" {% if current_discharge_status == 'active' %}selected{% endif %}>Active Clients</option>
+                            <option value="discharged" {% if current_discharge_status == 'discharged' %}selected{% endif %}>Discharged Clients</option>
                         </select>
                     </div>
                     
@@ -207,7 +217,7 @@
             <!-- Third Row: Action Buttons -->
             <div class="flex items-center mt-4">
                 <div class="flex space-x-3">
-                    {% if search_query or current_program or age_range or gender_filter or current_manager or start_date or end_date %}
+                    {% if search_query or current_program or age_range or gender_filter or current_manager or start_date or end_date or current_discharge_status %}
                     <a href="{% url 'clients:list' %}" class="inline-flex items-center px-4 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -306,11 +316,28 @@
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <div class="text-sm font-bold text-neutral-900 font-body">
-                                {{ client.first_name }} {{ client.last_name }}
+                            <div class="flex items-center gap-2">
+                                <div class="text-sm font-bold text-neutral-900 font-body">
+                                    {{ client.first_name }} {{ client.last_name }}
+                                </div>
+                                {% if client.discharge_date %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200" title="Discharged on {{ client.discharge_date|date:'M d, Y' }}">
+                                        <svg class="w-3 h-3 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                        </svg>
+                                        Discharged
+                                    </span>
+                                {% else %}
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-800 border border-green-200" title="Active">
+                                        <svg class="w-3 h-3 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        Active
+                                    </span>
+                                {% endif %}
                             </div>
                             {% if client.preferred_name %}
-                            <div class="text-sm text-neutral-500 font-body">{{ client.preferred_name }}</div>
+                            <div class="text-sm text-neutral-500 font-body mt-1">{{ client.preferred_name }}</div>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
