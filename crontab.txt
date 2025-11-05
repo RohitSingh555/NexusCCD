@@ -1,0 +1,26 @@
+# NexusCCD Scheduled Tasks (Cron Jobs)
+# To install this crontab, run: crontab /home/Admin0/NexusCCD/crontab.txt
+# To view current crontab: crontab -l
+# To edit crontab: crontab -e
+
+# Change to project directory for all cron jobs
+PROJECT_DIR=/home/Admin0/NexusCCD
+cd $PROJECT_DIR
+
+# 1. Database Backup - Daily at 1:00 AM
+# Creates a compressed backup of the PostgreSQL database
+0 1 * * * $PROJECT_DIR/scripts/backup_database.sh >> $PROJECT_DIR/logs/database_backup.log 2>&1
+
+# 2. Audit Log Cleanup - Daily at 2:00 AM
+# Deletes delete audit log entries older than 7 days
+# Deletes other audit logs older than 15 days
+0 2 * * * $PROJECT_DIR/scripts/cleanup_old_audit_logs.sh >> $PROJECT_DIR/logs/audit_cleanup.log 2>&1
+
+# 3. Daily Client Report - Daily at 11:00 PM
+# Sends daily client reports via email
+0 23 * * * $PROJECT_DIR/scripts/send_daily_report.sh >> $PROJECT_DIR/logs/daily_report.log 2>&1
+
+# 4. Session Cleanup - Weekly on Sunday at 3:00 AM
+# Removes expired Django sessions
+0 3 * * 0 cd $PROJECT_DIR && docker-compose exec -T web python manage.py clearsessions >> $PROJECT_DIR/logs/session_cleanup.log 2>&1
+

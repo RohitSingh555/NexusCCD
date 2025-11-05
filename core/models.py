@@ -422,7 +422,7 @@ class Client(BaseModel):
     alias = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Last Name at Birth")
     dob = models.DateField(db_index=True, null=True, blank=True)
     age = models.IntegerField(null=True, blank=True, help_text="Calculated from DOB")
-    gender = models.CharField(max_length=50, db_index=True)
+    gender = models.CharField(max_length=50, null=True, blank=True, db_index=True)
     gender_identity = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     pronoun = models.CharField(max_length=50, null=True, blank=True, db_index=True)
     marital_status = models.CharField(max_length=50, null=True, blank=True, db_index=True)
@@ -706,6 +706,7 @@ class ClientProgramEnrollment(BaseModel):
     
     class Meta:
         db_table = 'client_program_enrollments'
+        ordering = ['-start_date', 'program__name']
         constraints = [
             models.CheckConstraint(
                 check=models.Q(end_date__gte=models.F('start_date')),
@@ -1063,6 +1064,44 @@ class ClientDuplicate(BaseModel):
         
         return list(clients)
     
+    def get_duplicate_reason(self):
+        """Get a human-readable reason why this client was flagged as a duplicate"""
+        match_type = self.match_type.lower()
+        
+        # Map match types to human-readable reasons
+        reason_map = {
+            'exact_email': 'Matching Email Address',
+            'exact_phone': 'Matching Phone Number',
+            'email_phone': 'Matching Email Address and Phone Number',
+            'name_dob_match': 'Matching Name and Date of Birth',
+            'similarity': 'Similar Name',
+            'nickname': 'Similar Name (Possible Nickname)',
+        }
+        
+        # Handle similarity-based match types with scores
+        if match_type.startswith('name_similarity_'):
+            similarity = match_type.replace('name_similarity_', '')
+            try:
+                similarity_float = float(similarity)
+                return f'Similar Name ({int(similarity_float * 100)}% match)'
+            except (ValueError, TypeError):
+                return 'Similar Name'
+        
+        if match_type.startswith('dob_name_similarity_'):
+            similarity = match_type.replace('dob_name_similarity_', '')
+            try:
+                similarity_float = float(similarity)
+                return f'Matching Date of Birth and Similar Name ({int(similarity_float * 100)}% match)'
+            except (ValueError, TypeError):
+                return 'Matching Date of Birth and Similar Name'
+        
+        # Check if we have a direct mapping
+        if match_type in reason_map:
+            return reason_map[match_type]
+        
+        # Fallback: format the match_type in a readable way
+        return match_type.replace('_', ' ').title()
+    
     def mark_as_duplicate(self, reviewed_by, notes=None):
         """Mark this as a confirmed duplicate"""
         self.status = 'confirmed_duplicate'
@@ -1256,3 +1295,68 @@ class EmailLog(BaseModel):
     
     def __str__(self):
         return f"{self.email_type} to {self.recipient_email} on {self.sent_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+class ClientUploadLog(BaseModel):
+    """Track client upload operations for performance monitoring and debugging"""
+    
+    STATUS_CHOICES = [
+        ('success', 'Success'),
+        ('failed', 'Failed'),
+        ('partial', 'Partial Success'),
+    ]
+    
+    # File information
+    file_name = models.CharField(max_length=255, db_index=True)
+    file_size = models.BigIntegerField(help_text="File size in bytes")
+    file_type = models.CharField(max_length=10, db_index=True, help_text="csv, xlsx, or xls")
+    source = models.CharField(max_length=50, db_index=True, help_text="SMIMS or EMHware")
+    
+    # Upload metrics
+    total_rows = models.IntegerField(default=0, help_text="Total number of rows in the uploaded file")
+    records_created = models.IntegerField(default=0)
+    records_updated = models.IntegerField(default=0)
+    records_skipped = models.IntegerField(default=0)
+    duplicates_flagged = models.IntegerField(default=0)
+    errors_count = models.IntegerField(default=0)
+    
+    # Timing information
+    started_at = models.DateTimeField(db_index=True, help_text="When the upload process started")
+    completed_at = models.DateTimeField(null=True, blank=True, db_index=True, help_text="When the upload process completed")
+    duration_seconds = models.FloatField(null=True, blank=True, help_text="Upload duration in seconds")
+    
+    # Status and errors
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='success', db_index=True)
+    error_message = models.TextField(null=True, blank=True, help_text="Error message if upload failed")
+    error_details = models.JSONField(default=list, help_text="List of error messages from processing")
+    
+    # User information
+    uploaded_by = models.ForeignKey('core.Staff', on_delete=models.SET_NULL, null=True, blank=True, db_index=True, related_name='client_uploads')
+    
+    # Additional metadata
+    upload_details = models.JSONField(default=dict, help_text="Additional upload metadata")
+    
+    class Meta:
+        db_table = 'client_upload_logs'
+        ordering = ['-started_at']
+        indexes = [
+            models.Index(fields=['status', 'started_at']),
+            models.Index(fields=['uploaded_by', 'started_at']),
+            models.Index(fields=['source', 'started_at']),
+        ]
+    
+    def __str__(self):
+        return f"Upload: {self.file_name} - {self.status} ({self.total_rows} rows)"
+    
+    def calculate_duration(self):
+        """Calculate duration if both start and end times are available"""
+        if self.started_at and self.completed_at:
+            delta = self.completed_at - self.started_at
+            return delta.total_seconds()
+        return None
+    
+    def save(self, *args, **kwargs):
+        # Auto-calculate duration on save
+        if self.completed_at:
+            self.duration_seconds = self.calculate_duration()
+        super().save(*args, **kwargs)

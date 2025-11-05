@@ -25,6 +25,7 @@ urlpatterns = [
     path('get-email-recipients/', views.get_email_recipients, name='get_email_recipients'),
     path('save-email-subscriptions/', views.save_email_subscriptions, name='save_email_subscriptions'),
     path('remove-email-recipient/<int:recipient_id>/', views.remove_email_recipient, name='remove_email_recipient'),
+    path('upload-logs/', views.get_upload_logs, name='upload_logs'),
     path('<uuid:external_id>/update-profile-picture/', views.update_profile_picture, name='update_profile_picture'),
     path('<uuid:external_id>/remove-profile-picture/', views.remove_profile_picture, name='remove_profile_picture'),
 ]

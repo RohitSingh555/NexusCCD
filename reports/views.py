@@ -3,6 +3,7 @@ from django.views.generic import ListView, TemplateView
 from django.http import HttpResponse
 from django.utils import timezone
 from django.db import models
+from django.db.models import Q, Count, Sum
 from datetime import datetime, date
 import csv
 from core.models import Client, Program, ClientProgramEnrollment, Staff, Department
@@ -105,212 +106,193 @@ class ReportListView(ListView):
         # Get program manager and staff-only filtering
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
+        # Convert date filters to datetime for better performance (avoid __date field lookup)
+        from datetime import datetime, time as dt_time
+        start_datetime = None
+        end_datetime = None
+        if parsed_start_date:
+            start_datetime = timezone.make_aware(datetime.combine(parsed_start_date, dt_time.min))
+        if parsed_end_date:
+            end_datetime = timezone.make_aware(datetime.combine(parsed_end_date, dt_time.max))
+        
+        today = timezone.now().date()
+        
         # Filter data based on user role
         if is_analyst:
             # Analysts see all data across all clients and programs
-            # Apply date filtering if provided
+            # Optimized: Use datetime comparison instead of __date lookup
             client_queryset = Client.objects.all()
-            if parsed_start_date:
-                client_queryset = client_queryset.filter(created_at__date__gte=parsed_start_date)
-            if parsed_end_date:
-                client_queryset = client_queryset.filter(created_at__date__lte=parsed_end_date)
+            if start_datetime:
+                client_queryset = client_queryset.filter(created_at__gte=start_datetime)
+            if end_datetime:
+                client_queryset = client_queryset.filter(created_at__lte=end_datetime)
             
             context['total_clients'] = client_queryset.count()
             
-            # Count programs that have enrollments within the date range
-            program_queryset = Program.objects.filter(
-                clientprogramenrollment__isnull=False
-            ).distinct()
+            # Optimized: Use values() with distinct() for program count
+            program_filter = Q(clientprogramenrollment__isnull=False)
+            if parsed_start_date:
+                program_filter &= Q(clientprogramenrollment__start_date__gte=parsed_start_date)
+            if parsed_end_date:
+                program_filter &= Q(clientprogramenrollment__start_date__lte=parsed_end_date)
+            
+            context['active_programs'] = Program.objects.filter(program_filter).distinct().count()
+            
+            # Get total capacity in a single query
+            total_capacity = Program.objects.aggregate(
+                total=Sum('capacity_current')
+            )['total'] or 0
+            
+            # Count active enrollments in a single optimized query
+            enrollment_filter = Q(
+                start_date__lte=today
+            ) & (
+                Q(end_date__isnull=True) | Q(end_date__gt=today)
+            )
             
             if parsed_start_date:
-                program_queryset = program_queryset.filter(
-                    clientprogramenrollment__start_date__gte=parsed_start_date
-                )
+                enrollment_filter &= Q(start_date__gte=parsed_start_date)
             if parsed_end_date:
-                program_queryset = program_queryset.filter(
-                    clientprogramenrollment__start_date__lte=parsed_end_date
-                )
+                enrollment_filter &= Q(start_date__lte=parsed_end_date)
             
-            context['active_programs'] = program_queryset.count()
-            
-            # Calculate enrollment rate for all programs
-            total_capacity = 0
-            active_enrollments = 0
-            today = timezone.now().date()
-            
-            for program in Program.objects.all():
-                total_capacity += program.capacity_current
-                
-                # Count active enrollments for this program with date filtering
-                enrollment_queryset = ClientProgramEnrollment.objects.filter(
-                    program=program,
-                    start_date__lte=today
-                ).filter(
-                    models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
-                )
-                
-                # Apply date filtering to enrollments
-                if parsed_start_date:
-                    enrollment_queryset = enrollment_queryset.filter(start_date__gte=parsed_start_date)
-                if parsed_end_date:
-                    enrollment_queryset = enrollment_queryset.filter(start_date__lte=parsed_end_date)
-                
-                program_active_enrollments = enrollment_queryset.count()
-                active_enrollments += program_active_enrollments
+            active_enrollments = ClientProgramEnrollment.objects.filter(
+                enrollment_filter
+            ).count()
         elif (is_program_manager or is_leader) and assigned_programs:
             # Program managers see only data for their assigned programs
+            # Optimized: Use distinct() and select_related() to reduce queries
             client_queryset = Client.objects.filter(
                 clientprogramenrollment__program__in=assigned_programs
             ).distinct()
             
-            # Apply date filtering if provided
-            if parsed_start_date:
-                client_queryset = client_queryset.filter(created_at__date__gte=parsed_start_date)
-            if parsed_end_date:
-                client_queryset = client_queryset.filter(created_at__date__lte=parsed_end_date)
+            if start_datetime:
+                client_queryset = client_queryset.filter(created_at__gte=start_datetime)
+            if end_datetime:
+                client_queryset = client_queryset.filter(created_at__lte=end_datetime)
             
             context['total_clients'] = client_queryset.count()
             
-            # Count assigned programs that have enrollments within the date range
-            program_queryset = assigned_programs.filter(
-                clientprogramenrollment__isnull=False
-            ).distinct()
+            # Optimized: Use values_list() to get program IDs, then filter
+            program_ids = list(assigned_programs.values_list('id', flat=True))
+            program_filter = Q(id__in=program_ids, clientprogramenrollment__isnull=False)
             
             if parsed_start_date:
-                program_queryset = program_queryset.filter(
-                    clientprogramenrollment__start_date__gte=parsed_start_date
-                )
+                program_filter &= Q(clientprogramenrollment__start_date__gte=parsed_start_date)
             if parsed_end_date:
-                program_queryset = program_queryset.filter(
-                    clientprogramenrollment__start_date__lte=parsed_end_date
-                )
+                program_filter &= Q(clientprogramenrollment__start_date__lte=parsed_end_date)
             
-            context['active_programs'] = program_queryset.count()
+            context['active_programs'] = Program.objects.filter(program_filter).distinct().count()
             
-            # Calculate enrollment rate for assigned programs only
-            total_capacity = 0
-            active_enrollments = 0
-            today = timezone.now().date()
+            # Get total capacity in a single query
+            total_capacity = assigned_programs.aggregate(
+                total=Sum('capacity_current')
+            )['total'] or 0
             
-            for program in assigned_programs:
-                total_capacity += program.capacity_current
-                
-                # Count active enrollments for this program
-                program_active_enrollments = ClientProgramEnrollment.objects.filter(
-                    program=program,
-                    start_date__lte=today
-                ).filter(
-                    models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
-                ).count()
-                
-                active_enrollments += program_active_enrollments
+            # Count active enrollments in a single optimized query
+            enrollment_filter = Q(
+                program__in=assigned_programs,
+                start_date__lte=today
+            ) & (
+                Q(end_date__isnull=True) | Q(end_date__gt=today)
+            )
+            
+            if parsed_start_date:
+                enrollment_filter &= Q(start_date__gte=parsed_start_date)
+            if parsed_end_date:
+                enrollment_filter &= Q(start_date__lte=parsed_end_date)
+            
+            active_enrollments = ClientProgramEnrollment.objects.filter(
+                enrollment_filter
+            ).count()
         elif is_staff_only and assigned_clients:
             # Staff-only users see only data for their assigned clients and programs
             client_queryset = assigned_clients
             
-            # Apply date filtering if provided
-            if parsed_start_date:
-                client_queryset = client_queryset.filter(created_at__date__gte=parsed_start_date)
-            if parsed_end_date:
-                client_queryset = client_queryset.filter(created_at__date__lte=parsed_end_date)
+            if start_datetime:
+                client_queryset = client_queryset.filter(created_at__gte=start_datetime)
+            if end_datetime:
+                client_queryset = client_queryset.filter(created_at__lte=end_datetime)
             
             context['total_clients'] = client_queryset.count()
             
             # Count assigned programs that have enrollments within the date range
             if assigned_programs:
-                program_queryset = assigned_programs.filter(
-                    clientprogramenrollment__isnull=False
-                ).distinct()
+                program_ids = list(assigned_programs.values_list('id', flat=True))
+                program_filter = Q(id__in=program_ids, clientprogramenrollment__isnull=False)
                 
                 if parsed_start_date:
-                    program_queryset = program_queryset.filter(
-                        clientprogramenrollment__start_date__gte=parsed_start_date
-                    )
+                    program_filter &= Q(clientprogramenrollment__start_date__gte=parsed_start_date)
                 if parsed_end_date:
-                    program_queryset = program_queryset.filter(
-                        clientprogramenrollment__start_date__lte=parsed_end_date
-                    )
+                    program_filter &= Q(clientprogramenrollment__start_date__lte=parsed_end_date)
                 
-                context['active_programs'] = program_queryset.count()
+                context['active_programs'] = Program.objects.filter(program_filter).distinct().count()
             else:
                 context['active_programs'] = 0
             
-            # Calculate enrollment rate for assigned programs only
-            total_capacity = 0
-            active_enrollments = 0
-            today = timezone.now().date()
+            # Get total capacity in a single query
+            total_capacity = assigned_programs.aggregate(
+                total=Sum('capacity_current')
+            )['total'] or 0 if assigned_programs else 0
             
-            for program in assigned_programs:
-                total_capacity += program.capacity_current
-                
-                # Count active enrollments for this program with date filtering
-                enrollment_queryset = ClientProgramEnrollment.objects.filter(
-                    program=program,
+            # Count active enrollments in a single optimized query
+            if assigned_programs:
+                enrollment_filter = Q(
+                    program__in=assigned_programs,
                     start_date__lte=today
-                ).filter(
-                    models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
+                ) & (
+                    Q(end_date__isnull=True) | Q(end_date__gt=today)
                 )
                 
-                # Apply date filtering to enrollments
                 if parsed_start_date:
-                    enrollment_queryset = enrollment_queryset.filter(start_date__gte=parsed_start_date)
+                    enrollment_filter &= Q(start_date__gte=parsed_start_date)
                 if parsed_end_date:
-                    enrollment_queryset = enrollment_queryset.filter(start_date__lte=parsed_end_date)
+                    enrollment_filter &= Q(start_date__lte=parsed_end_date)
                 
-                program_active_enrollments = enrollment_queryset.count()
-                active_enrollments += program_active_enrollments
+                active_enrollments = ClientProgramEnrollment.objects.filter(
+                    enrollment_filter
+                ).count()
+            else:
+                active_enrollments = 0
         else:
             # SuperAdmin and Staff see all data
-            # Apply date filtering if provided
+            # Optimized: Use datetime comparison instead of __date lookup
             client_queryset = Client.objects.all()
-            if parsed_start_date:
-                client_queryset = client_queryset.filter(created_at__date__gte=parsed_start_date)
-            if parsed_end_date:
-                client_queryset = client_queryset.filter(created_at__date__lte=parsed_end_date)
+            if start_datetime:
+                client_queryset = client_queryset.filter(created_at__gte=start_datetime)
+            if end_datetime:
+                client_queryset = client_queryset.filter(created_at__lte=end_datetime)
             
             context['total_clients'] = client_queryset.count()
             
-            # Count programs that have enrollments within the date range
-            program_queryset = Program.objects.filter(
-                clientprogramenrollment__isnull=False
-            ).distinct()
+            # Optimized: Use values() with distinct() for program count
+            program_filter = Q(clientprogramenrollment__isnull=False)
+            if parsed_start_date:
+                program_filter &= Q(clientprogramenrollment__start_date__gte=parsed_start_date)
+            if parsed_end_date:
+                program_filter &= Q(clientprogramenrollment__start_date__lte=parsed_end_date)
+            
+            context['active_programs'] = Program.objects.filter(program_filter).distinct().count()
+            
+            # Get total capacity in a single query
+            total_capacity = Program.objects.aggregate(
+                total=Sum('capacity_current')
+            )['total'] or 0
+            
+            # Count active enrollments in a single optimized query
+            enrollment_filter = Q(
+                start_date__lte=today
+            ) & (
+                Q(end_date__isnull=True) | Q(end_date__gt=today)
+            )
             
             if parsed_start_date:
-                program_queryset = program_queryset.filter(
-                    clientprogramenrollment__start_date__gte=parsed_start_date
-                )
+                enrollment_filter &= Q(start_date__gte=parsed_start_date)
             if parsed_end_date:
-                program_queryset = program_queryset.filter(
-                    clientprogramenrollment__start_date__lte=parsed_end_date
-                )
+                enrollment_filter &= Q(start_date__lte=parsed_end_date)
             
-            context['active_programs'] = program_queryset.count()
-            
-            # Calculate actual enrollment rate
-            # Enrollment rate = (Total active enrollments / Total program capacity) * 100
-            total_capacity = 0
-            active_enrollments = 0
-            today = timezone.now().date()
-            
-            for program in Program.objects.all():
-                total_capacity += program.capacity_current
-                
-                # Count active enrollments for this program with date filtering
-                enrollment_queryset = ClientProgramEnrollment.objects.filter(
-                    program=program,
-                    start_date__lte=today
-                ).filter(
-                    models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
-                )
-                
-                # Apply date filtering to enrollments
-                if parsed_start_date:
-                    enrollment_queryset = enrollment_queryset.filter(start_date__gte=parsed_start_date)
-                if parsed_end_date:
-                    enrollment_queryset = enrollment_queryset.filter(start_date__lte=parsed_end_date)
-                
-                program_active_enrollments = enrollment_queryset.count()
-                active_enrollments += program_active_enrollments
+            active_enrollments = ClientProgramEnrollment.objects.filter(
+                enrollment_filter
+            ).count()
         
         # Calculate enrollment rate
         enrollment_rate = (active_enrollments / total_capacity * 100) if total_capacity > 0 else 0
@@ -334,15 +316,24 @@ class OrganizationalSummaryView(TemplateView):
         # Get program manager and staff-only filtering
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
+        # Convert date filters to datetime for better performance (avoid __date field lookup)
+        from datetime import datetime, time as dt_time
+        start_datetime = None
+        end_datetime = None
+        if parsed_start_date:
+            start_datetime = timezone.make_aware(datetime.combine(parsed_start_date, dt_time.min))
+        if parsed_end_date:
+            end_datetime = timezone.make_aware(datetime.combine(parsed_end_date, dt_time.max))
+        
         # Filter data based on user role
         if is_analyst:
             # Analysts see all data across all clients and programs
-            # Apply date filtering if provided
+            # Optimized: Use datetime comparison instead of __date lookup
             client_queryset = Client.objects.all()
-            if parsed_start_date:
-                client_queryset = client_queryset.filter(created_at__date__gte=parsed_start_date)
-            if parsed_end_date:
-                client_queryset = client_queryset.filter(created_at__date__lte=parsed_end_date)
+            if start_datetime:
+                client_queryset = client_queryset.filter(created_at__gte=start_datetime)
+            if end_datetime:
+                client_queryset = client_queryset.filter(created_at__lte=end_datetime)
             
             context['total_clients'] = client_queryset.count()
             
@@ -372,15 +363,15 @@ class OrganizationalSummaryView(TemplateView):
                 enrollments = enrollments.filter(start_date__lte=parsed_end_date)
         elif (is_program_manager or is_leader) and assigned_programs:
             # Program managers see only data for their assigned programs
+            # Optimized: Use datetime comparison instead of __date lookup
             client_queryset = Client.objects.filter(
                 clientprogramenrollment__program__in=assigned_programs
             ).distinct()
             
-            # Apply date filtering if provided
-            if parsed_start_date:
-                client_queryset = client_queryset.filter(created_at__date__gte=parsed_start_date)
-            if parsed_end_date:
-                client_queryset = client_queryset.filter(created_at__date__lte=parsed_end_date)
+            if start_datetime:
+                client_queryset = client_queryset.filter(created_at__gte=start_datetime)
+            if end_datetime:
+                client_queryset = client_queryset.filter(created_at__lte=end_datetime)
             
             context['total_clients'] = client_queryset.count()
             
@@ -410,13 +401,13 @@ class OrganizationalSummaryView(TemplateView):
                 enrollments = enrollments.filter(start_date__lte=parsed_end_date)
         elif is_staff_only and assigned_clients:
             # Staff-only users see only data for their assigned clients and programs
+            # Optimized: Use datetime comparison instead of __date lookup
             client_queryset = assigned_clients
             
-            # Apply date filtering if provided
-            if parsed_start_date:
-                client_queryset = client_queryset.filter(created_at__date__gte=parsed_start_date)
-            if parsed_end_date:
-                client_queryset = client_queryset.filter(created_at__date__lte=parsed_end_date)
+            if start_datetime:
+                client_queryset = client_queryset.filter(created_at__gte=start_datetime)
+            if end_datetime:
+                client_queryset = client_queryset.filter(created_at__lte=end_datetime)
             
             context['total_clients'] = client_queryset.count()
             
@@ -449,12 +440,12 @@ class OrganizationalSummaryView(TemplateView):
                 enrollments = enrollments.filter(start_date__lte=parsed_end_date)
         else:
             # SuperAdmin and Staff see all data
-            # Apply date filtering if provided
+            # Optimized: Use datetime comparison instead of __date lookup
             client_queryset = Client.objects.all()
-            if parsed_start_date:
-                client_queryset = client_queryset.filter(created_at__date__gte=parsed_start_date)
-            if parsed_end_date:
-                client_queryset = client_queryset.filter(created_at__date__lte=parsed_end_date)
+            if start_datetime:
+                client_queryset = client_queryset.filter(created_at__gte=start_datetime)
+            if end_datetime:
+                client_queryset = client_queryset.filter(created_at__lte=end_datetime)
             
             context['total_clients'] = client_queryset.count()
             
@@ -483,22 +474,15 @@ class OrganizationalSummaryView(TemplateView):
             if parsed_end_date:
                 enrollments = enrollments.filter(start_date__lte=parsed_end_date)
         
+        # Optimized: Use database query instead of Python loop
         today = timezone.now().date()
-        active_count = 0
-        for enrollment in enrollments:
-            if today < enrollment.start_date:
-                # Pending - not active yet
-                continue
-            elif enrollment.end_date:
-                if today > enrollment.end_date:
-                    # Completed - not active
-                    continue
-                else:
-                    # Active - between start and end date
-                    active_count += 1
-            else:
-                # Active - no end date set
-                active_count += 1
+        # Active enrollments: start_date <= today AND (end_date is NULL OR end_date > today)
+        active_enrollments_filter = Q(
+            start_date__lte=today
+        ) & (
+            Q(end_date__isnull=True) | Q(end_date__gt=today)
+        )
+        active_count = enrollments.filter(active_enrollments_filter).count()
         
         context['active_enrollments'] = active_count
         context['is_program_manager'] = is_program_manager
@@ -680,6 +664,10 @@ class ClientDemographicsView(TemplateView):
         # Get date range filter parameters
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
         
+        # Get program and department filter parameters
+        program_filter = self.request.GET.get('program', '').strip()
+        department_filter = self.request.GET.get('department', '').strip()
+        
         # Get program manager and staff-only filtering
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
@@ -692,6 +680,22 @@ class ClientDemographicsView(TemplateView):
             clients = assigned_clients
         else:
             clients = Client.objects.all()
+        
+        # Apply program filter if specified
+        if program_filter:
+            try:
+                program = Program.objects.get(id=program_filter)
+                clients = clients.filter(clientprogramenrollment__program=program).distinct()
+            except (Program.DoesNotExist, ValueError):
+                pass
+        
+        # Apply department filter if specified
+        if department_filter:
+            try:
+                department = Department.objects.get(id=department_filter)
+                clients = clients.filter(clientprogramenrollment__program__department=department).distinct()
+            except (Department.DoesNotExist, ValueError):
+                pass
         
         # Apply date range filtering if specified
         if parsed_start_date or parsed_end_date:
@@ -745,6 +749,16 @@ class ClientDemographicsView(TemplateView):
         # Sort gender counts by count (descending) for better display
         gender_counts = dict(sorted(gender_counts.items(), key=lambda x: x[1], reverse=True))
         
+        # Get all programs and departments for filter dropdowns
+        if (is_program_manager or is_leader) and assigned_programs:
+            available_programs = assigned_programs.order_by('name')
+            available_departments = Department.objects.filter(
+                program__in=assigned_programs
+            ).distinct().order_by('name')
+        else:
+            available_programs = Program.objects.filter(status='active').order_by('name')
+            available_departments = Department.objects.all().order_by('name')
+        
         context.update({
             'total_clients': clients.count(),
             'age_groups': age_groups,
@@ -752,6 +766,10 @@ class ClientDemographicsView(TemplateView):
             'is_program_manager': is_program_manager,
             'start_date': start_date,
             'end_date': end_date,
+            'program_filter': program_filter,
+            'department_filter': department_filter,
+            'available_programs': available_programs,
+            'available_departments': available_departments,
         })
         return context
 
@@ -775,6 +793,10 @@ class ClientEnrollmentHistoryView(ListView):
         # Get date range filter parameters
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
         
+        # Get program and department filter parameters
+        program_filter = self.request.GET.get('program', '').strip()
+        department_filter = self.request.GET.get('department', '').strip()
+        
         # Get program manager and staff-only filtering
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
@@ -796,6 +818,22 @@ class ClientEnrollmentHistoryView(ListView):
         else:
             queryset = ClientProgramEnrollment.objects.select_related('client', 'program', 'program__department')
         
+        # Apply program filter if specified
+        if program_filter:
+            try:
+                program = Program.objects.get(id=program_filter)
+                queryset = queryset.filter(program=program)
+            except (Program.DoesNotExist, ValueError):
+                pass
+        
+        # Apply department filter if specified
+        if department_filter:
+            try:
+                department = Department.objects.get(id=department_filter)
+                queryset = queryset.filter(program__department=department)
+            except (Department.DoesNotExist, ValueError):
+                pass
+        
         # Apply date filtering
         if parsed_start_date:
             queryset = queryset.filter(start_date__gte=parsed_start_date)
@@ -810,6 +848,11 @@ class ClientEnrollmentHistoryView(ListView):
         
         # Get date range filter parameters
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
+        
+        # Get program and department filter parameters
+        program_filter = self.request.GET.get('program', '').strip()
+        department_filter = self.request.GET.get('department', '').strip()
+        
         context['start_date'] = start_date
         context['end_date'] = end_date
         
@@ -824,37 +867,70 @@ class ClientEnrollmentHistoryView(ListView):
         else:
             all_enrollments = ClientProgramEnrollment.objects.all()
         
+        # Apply program filter to statistics if specified
+        if program_filter:
+            try:
+                program = Program.objects.get(id=program_filter)
+                all_enrollments = all_enrollments.filter(program=program)
+            except (Program.DoesNotExist, ValueError):
+                pass
+        
+        # Apply department filter to statistics if specified
+        if department_filter:
+            try:
+                department = Department.objects.get(id=department_filter)
+                all_enrollments = all_enrollments.filter(program__department=department)
+            except (Department.DoesNotExist, ValueError):
+                pass
+        
         # Apply date filtering to statistics
         if parsed_start_date:
             all_enrollments = all_enrollments.filter(start_date__gte=parsed_start_date)
         if parsed_end_date:
             all_enrollments = all_enrollments.filter(start_date__lte=parsed_end_date)
+        # Optimized: Use database queries instead of Python loop
         today = timezone.now().date()
         
-        # Calculate active, completed, and pending enrollments based on date logic
-        active_count = 0
-        completed_count = 0
-        pending_count = 0
+        # Calculate active enrollments: start_date <= today AND (end_date is NULL OR end_date > today)
+        active_count = all_enrollments.filter(
+            start_date__lte=today
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gt=today)
+        ).count()
         
-        for enrollment in all_enrollments:
-            if today < enrollment.start_date:
-                pending_count += 1
-            elif enrollment.end_date:
-                if today > enrollment.end_date:
-                    completed_count += 1
-                else:
-                    active_count += 1
-            else:
-                active_count += 1
+        # Calculate completed enrollments: end_date is not NULL AND end_date < today
+        completed_count = all_enrollments.filter(
+            end_date__isnull=False,
+            end_date__lt=today
+        ).count()
+        
+        # Calculate pending enrollments: start_date > today
+        pending_count = all_enrollments.filter(
+            start_date__gt=today
+        ).count()
         
         context['total_enrollments'] = all_enrollments.count()
         context['active_enrollments'] = active_count
         context['completed_enrollments'] = completed_count
         context['pending_enrollments'] = pending_count
         
+        # Get all programs and departments for filter dropdowns
+        if (is_program_manager or is_leader) and assigned_programs:
+            available_programs = assigned_programs.order_by('name')
+            available_departments = Department.objects.filter(
+                program__in=assigned_programs
+            ).distinct().order_by('name')
+        else:
+            available_programs = Program.objects.filter(status='active').order_by('name')
+            available_departments = Department.objects.all().order_by('name')
+        
         # Add per_page to context for the template
         context['per_page'] = str(self.get_paginate_by(self.get_queryset()))
         context['is_program_manager'] = is_program_manager
+        context['program_filter'] = program_filter
+        context['department_filter'] = department_filter
+        context['available_programs'] = available_programs
+        context['available_departments'] = available_departments
         
         # Add date range parameters to context
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
@@ -871,26 +947,48 @@ class ClientEnrollmentHistoryExportView(ListView):
     
     def get_queryset(self):
         """Get enrollments ordered by most recent start date first"""
+        # Get program and department filter parameters
+        program_filter = self.request.GET.get('program', '').strip()
+        department_filter = self.request.GET.get('department', '').strip()
+        
         # Get program manager and staff-only filtering
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
         # Filter enrollments based on user role
         if (is_program_manager or is_leader) and assigned_programs:
             if assigned_programs:
-                return ClientProgramEnrollment.objects.filter(
+                queryset = ClientProgramEnrollment.objects.filter(
                     program__in=assigned_programs
-                ).select_related('client', 'program', 'program__department').order_by('-start_date')
+                ).select_related('client', 'program', 'program__department')
             else:
                 return ClientProgramEnrollment.objects.none()
         elif is_staff_only:
             if assigned_programs:
-                return ClientProgramEnrollment.objects.filter(
+                queryset = ClientProgramEnrollment.objects.filter(
                     program__in=assigned_programs
-                ).select_related('client', 'program', 'program__department').order_by('-start_date')
+                ).select_related('client', 'program', 'program__department')
             else:
                 return ClientProgramEnrollment.objects.none()
         else:
-            return ClientProgramEnrollment.objects.select_related('client', 'program', 'program__department').order_by('-start_date')
+            queryset = ClientProgramEnrollment.objects.select_related('client', 'program', 'program__department')
+        
+        # Apply program filter if specified
+        if program_filter:
+            try:
+                program = Program.objects.get(id=program_filter)
+                queryset = queryset.filter(program=program)
+            except (Program.DoesNotExist, ValueError):
+                pass
+        
+        # Apply department filter if specified
+        if department_filter:
+            try:
+                department = Department.objects.get(id=department_filter)
+                queryset = queryset.filter(program__department=department)
+            except (Department.DoesNotExist, ValueError):
+                pass
+        
+        return queryset.order_by('-start_date')
     
     def get(self, request, *args, **kwargs):
         # Create CSV response
@@ -968,30 +1066,34 @@ class ClientOutcomesView(TemplateView):
         if parsed_start_date or parsed_end_date:
             if parsed_start_date and parsed_end_date:
                 # Filter enrollments by start date within the range
-                enrollments = enrollments.filter(start_date__date__range=[parsed_start_date, parsed_end_date])
+                enrollments = enrollments.filter(start_date__range=[parsed_start_date, parsed_end_date])
             elif parsed_start_date:
-                enrollments = enrollments.filter(start_date__date__gte=parsed_start_date)
+                enrollments = enrollments.filter(start_date__gte=parsed_start_date)
             elif parsed_end_date:
-                enrollments = enrollments.filter(start_date__date__lte=parsed_end_date)
+                enrollments = enrollments.filter(start_date__lte=parsed_end_date)
         
-        # Calculate statistics using date-based logic
+        # Optimized: Use database queries instead of Python loop
         today = timezone.now().date()
         
         total = enrollments.count()
-        active_count = 0
-        completed_count = 0
-        pending_count = 0
         
-        for enrollment in enrollments:
-            if today < enrollment.start_date:
-                pending_count += 1
-            elif enrollment.end_date:
-                if today > enrollment.end_date:
-                    completed_count += 1
-                else:
-                    active_count += 1
-            else:
-                active_count += 1
+        # Calculate active enrollments: start_date <= today AND (end_date is NULL OR end_date > today)
+        active_count = enrollments.filter(
+            start_date__lte=today
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gt=today)
+        ).count()
+        
+        # Calculate completed enrollments: end_date is not NULL AND end_date < today
+        completed_count = enrollments.filter(
+            end_date__isnull=False,
+            end_date__lt=today
+        ).count()
+        
+        # Calculate pending enrollments: start_date > today
+        pending_count = enrollments.filter(
+            start_date__gt=today
+        ).count()
         
         success_rate = (completed_count / total * 100) if total > 0 else 0
         
@@ -1043,9 +1145,19 @@ class ProgramCapacityView(ListView):
         context['start_date'] = start_date
         context['end_date'] = end_date
         
+        # Get sorting parameters
+        sort_by = self.request.GET.get('sort', 'name').strip()
+        sort_order = self.request.GET.get('order', 'asc').strip()
+        context['sort_by'] = sort_by
+        context['sort_order'] = sort_order
+        
         return context
     
     def get_queryset(self):
+        # Get sorting parameter
+        sort_by = self.request.GET.get('sort', 'name').strip()
+        sort_order = self.request.GET.get('order', 'asc').strip()
+        
         # Get program manager and staff-only filtering
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
@@ -1081,6 +1193,22 @@ class ProgramCapacityView(ListView):
                 'vacant': program.capacity_current - active_enrollments,
                 'utilization': round(utilization, 1)
             })
+        
+        # Sort program_data based on sort_by and sort_order
+        reverse_order = (sort_order == 'desc')
+        
+        if sort_by == 'name':
+            program_data.sort(key=lambda x: x['program'].name.lower(), reverse=reverse_order)
+        elif sort_by == 'department':
+            program_data.sort(key=lambda x: x['program'].department.name if x['program'].department else '', reverse=reverse_order)
+        elif sort_by == 'capacity':
+            program_data.sort(key=lambda x: x['capacity'], reverse=reverse_order)
+        elif sort_by == 'occupied':
+            program_data.sort(key=lambda x: x['occupied'], reverse=reverse_order)
+        elif sort_by == 'vacant' or sort_by == 'vacancy':
+            program_data.sort(key=lambda x: x['vacant'], reverse=reverse_order)
+        elif sort_by == 'utilization':
+            program_data.sort(key=lambda x: x['utilization'], reverse=reverse_order)
         
         return program_data
 
@@ -1219,21 +1347,19 @@ class ProgramPerformanceView(ListView):
             # Get all enrollments for this program
             all_enrollments = ClientProgramEnrollment.objects.filter(program=program)
             
-            # Calculate active and completed enrollments using date-based logic
-            active_count = 0
-            completed_count = 0
+            # Optimized: Use database queries instead of Python loop
+            # Calculate active enrollments: start_date <= today AND (end_date is NULL OR end_date > today)
+            active_count = all_enrollments.filter(
+                start_date__lte=today
+            ).filter(
+                Q(end_date__isnull=True) | Q(end_date__gt=today)
+            ).count()
             
-            for enrollment in all_enrollments:
-                if today < enrollment.start_date:
-                    # Pending - not counted in active or completed
-                    continue
-                elif enrollment.end_date:
-                    if today > enrollment.end_date:
-                        completed_count += 1
-                    else:
-                        active_count += 1
-                else:
-                    active_count += 1
+            # Calculate completed enrollments: end_date is not NULL AND end_date < today
+            completed_count = all_enrollments.filter(
+                end_date__isnull=False,
+                end_date__lt=today
+            ).count()
             
             total_enrollments = all_enrollments.count()
             completion_rate = (completed_count / total_enrollments * 100) if total_enrollments > 0 else 0
@@ -1291,21 +1417,19 @@ class ProgramPerformanceExportView(ListView):
             # Get all enrollments for this program
             all_enrollments = ClientProgramEnrollment.objects.filter(program=program)
             
-            # Calculate active and completed enrollments using date-based logic
-            active_count = 0
-            completed_count = 0
+            # Optimized: Use database queries instead of Python loop
+            # Calculate active enrollments: start_date <= today AND (end_date is NULL OR end_date > today)
+            active_count = all_enrollments.filter(
+                start_date__lte=today
+            ).filter(
+                Q(end_date__isnull=True) | Q(end_date__gt=today)
+            ).count()
             
-            for enrollment in all_enrollments:
-                if today < enrollment.start_date:
-                    # Pending - not counted in active or completed
-                    continue
-                elif enrollment.end_date:
-                    if today > enrollment.end_date:
-                        completed_count += 1
-                    else:
-                        active_count += 1
-                else:
-                    active_count += 1
+            # Calculate completed enrollments: end_date is not NULL AND end_date < today
+            completed_count = all_enrollments.filter(
+                end_date__isnull=False,
+                end_date__lt=today
+            ).count()
             
             total_enrollments = all_enrollments.count()
             completion_rate = (completed_count / total_enrollments * 100) if total_enrollments > 0 else 0
@@ -1430,6 +1554,10 @@ class ClientDemographicsExportView(TemplateView):
         # Get date range filter parameters
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(request)
         
+        # Get program and department filter parameters
+        program_filter = request.GET.get('program', '').strip()
+        department_filter = request.GET.get('department', '').strip()
+        
         # Get the same data as the main view
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(request)
         
@@ -1442,6 +1570,22 @@ class ClientDemographicsExportView(TemplateView):
             clients = assigned_clients
         else:
             clients = Client.objects.all()
+        
+        # Apply program filter if specified
+        if program_filter:
+            try:
+                program = Program.objects.get(id=program_filter)
+                clients = clients.filter(clientprogramenrollment__program=program).distinct()
+            except (Program.DoesNotExist, ValueError):
+                pass
+        
+        # Apply department filter if specified
+        if department_filter:
+            try:
+                department = Department.objects.get(id=department_filter)
+                clients = clients.filter(clientprogramenrollment__program__department=department).distinct()
+            except (Department.DoesNotExist, ValueError):
+                pass
         
         # Apply date range filtering if specified
         if parsed_start_date or parsed_end_date:
@@ -1525,7 +1669,9 @@ class ClientDemographicsExportView(TemplateView):
         
         # Detailed Client Information
         writer.writerow(['DETAILED CLIENT INFORMATION'])
-        writer.writerow(['Client ID', 'First Name', 'Last Name', 'Preferred Name', 'Date of Birth', 'Age', 'Gender', 'Programs'])
+        writer.writerow(['Client ID', 'First Name', 'Last Name', 'Preferred Name', 'Date of Birth', 'Age', 'Gender', 
+                        'Healthcare Coverage', 'Citizenship Status', 'Country of Birth', 'Sexual Orientation', 
+                        'Indigenous Status', 'Ethnicity', 'Programs'])
         
         for client in clients:
             # Calculate age
@@ -1539,6 +1685,21 @@ class ClientDemographicsExportView(TemplateView):
             client_programs = ClientProgramEnrollment.objects.filter(client=client).values_list('program__name', flat=True)
             programs_str = ', '.join(client_programs) if client_programs else 'None'
             
+            # Get healthcare coverage - check if field exists, otherwise derive from health_card_number
+            healthcare_coverage = ''
+            if hasattr(client, 'healthcare_coverage') and client.healthcare_coverage:
+                healthcare_coverage = client.healthcare_coverage
+            elif client.health_card_number:
+                healthcare_coverage = 'Yes (Has Health Card)'
+            
+            # Format ethnicity (it's a JSONField that can be a list)
+            ethnicity_str = ''
+            if client.ethnicity:
+                if isinstance(client.ethnicity, list):
+                    ethnicity_str = ', '.join(str(e) for e in client.ethnicity if e)
+                else:
+                    ethnicity_str = str(client.ethnicity)
+            
             writer.writerow([
                 client.client_id or '',
                 client.first_name or '',
@@ -1547,6 +1708,12 @@ class ClientDemographicsExportView(TemplateView):
                 client.dob.strftime('%Y-%m-%d') if client.dob else '',
                 age,
                 client.gender or 'Unknown',
+                healthcare_coverage,
+                client.citizenship_status or '',
+                client.country_of_birth or '',
+                client.sexual_orientation or '',
+                client.indigenous_status or '',
+                ethnicity_str,
                 programs_str
             ])
         

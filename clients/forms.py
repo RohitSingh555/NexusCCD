@@ -514,6 +514,11 @@ class ClientForm(forms.ModelForm):
             self.support_workers_data = self.instance.support_workers if self.instance.support_workers else []
             self.next_of_kin_data = self.instance.next_of_kin if self.instance.next_of_kin else {}
             self.emergency_contact_data = self.instance.emergency_contact if self.instance.emergency_contact else {}
+            
+            # Initialize ethnicity field for Select widget (convert list to first value)
+            if self.ethnicity_data and isinstance(self.ethnicity_data, list) and len(self.ethnicity_data) > 0:
+                # Use the first ethnicity value for the Select widget
+                self.fields['ethnicity'].initial = self.ethnicity_data[0]
         else:
             self.addresses_data = []
             self.contact_data = {}
@@ -577,8 +582,16 @@ class ClientForm(forms.ModelForm):
         """Validate and clean ethnicity data"""
         ethnicity = self.cleaned_data.get('ethnicity')
         
-        # Ethnicity is now a simple string field, no special validation needed
-        return ethnicity
+        # Convert string to list for JSONField
+        if ethnicity:
+            # If it's already a list, return as is
+            if isinstance(ethnicity, list):
+                return ethnicity
+            # If it's a string, convert to list
+            if isinstance(ethnicity, str) and ethnicity.strip():
+                return [ethnicity.strip()]
+        # Return empty list if no value
+        return []
     
     def clean_contact_information(self):
         """Validate and clean contact_information data"""

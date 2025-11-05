@@ -14,9 +14,10 @@ from django.db.models import Q
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
 from django.db import IntegrityError
+from django.db import transaction
 from django.http import HttpResponse
 import csv
-from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate
+from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate, ClientUploadLog
 from datetime import datetime, date
 from core.views import ProgramManagerAccessMixin, AnalystAccessMixin, jwt_required
 from core.fuzzy_matching import fuzzy_matcher
@@ -318,7 +319,26 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
             except Exception:
                 pass  # If user doesn't have permission, ignore the manager filter
         
-        return queryset.order_by('-created_at')
+        # Sorting (case-insensitive by name)
+        from django.db.models.functions import Lower, Coalesce
+        from django.db.models import Value
+        queryset = queryset.annotate(
+            last_name_ci=Lower(Coalesce('last_name', Value(''))),
+            first_name_ci=Lower(Coalesce('first_name', Value(''))),
+        )
+        sort_key = self.request.GET.get('sort', 'name_asc')
+        sort_mapping = {
+            'name_asc': ['first_name_ci', 'last_name_ci'],
+            'name_desc': ['-first_name_ci', '-last_name_ci'],
+            'created_desc': ['-created_at'],
+            'created_asc': ['created_at'],
+            'updated_desc': ['-updated_at'],
+            'updated_asc': ['updated_at'],
+            'dob_asc': ['dob', 'first_name_ci', 'last_name_ci'],
+            'dob_desc': ['-dob', 'first_name_ci', 'last_name_ci'],
+        }
+        order_by_fields = sort_mapping.get(sort_key, ['first_name_ci', 'last_name_ci'])
+        return queryset.order_by(*order_by_fields)
     
     def get_accessible_programs(self):
         """Get all programs that the current user has access to based on their roles"""
@@ -379,6 +399,7 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         context['gender_filter'] = self.request.GET.get('gender', '')
         context['manager_filter'] = self.request.GET.get('manager', '')
         context['per_page'] = self.request.GET.get('per_page', '10')
+        context['sort'] = self.request.GET.get('sort', 'name_asc')
         
         # Add date range filter parameters
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
@@ -1170,8 +1191,13 @@ class ClientUploadView(TemplateView):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@transaction.atomic
 def upload_clients(request):
     """Handle CSV/Excel file upload and process client data"""
+    
+    # Start timing the upload
+    upload_start_time = timezone.now()
+    upload_log = None
     
     # Check for load test mode - skip database writes if X-Load-Test header is present
     is_load_test = request.headers.get('X-Load-Test', '').lower() == 'true'
@@ -1200,6 +1226,30 @@ def upload_clients(request):
         
         file = request.FILES['file']
         file_extension = file.name.split('.')[-1].lower()
+        
+        # Get staff profile for upload log
+        staff_profile = None
+        if request.user.is_authenticated:
+            try:
+                staff_profile = request.user.staff_profile
+            except Exception:
+                pass
+        
+        # Create upload log entry
+        try:
+            upload_log = ClientUploadLog.objects.create(
+                file_name=file.name,
+                file_size=file.size,
+                file_type=file_extension,
+                source=source,
+                started_at=upload_start_time,
+                uploaded_by=staff_profile,
+                status='success',
+                upload_details={}
+            )
+        except Exception as e:
+            logger.warning(f"Failed to create upload log: {e}")
+            upload_log = None
         
         if file_extension not in ['csv', 'xlsx', 'xls']:
             return JsonResponse({'success': False, 'error': 'Invalid file format. Please upload CSV or Excel files.'}, status=400)
@@ -1278,8 +1328,6 @@ def upload_clients(request):
             column_mapping = {}
             df_columns_lower = [col.lower().strip() for col in df_columns]
             
-            print(f"DEBUG: CSV columns: {df_columns}")
-            print(f"DEBUG: Looking for DOB column mapping...")
             
             for standard_name, variations in field_mapping.items():
                 for variation in variations:
@@ -1288,8 +1336,6 @@ def upload_clients(request):
                         # Find the original column name (case-sensitive)
                         original_col = df_columns[df_columns_lower.index(variation_lower)]
                         column_mapping[original_col] = standard_name
-                        if standard_name == 'dob':
-                            print(f"DEBUG: DOB column found: '{original_col}' -> '{standard_name}'")
                         break
             
             return column_mapping
@@ -1343,7 +1389,6 @@ def upload_clients(request):
         for col in df.columns:
             if column_mapping.get(col) == 'client_combined':
                 has_combined_client_field = True
-                print(f"DEBUG: Found combined client field: '{col}' - can provide client_id, first_name, last_name")
                 break
         
         for required_field in required_fields:
@@ -1357,7 +1402,6 @@ def upload_clients(request):
             if not found and has_combined_client_field:
                 if required_field in ['client_id', 'first_name', 'last_name']:
                     found = True
-                    print(f"DEBUG: Combined client field can provide '{required_field}'")
             
             if not found:
                 missing_fields.append(required_field)
@@ -1368,17 +1412,7 @@ def upload_clients(request):
                 'error': f'Missing required columns. Please include columns for: {", ".join(missing_fields)}. Note: client_id is now required for all uploads.'
             }, status=400)
         
-        # Check that at least one of phone OR dob is present (only for new clients)
-        if not has_existing_client_ids:
-            has_phone = any(column_mapping.get(col) == 'phone' for col in df.columns)
-            has_dob = any(column_mapping.get(col) == 'dob' for col in df.columns)
-            
-            
-            if not has_phone and not has_dob:
-                return JsonResponse({
-                    'success': False, 
-                    'error': 'At least one of phone or DOB columns is required for new client creation. Please include either a phone number column or a date of birth (DOB) column.'
-                }, status=400)
+        # Phone and DOB are both optional - no requirement check needed
         
         # Check for intake-related columns using case-insensitive mapping
         has_intake_data = False
@@ -1513,6 +1547,25 @@ def upload_clients(request):
                     # Return names but no client_id
                     return first_name, last_name, None
             
+            # Pattern 5: "First Last" - Simple space-separated First Last format (no comma)
+            # This handles cases like "John Doe" or "Mary Jane Smith"
+            pattern5 = r'^([A-Za-z0-9._\'-]+(?:\s+[A-Za-z0-9._\'-]+)*)\s+([A-Za-z0-9\s._\'-]+)$'
+            match5 = re.match(pattern5, client_str)
+            if match5:
+                # First group might be just first name or first + middle name(s)
+                name_parts = match5.group(1).strip().split()
+                if len(name_parts) >= 1:
+                    first_name = name_parts[0].strip()  # First part is first name
+                    last_name = match5.group(2).strip()  # Second group is last name
+                    
+                    # Use client_id from separate field if provided
+                    if client_id_field_value and str(client_id_field_value).strip():
+                        client_id = str(client_id_field_value).strip()
+                        return first_name, last_name, client_id
+                    else:
+                        # Return names but no client_id
+                        return first_name, last_name, None
+            
             # If no pattern matches, return None
             return None, None, None
         
@@ -1563,8 +1616,8 @@ def upload_clients(request):
             # If we get here, the data is essentially the same
             return True
         
-        def process_intake_data(client, row, index, column_mapping, df_columns):
-            """Process intake data for a client"""
+        def process_intake_data(client, row, index, column_mapping, df_columns, departments_cache, programs_by_department):
+            """Process intake data for a client - optimized with pre-loaded caches"""
             try:
                 # Helper function to get data using field mapping
                 def get_field_data(field_name, default=''):
@@ -1656,21 +1709,20 @@ def upload_clients(request):
                 
                 print(f"DEBUG: Final program-date pairs: {list(zip(program_names, intake_dates))}")
                 
-                # Get or create department
+                # Get or create department (use cache)
                 department = None
-                if program_department:
-                    department, created = Department.objects.get_or_create(
-                        name=program_department,
-                        defaults={'owner': 'System'}
-                    )
-                    if created:
-                        logger.info(f"Created new department: {program_department}")
+                dept_name = program_department if program_department else 'NA'
+                if dept_name in departments_cache:
+                    department = departments_cache[dept_name]
                 else:
-                    # Default to NA if no department specified
+                    # Create new department and add to cache
                     department, created = Department.objects.get_or_create(
-                        name='NA',
+                        name=dept_name,
                         defaults={'owner': 'System'}
                     )
+                    departments_cache[dept_name] = department
+                    if created:
+                        logger.info(f"Created new department: {dept_name}")
                 
                 # Get additional enrollment fields using field mapping (outside loop for efficiency)
                 sub_program = get_field_data('sub_program')
@@ -1696,38 +1748,51 @@ def upload_clients(request):
                 for i, (current_program_name, current_intake_date) in enumerate(zip(program_names, intake_dates)):
                     print(f"DEBUG: Processing program {i+1}/{len(program_names)}: '{current_program_name}' with date {current_intake_date}")
                     
-                    # Get or create program
-                    program, created = Program.objects.get_or_create(
-                        name=current_program_name,
-                        department=department,
-                        defaults={
-                            'location': 'TBD',
-                            'status': 'suggested' if created else 'active',
-                            'description': f'Program created from intake data - {source}'
-                        }
-                    )
+                    # Find existing program by name matching (DO NOT CREATE NEW PROGRAMS)
+                    # Search across ALL programs, not just within department
+                    normalized_name = (current_program_name or '').strip()
+                    program = None
                     
-                    # Set audit fields for newly created programs
-                    if created:
-                        if request.user.is_authenticated:
-                            first_name = request.user.first_name or ''
-                            last_name = request.user.last_name or ''
-                            user_name = f"{first_name} {last_name}".strip()
-                            if not user_name or user_name == ' ':
-                                user_name = request.user.username or request.user.email or 'System'
-                            program.created_by = user_name
-                            program.updated_by = user_name
+                    if not normalized_name:
+                        logger.warning(f"Skipping enrollment: empty program name for client {client.first_name} {client.last_name}")
+                        continue
+                    
+                    # First, try exact match (case-insensitive) across all departments
+                    program = Program.objects.filter(name__iexact=normalized_name).first()
+                    
+                    # If no exact match, try fuzzy matching across ALL programs
+                    # Use the best match found, regardless of score
+                    if not program:
+                        best_match = None
+                        best_score = 0
+                        # Search all programs (load them if not already cached globally)
+                        all_programs_list = []
+                        for dept_programs in programs_by_department.values():
+                            if isinstance(dept_programs, dict) and '_all' in dept_programs:
+                                all_programs_list.extend(dept_programs['_all'])
+                        
+                        # If cache doesn't have all programs, query database
+                        if not all_programs_list:
+                            all_programs_list = list(Program.objects.select_related('department').all())
+                        
+                        # Find the best matching program
+                        for p in all_programs_list:
+                            score = calculate_name_similarity(normalized_name, p.name or '')
+                            if score > best_score:
+                                best_score = score
+                                best_match = p
+                        
+                        # Use the best match found (even if score is low)
+                        if best_match and best_score > 0:
+                            program = best_match
+                            logger.info(f"Fuzzy matched program '{current_program_name}' to existing program '{program.name}' (score: {best_score:.2f})")
                         else:
-                            program.created_by = 'System'
-                            program.updated_by = 'System'
-                        program.save()
-                    
-                    if created:
-                        logger.info(f"Created new program: {current_program_name} (status: suggested)")
-                    else:
-                        # If program exists but is suggested, keep it as suggested
-                        if program.status == 'suggested':
-                            logger.info(f"Program {current_program_name} already exists with suggested status")
+                            # No match found at all
+                            logger.warning(
+                                f"Skipping enrollment for client {client.first_name} {client.last_name}: "
+                                f"Program '{current_program_name}' not found. Please create the program first or check the name spelling."
+                            )
+                            continue
                     
                     # Create intake record
                     intake, created = Intake.objects.get_or_create(
@@ -1779,24 +1844,10 @@ def upload_clients(request):
                         logger.info(f"Created pending enrollment for {client.first_name} {client.last_name} in {current_program_name}")
                         print(f"DEBUG: Successfully created enrollment for {client.first_name} {client.last_name} in {current_program_name}")
                         
-                        # Create audit log entry for enrollment creation
-                        try:
-                            from core.models import create_audit_log
-                            create_audit_log(
-                                entity_name='Enrollment',
-                                entity_id=enrollment.external_id,
-                                action='create',
-                                changed_by=None,  # Bulk import, no specific user
-                                diff_data={
-                                    'client': str(enrollment.client),
-                                    'program': str(enrollment.program),
-                                    'start_date': str(enrollment.start_date),
-                                    'status': enrollment.status,
-                                    'source': 'bulk_import'
-                                }
-                            )
-                        except Exception as e:
-                            logger.error(f"Error creating audit log for enrollment: {e}")
+                        # Skip audit log for bulk imports to improve performance
+                        # Audit logs can be created separately if needed for specific tracking
+                        # For 10k+ records, creating individual audit logs adds significant overhead
+                        pass
                     else:
                         print(f"DEBUG: Enrollment already exists for {client.first_name} {client.last_name} in {current_program_name}")
                         logger.info(f"Enrollment already exists for {client.first_name} {client.last_name} in {current_program_name}")
@@ -1805,73 +1856,6 @@ def upload_clients(request):
                 logger.error(f"Error processing intake data for row {index + 2}: {str(e)}")
                 errors.append(f"Row {index + 2} (Intake): {str(e)}")
         
-        def find_duplicate_client(client_data):
-            """Find duplicate client based on email, phone, and name similarity"""
-            contact_info = client_data.get('contact_information', {})
-            email = contact_info.get('email', '').strip()
-            phone = contact_info.get('phone', '').strip()
-            full_name = f"{client_data.get('first_name', '')} {client_data.get('last_name', '')}".strip()
-            dob = client_data.get('dob', '')
-
-            # Priority 1: Exact email match
-            if email:
-                exact_email_match = Client.objects.filter(
-                    contact_information__email=email
-                ).first()
-                if exact_email_match:
-                    return exact_email_match, "exact_email"
-            
-            # Priority 2: Exact phone match
-            if phone:
-                exact_phone_match = Client.objects.filter(
-                    contact_information__phone=phone
-                ).first()
-                if exact_phone_match:
-                    return exact_phone_match, "exact_phone"
-            
-            # Priority 3: Email and phone combination (if both provided)
-            if email and phone:
-                email_phone_match = Client.objects.filter(
-                    contact_information__email=email,
-                    contact_information__phone=phone
-                ).first()
-                if email_phone_match:
-                    return email_phone_match, "email_phone"
-            
-            # Priority 4: Name similarity check (only if name is provided and similar enough)
-            if full_name:
-                # Get all clients to check name similarity
-                all_clients = Client.objects.all()
-                for client in all_clients:
-                    client_full_name = f"{client.first_name} {client.last_name}".strip()
-                    similarity = calculate_name_similarity(full_name, client_full_name)
-                    
-                    # If names are very similar (80%+ similarity), consider it a duplicate
-                    if similarity >= 0.8:
-                        return client, f"name_similarity_{similarity:.2f}"
-
-            # Priority 5: Name + Date of Birth combination
-            if full_name and dob and dob != datetime(1900, 1, 1).date():  # Skip default DOB
-                name_dob_match = Client.objects.filter(
-                    first_name__iexact=client_data.get('first_name', '').strip(),
-                    last_name__iexact=client_data.get('last_name', '').strip(),
-                    dob=dob
-                ).first()
-                if name_dob_match:
-                    return name_dob_match, "name_dob_match"
-
-            # Priority 6: Date of Birth + Name similarity (if DOB is valid and not default)
-            if dob and dob != datetime(1900, 1, 1).date():
-                dob_clients = Client.objects.filter(dob=dob)
-                for client in dob_clients:
-                    client_full_name = f"{client.first_name} {client.last_name}".strip()
-                    similarity = calculate_name_similarity(full_name, client_full_name)
-                    
-                    # If names are similar (70%+ similarity) and DOB matches, consider it a duplicate
-                    if similarity >= 0.7:
-                        return client, f"dob_name_similarity_{similarity:.2f}"
-            
-            return None, None
         
         # Load test mode: process data but skip database writes
         if is_load_test:
@@ -1898,8 +1882,200 @@ def upload_clients(request):
                 ]
             })
         
+        # ===== BATCH OPTIMIZATION: Pre-load existing data =====
+        # Collect all client_ids, emails, phones from the upload first
+        all_client_ids = []
+        all_emails = []
+        all_phones = []
+        row_data_map = {}  # Store row data by index for later processing
+        
+        # Pre-load all departments and programs for intake processing optimization
+        logger.info("Pre-loading departments and programs for batch processing")
+        departments_cache = {dept.name: dept for dept in Department.objects.all()}
+        # Pre-load all programs grouped by department for fast lookup
+        programs_by_department = {}
+        all_programs = Program.objects.select_related('department').all()
+        for program in all_programs:
+            dept_name = program.department.name if program.department else 'NA'
+            # Initialize department entry if not exists
+            if dept_name not in programs_by_department:
+                programs_by_department[dept_name] = {'_all': []}
+            # Store program by name (case-insensitive key) for direct lookup
+            programs_by_department[dept_name][program.name.lower()] = program
+            # Store in '_all' list for fuzzy matching
+            programs_by_department[dept_name]['_all'].append(program)
+        
+        logger.info(f"Pre-loaded {len(departments_cache)} departments and {len(all_programs)} programs")
+        logger.info("Starting batch data collection phase")
+        for index, row in df.iterrows():
+            try:
+                # Helper function to get data using field mapping (inline version for collection phase)
+                def get_field_data_inline(field_name, default=''):
+                    for col in df.columns:
+                        if column_mapping.get(col) == field_name:
+                            value = row[col]
+                            if pd.notna(value) and str(value).strip():
+                                return str(value).strip()
+                    return default
+                
+                # Helper function to clean client_id
+                def clean_client_id_inline(value):
+                    if pd.isna(value) or value is None:
+                        return None
+                    try:
+                        str_value = str(value).strip()
+                        if not str_value or str_value.lower() in ['nan', 'none', 'null', '']:
+                            return None
+                        if '.' in str_value:
+                            float_val = float(str_value)
+                            if float_val.is_integer():
+                                return str(int(float_val))
+                            return str_value
+                        return str_value
+                    except (ValueError, TypeError):
+                        return None
+                
+                client_id = clean_client_id_inline(get_field_data_inline('client_id'))
+                email = get_field_data_inline('email', '').strip()
+                phone = get_field_data_inline('phone', '').strip()
+                
+                # Store row data for later processing
+                row_data_map[index] = {
+                    'client_id': client_id,
+                    'email': email,
+                    'phone': phone,
+                    'first_name': get_field_data_inline('first_name', ''),
+                    'last_name': get_field_data_inline('last_name', ''),
+                }
+                
+                if client_id:
+                    all_client_ids.append(client_id)
+                if email:
+                    all_emails.append(email.lower())
+                if phone:
+                    all_phones.append(phone)
+            except Exception as e:
+                logger.warning(f"Error collecting data from row {index + 1}: {str(e)}")
+                continue
+        
+        # Batch query existing clients by client_id + source
+        existing_clients_by_id = {}
+        if all_client_ids:
+            existing_clients = Client.objects.filter(
+                client_id__in=all_client_ids,
+                source=source
+            ).select_related().only(
+                'id', 'client_id', 'source', 'first_name', 'last_name', 
+                'email', 'phone', 'contact_information', 'dob'
+            )
+            for client in existing_clients:
+                existing_clients_by_id[client.client_id] = client
+        
+        logger.info(f"Found {len(existing_clients_by_id)} existing clients by client_id+source")
+        
+        # Batch query potential duplicates by email
+        potential_duplicates_by_email = {}
+        if all_emails:
+            duplicate_email_clients = Client.objects.filter(
+                contact_information__email__in=all_emails
+            ).only('id', 'first_name', 'last_name', 'email', 'phone', 'contact_information', 'dob', 'client_id')
+            for client in duplicate_email_clients:
+                email_key = client.contact_information.get('email', '').lower() if client.contact_information else ''
+                if email_key:
+                    if email_key not in potential_duplicates_by_email:
+                        potential_duplicates_by_email[email_key] = []
+                    potential_duplicates_by_email[email_key].append(client)
+        
+        # Batch query potential duplicates by phone
+        potential_duplicates_by_phone = {}
+        if all_phones:
+            duplicate_phone_clients = Client.objects.filter(
+                contact_information__phone__in=all_phones
+            ).only('id', 'first_name', 'last_name', 'email', 'phone', 'contact_information', 'dob', 'client_id')
+            for client in duplicate_phone_clients:
+                phone_key = client.contact_information.get('phone', '') if client.contact_information else ''
+                if phone_key:
+                    if phone_key not in potential_duplicates_by_phone:
+                        potential_duplicates_by_phone[phone_key] = []
+                    potential_duplicates_by_phone[phone_key].append(client)
+        
+        logger.info(f"Pre-loaded {len(potential_duplicates_by_email)} email-based potential duplicates")
+        logger.info(f"Pre-loaded {len(potential_duplicates_by_phone)} phone-based potential duplicates")
+        # ===== END BATCH OPTIMIZATION =====
+        
+        # Optimized find_duplicate_client function using pre-loaded data
+        def find_duplicate_client_optimized(client_data, row_index):
+            """Find duplicate client using pre-loaded batch data"""
+            contact_info = client_data.get('contact_information', {})
+            email = contact_info.get('email', '').strip().lower()
+            phone = contact_info.get('phone', '').strip()
+            full_name = f"{client_data.get('first_name', '')} {client_data.get('last_name', '')}".strip()
+            dob = client_data.get('dob', '')
+
+            # Priority 1: Exact email match (from batch data)
+            if email:
+                email_matches = potential_duplicates_by_email.get(email, [])
+                if email_matches:
+                    return email_matches[0], "exact_email"
+            
+            # Priority 2: Exact phone match (from batch data)
+            if phone:
+                phone_matches = potential_duplicates_by_phone.get(phone, [])
+                if phone_matches:
+                    return phone_matches[0], "exact_phone"
+            
+            # Priority 3: Email and phone combination (from batch data)
+            if email and phone:
+                email_matches = potential_duplicates_by_email.get(email, [])
+                for match in email_matches:
+                    match_phone = match.contact_information.get('phone', '').strip() if match.contact_information else ''
+                    if match_phone == phone:
+                        return match, "email_phone"
+            
+            # Priority 4: Name similarity check (only check against pre-loaded duplicates, not all clients)
+            if full_name:
+                # Check name similarity against potential duplicates we already found
+                candidates = []
+                if email:
+                    candidates.extend(potential_duplicates_by_email.get(email, []))
+                if phone:
+                    candidates.extend(potential_duplicates_by_phone.get(phone, []))
+                
+                # Also check existing clients with same client_id but different source (potential duplicates)
+                client_id = client_data.get('client_id')
+                if client_id and client_id in existing_clients_by_id:
+                    candidates.append(existing_clients_by_id[client_id])
+                
+                for client in candidates:
+                    client_full_name = f"{client.first_name} {client.last_name}".strip()
+                    similarity = calculate_name_similarity(full_name, client_full_name)
+                    if similarity >= 0.8:
+                        return client, f"name_similarity_{similarity:.2f}"
+            
+            # Priority 5: Name + Date of Birth combination (limited query)
+            if full_name and dob and dob != datetime(1900, 1, 1).date():
+                name_dob_match = Client.objects.filter(
+                    first_name__iexact=client_data.get('first_name', '').strip(),
+                    last_name__iexact=client_data.get('last_name', '').strip(),
+                    dob=dob
+                ).first()
+                if name_dob_match:
+                    return name_dob_match, "name_dob_match"
+            
+            # Priority 6: Date of Birth + Name similarity (limited query)
+            if dob and dob != datetime(1900, 1, 1).date():
+                dob_clients = Client.objects.filter(dob=dob).only('id', 'first_name', 'last_name')[:100]  # Limit to 100
+                for client in dob_clients:
+                    client_full_name = f"{client.first_name} {client.last_name}".strip()
+                    similarity = calculate_name_similarity(full_name, client_full_name)
+                    if similarity >= 0.7:
+                        return client, f"dob_name_similarity_{similarity:.2f}"
+            
+            return None, None
+        
         # Initialize lists for bulk operations
         clients_to_create = []
+        clients_to_update = []  # NEW: List for bulk updates
         extended_records_to_create = []
         duplicate_relationships_to_create = []
         
@@ -1945,12 +2121,15 @@ def upload_clients(request):
                 # Helper function to clean client_id and ensure it's a whole number string
                 def clean_client_id(value):
                     """Clean client_id to ensure it's a whole number string without decimals"""
-                    if not value or str(value).strip() == '':
+                    # Check for pandas NaN/None/null values first
+                    if pd.isna(value) or value is None:
                         return None
                     
+                    # Convert to string and check if it's empty or 'nan'
                     try:
-                        # Convert to string first
                         str_value = str(value).strip()
+                        if not str_value or str_value.lower() in ['nan', 'none', 'null', '']:
+                            return None
                         
                         # If it's a decimal number (like 2765.0), convert to integer then back to string
                         if '.' in str_value:
@@ -1965,7 +2144,7 @@ def upload_clients(request):
                             # Already a whole number, return as string
                             return str_value
                     except (ValueError, TypeError):
-                        return str(value).strip() if value else None
+                        return None
 
                 # Clean and prepare data using field mapping
                 email = get_field_data('email')  # Now optional
@@ -2011,23 +2190,11 @@ def upload_clients(request):
                                                 # If all parsing attempts fail, raise the original error
                                                 raise ValueError(f"Unable to parse date: {dob_str}")
                     else:
-                        # Check if this is an update (has Client ID) - if so, DOB is optional
-                        client_id = get_field_data('client_id')
-                        if not client_id:
-                            # This is a new client creation, DOB is required
-                            errors.append(f"Row {index + 1}: Date of Birth is required for new client creation")
-                            skipped_count += 1
-                            continue
-                        # For updates, we can proceed without DOB
+                        # DOB is optional - no error needed
+                        pass
                 except Exception as e:
-                    # If date parsing fails, check if this is a new client or update
-                    client_id = get_field_data('client_id')
-                    if not client_id:
-                        # This is a new client creation, DOB is required
-                        errors.append(f"Row {index + 1}: Invalid Date of Birth format - {str(e)}")
-                        skipped_count += 1
-                        continue
-                    # For updates, we can proceed without DOB
+                    # If date parsing fails, DOB is optional - just set to None
+                    dob = None
                 
                 client_data = {
                     'first_name': get_field_data('first_name'),
@@ -2036,7 +2203,7 @@ def upload_clients(request):
                     'dob': dob,
                     'preferred_name': get_field_data('preferred_name'),
                     'alias': get_field_data('alias'),
-                    'gender': get_field_data('gender', 'Unknown'),
+                    'gender': get_field_data('gender', None),
                     'gender_identity': get_field_data('gender_identity'),
                     'pronoun': get_field_data('pronoun'),
                     'marital_status': get_field_data('marital_status'),
@@ -2053,6 +2220,7 @@ def upload_clients(request):
                     'official_language': get_field_data('official_language'),
                     'language_interpreter_required': parse_boolean(get_field_data('language_interpreter_required')),
                     'self_identification_race_ethnicity': get_field_data('self_identification_race_ethnicity'),
+                    'indigenous_status': get_field_data('indigenous_status'),
                     'lgbtq_status': get_field_data('lgbtq_status'),
                     'highest_level_education': get_field_data('highest_level_education'),
                     'children_home': parse_boolean(get_field_data('children_home')),
@@ -2154,40 +2322,88 @@ def upload_clients(request):
                 combined_client_value = None
                 client_id_from_separate_field = None
                 
-                # Look for combined client field
+                # Look for combined client field via mapping first
                 for col in df.columns:
                     if column_mapping.get(col) == 'client_combined':
                         combined_client_value = row[col]
                         break
                 
-                # Look for separate client_id field
+                # If not found via mapping, check for "Client" or "client" column directly (case-insensitive)
+                if not combined_client_value or pd.isna(combined_client_value) or not str(combined_client_value).strip():
+                    for col in df.columns:
+                        col_lower = col.lower().strip()
+                        # Check if column name is "client" (but not already mapped to client_id or something else)
+                        if col_lower == 'client' and column_mapping.get(col) not in ['client_id', 'first_name', 'last_name']:
+                            combined_client_value = row[col]
+                            break
+                
+                # Look for separate client_id field via mapping
                 for col in df.columns:
                     if column_mapping.get(col) == 'client_id':
                         client_id_from_separate_field = row[col]
-                        print(f"Row {index + 1}: Found separate client_id field '{col}' with value: '{client_id_from_separate_field}'")
                         break
                 
-                # Only parse if combined field exists AND has a value
-                if combined_client_value and str(combined_client_value).strip():
-                    print(f"Row {index + 1}: Parsing combined client field '{combined_client_value}' with separate client_id '{client_id_from_separate_field}'")
+                # If not found via mapping, check for "Client ID" or "client id" column directly (case-insensitive)
+                if not client_id_from_separate_field or pd.isna(client_id_from_separate_field) or (str(client_id_from_separate_field).strip() == '' or str(client_id_from_separate_field).strip().lower() in ['nan', 'none', '']):
+                    for col in df.columns:
+                        col_lower = col.lower().strip()
+                        # Check if column name contains "client" and "id" (like "Client ID", "client id", etc.)
+                        if ('client' in col_lower and 'id' in col_lower) and column_mapping.get(col) not in ['first_name', 'last_name', 'client_combined']:
+                            potential_client_id = row[col]
+                            if potential_client_id and not pd.isna(potential_client_id) and str(potential_client_id).strip() and str(potential_client_id).strip().lower() not in ['nan', 'none', '']:
+                                client_id_from_separate_field = potential_client_id
+                                break
+                
+                # Try to extract names and client_id from combined field
+                if combined_client_value and not pd.isna(combined_client_value) and str(combined_client_value).strip():
                     parsed_first, parsed_last, parsed_client_id = parse_combined_client_field(
                         combined_client_value, 
                         client_id_from_separate_field
                     )
-                    print(f"Row {index + 1}: Parsing result - First: '{parsed_first}', Last: '{parsed_last}', ID: '{parsed_client_id}'")
                     
-                    # Only override if parsing was successful
+                    # Override names if parsing was successful
                     if parsed_first and parsed_last:
-                        client_data['first_name'] = parsed_first
-                        client_data['last_name'] = parsed_last
+                        if not client_data.get('first_name') or client_data.get('first_name', '').strip() == '':
+                            client_data['first_name'] = parsed_first
+                        if not client_data.get('last_name') or client_data.get('last_name', '').strip() == '':
+                            client_data['last_name'] = parsed_last
                         
-                        # Only override client_id if we successfully parsed it
-                        if parsed_client_id:
+                        # Override client_id if we successfully parsed it and it's missing
+                        if parsed_client_id and (not client_data.get('client_id') or client_data.get('client_id', '').strip() == ''):
                             client_data['client_id'] = clean_client_id(parsed_client_id)
-                        
-                        print(f"Row {index + 1}: Parsed combined client field - First: '{parsed_first}', Last: '{parsed_last}', ID: '{parsed_client_id}'")
-                    else:
-                        print(f"Row {index + 1}: Combined client field found but parsing failed, using individual fields")
+                
+                # If client_id is still missing, try to get it from Client ID column
+                if (not client_data.get('client_id') or client_data.get('client_id', '').strip() == '') and client_id_from_separate_field:
+                    try:
+                        if not pd.isna(client_id_from_separate_field):
+                            cleaned_id = clean_client_id(client_id_from_separate_field)
+                            if cleaned_id:
+                                client_data['client_id'] = cleaned_id
+                    except:
+                        pass
+                
+                # If names are still missing, try to extract from a simple "name" column (First Last format)
+                if (not client_data.get('first_name') or client_data.get('first_name', '').strip() == '') or (not client_data.get('last_name') or client_data.get('last_name', '').strip() == ''):
+                    # Check for a "name" column that might contain "First Last" format
+                    name_field_value = None
+                    for col in df.columns:
+                        col_lower = col.lower().strip()
+                        # Check if column is "name" (but not already mapped to something else)
+                        if col_lower in ['name'] and column_mapping.get(col) not in ['first_name', 'last_name', 'client_combined']:
+                            name_field_value = row[col]
+                            break
+                    
+                    if name_field_value and str(name_field_value).strip():
+                        name_str = str(name_field_value).strip()
+                        # Try to parse as "First Last" format (simple space-separated)
+                        # Only split if we have at least one space and the result has 2+ parts
+                        name_parts = name_str.split()
+                        if len(name_parts) >= 2:
+                            # First part is first name, rest is last name
+                            if not client_data.get('first_name') or client_data.get('first_name', '').strip() == '':
+                                client_data['first_name'] = name_parts[0]
+                            if not client_data.get('last_name') or client_data.get('last_name', '').strip() == '':
+                                client_data['last_name'] = ' '.join(name_parts[1:])
                 
                 # Handle languages_spoken (expect comma-separated string)
                 languages = get_field_data('language')
@@ -2253,45 +2469,26 @@ def upload_clients(request):
                 
                 client_data['addresses'] = addresses
                 
-                # Check for duplicates using our custom logic
-                duplicate_client, match_type = find_duplicate_client(client_data)
-                client = None  # Initialize client variable
+                # Check for existing client_id first - this is the primary update mechanism (using batch lookup)
+                client = None
+                is_update = False
                 original_email = ''
                 original_phone = ''
                 original_client_id = ''
                 
-                # Check for existing client_id first - this is the primary update mechanism
-                existing_client_id = None
-                client = None
-                is_update = False
-                
                 if client_data.get('client_id'):
                     try:
-                        # Debug: Log Client ID + Source lookup
+                        # Use batch-loaded existing clients instead of querying
                         client_id_to_find = client_data['client_id']
-                        print(f"Row {index + 1}: Looking for existing client with Client ID: '{client_id_to_find}' and Source: '{source}'")
+                        existing_client = existing_clients_by_id.get(client_id_to_find)
                         
-                        # Match by both client_id AND source - only update if both match
-                        existing_client_id = Client.objects.filter(client_id=client_data['client_id'], source=source).first()
-                        print(f"Row {index + 1}: Found existing client: {existing_client_id}")
-                        
-                        if existing_client_id:
+                        if existing_client:
                             # Found existing client by Client ID + Source combination - UPDATE instead of CREATE
-                            client = existing_client_id
+                            client = existing_client
                             is_update = True
                             updated_count += 1
-                            print(f"Row {index + 1}: Will UPDATE existing client (client_id + source match)")
                             
-                            # Update the existing client with new data (only non-empty values)
-                            # Filter out empty values to prevent overwriting existing data
-                            
-                            # Debug: Log what's in client_data before filtering
-                            print(f"Row {index + 1}: client_data keys: {list(client_data.keys())}")
-                            if 'gender' in client_data:
-                                print(f"Row {index + 1}: gender in client_data: '{client_data['gender']}'")
-                            if 'contact_information' in client_data:
-                                print(f"Row {index + 1}: contact_information in client_data: {client_data['contact_information']}")
-                            
+                            # Collect update data instead of updating immediately
                             # For updates, only include fields that are actually present in the CSV
                             filtered_data = {}
                             
@@ -2338,14 +2535,7 @@ def upload_clients(request):
                                 
                                 filtered_data[field] = value
                             
-                            # Debug: Log what fields are being updated
-                            print(f"Row {index + 1}: Updating client {client.first_name} {client.last_name}")
-                            print(f"Row {index + 1}: Original gender: '{client.gender}'")
-                            print(f"Row {index + 1}: Filtered data fields: {list(filtered_data.keys())}")
-                            if 'gender' in filtered_data:
-                                print(f"Row {index + 1}: Gender in filtered_data: '{filtered_data['gender']}'")
-                            
-                            # Apply only the filtered (non-empty) values, excluding extended fields
+                            # Define extended fields list
                             extended_fields_list = [
                                 'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
                                 'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
@@ -2366,34 +2556,24 @@ def upload_clients(request):
                                 'restriction_duration_days', 'restriction_status', 'early_termination_by'
                             ]
                             
+                            # Apply filtered values to client object for bulk update
                             for field, value in filtered_data.items():
                                 if hasattr(client, field) and field not in extended_fields_list:
                                     setattr(client, field, value)
                             
-                            # Set updated_by field for the update
+                            # Set updated_by field
                             if request.user.is_authenticated:
-                                # Try to get user's full name
                                 first_name = request.user.first_name or ''
                                 last_name = request.user.last_name or ''
                                 user_name = f"{first_name} {last_name}".strip()
-                                
-                                # If no full name, fall back to username or email
                                 if not user_name or user_name == ' ':
                                     user_name = request.user.username or request.user.email or 'System'
-                                
                                 client.updated_by = user_name
                             else:
                                 client.updated_by = 'System'
                             
-                            # Save the updated client
-                            client.save()
-                            logger.info(f"Updated existing client by Client ID {client_data['client_id']}: {client.first_name} {client.last_name}")
-                            
-                            # Update or create ClientExtended record
-                            from core.models import ClientExtended
+                            # Store client and extended data for bulk update
                             extended_data = {}
-                            
-                            # Extract extended fields from filtered_data (only non-empty values)
                             for field in extended_fields_list:
                                 if field in filtered_data:
                                     value = filtered_data[field]
@@ -2403,23 +2583,15 @@ def upload_clients(request):
                                         elif not isinstance(value, str):
                                             extended_data[field] = value
                             
-                            # Update or create ClientExtended record
-                            if extended_data:
-                                extended_record, created = ClientExtended.objects.get_or_create(
-                                    client=client,
-                                    defaults=extended_data
-                                )
-                                if not created:
-                                    # Update existing record
-                                    for field, value in extended_data.items():
-                                        setattr(extended_record, field, value)
-                                    extended_record.save()
-                                    logger.info(f"Updated ClientExtended record for client {client.client_id}")
-                                else:
-                                    logger.info(f"Created ClientExtended record for client {client.client_id}")
+                            clients_to_update.append({
+                                'client': client,
+                                'extended_data': extended_data,
+                                'row_index': index
+                            })
+                            
+                            logger.info(f"Prepared update for client by Client ID {client_data['client_id']}: {client.first_name} {client.last_name}")
                         else:
                             # Client ID exists but with different source - CREATE new client
-                            print(f"Row {index + 1}: Client ID '{client_id_to_find}' exists but with different source - will CREATE new client")
                             is_update = False  # Reset to False since we're creating a new client
                         
                     except Exception as e:
@@ -2438,66 +2610,16 @@ def upload_clients(request):
                         if not value or (isinstance(value, str) and value.strip() == ''):
                             missing_required.append(field)
                     
-                    # Check that at least one of phone OR dob is present (only for new clients)
-                    has_phone = False
-                    has_dob = False
-                    
-                    # Check phone number in both locations
-                    phone_value = client_data.get('contact_information', {}).get('phone')
-                    if phone_value and isinstance(phone_value, str) and phone_value.strip() != '':
-                        has_phone = True
-                    else:
-                        # Also check the direct phone field
-                        phone_value = client_data.get('phone')
-                        if phone_value and isinstance(phone_value, str) and phone_value.strip() != '':
-                            has_phone = True
-                    
-                    # Check DOB
-                    dob_value = client_data.get('dob')
-                    if dob_value:
-                        has_dob = True
-                    
-                    if not has_phone and not has_dob:
-                        missing_required.append('phone_or_dob')
-                    
-                    # Debug: Log what's in client_data for required fields
-                    debug_fields = []
-                    for f in required_fields:
-                        debug_fields.append((f, client_data.get(f)))
-                    
-                    # Add phone/dob debug info
-                    contact_phone = client_data.get('contact_information', {}).get('phone')
-                    direct_phone = client_data.get('phone')
-                    dob_value = client_data.get('dob')
-                    debug_fields.append(('phone_or_dob', f"contact_phone='{contact_phone}', direct_phone='{direct_phone}', dob='{dob_value}'"))
-                    
-                    debug_row_info = f"Row {index + 1}: client_data for required fields: {debug_fields}"
-                    print(debug_row_info)
-                    if not hasattr(debug_info, 'row_debug'):
-                        debug_info['row_debug'] = []
-                    debug_info['row_debug'].append(debug_row_info)
+                    # Phone and DOB are both optional - no requirement check needed
                     
                     if missing_required:
-                        # Handle special case for phone_or_dob
-                        if 'phone_or_dob' in missing_required:
-                            missing_required.remove('phone_or_dob')
-                            if missing_required:
-                                error_msg = f"Row {index + 1}: Missing required fields: {', '.join(missing_required)}. Also, at least one of phone or DOB is required."
-                            else:
-                                error_msg = f"Row {index + 1}: At least one of phone or DOB is required for client creation."
-                        else:
-                            error_msg = f"Row {index + 1}: Missing required fields for client creation: {', '.join(missing_required)}"
-                        print(f"Row {index + 1}: VALIDATION FAILED - {error_msg}")
+                        error_msg = f"Row {index + 1}: Missing required fields for client creation: {', '.join(missing_required)}"
                         errors.append(error_msg)
                         skipped_count += 1
                         continue
-                    else:
-                        print(f"Row {index + 1}: VALIDATION PASSED - proceeding to client creation")
                     
-                    # Check for duplicates using our custom logic (only for new clients)
-                    print(f"Row {index + 1}: About to check for duplicates")
-                    duplicate_client, match_type = find_duplicate_client(client_data)
-                    print(f"Row {index + 1}: Duplicate check result: duplicate_client={duplicate_client}, match_type={match_type}")
+                    # Check for duplicates using optimized batch function (only for new clients)
+                    duplicate_client, match_type = find_duplicate_client_optimized(client_data, index)
                     
                     # Store original values for duplicate relationship creation
                     if duplicate_client:
@@ -2510,7 +2632,6 @@ def upload_clients(request):
                         # Duplicate detection will be handled through the ClientDuplicate relationship
                     
                     # Separate client fields from extended fields for new client creation
-                    print(f"Row {index + 1}: About to separate client fields from extended fields")
                     client_fields = {}
                     extended_fields_list = [
                         'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
@@ -2596,6 +2717,72 @@ def upload_clients(request):
                 
                 logger.error(f"Error processing row {index + 2}: {str(e)}")
         
+        # Bulk update existing clients first
+        if clients_to_update:
+            try:
+                logger.info(f"Bulk updating {len(clients_to_update)} clients")
+                clients_to_bulk_update = [update_data['client'] for update_data in clients_to_update]
+                
+                # Define fields that can be bulk updated
+                # Note: updated_at is auto-managed by Django, don't include it
+                update_fields = [
+                    'first_name', 'last_name', 'middle_name', 'dob', 'preferred_name', 'alias',
+                    'gender', 'gender_identity', 'pronoun', 'marital_status', 'citizenship_status',
+                    'location_county', 'province', 'city', 'postal_code', 'address', 'address_2',
+                    'language', 'preferred_language', 'mother_tongue', 'official_language',
+                    'language_interpreter_required', 'self_identification_race_ethnicity', 'lgbtq_status',
+                    'highest_level_education', 'children_home', 'children_number', 'lhin',
+                    'email', 'phone', 'source', 'level_of_support', 'client_type', 'referral_source',
+                    'phone_work', 'phone_alt', 'permission_to_phone', 'permission_to_email',
+                    'medical_conditions', 'primary_diagnosis', 'family_doctor', 'health_card_number',
+                    'health_card_version', 'health_card_exp_date', 'health_card_issuing_province',
+                    'no_health_card_reason', 'next_of_kin', 'emergency_contact', 'comments',
+                    'chart_number', 'contact_information', 'addresses', 'languages_spoken',
+                    'ethnicity', 'support_workers', 'updated_by'
+                ]
+                
+                # Use bulk_update - Django will only update fields that are set on the objects
+                # We've already set the fields we want to update on each client object above
+                Client.objects.bulk_update(clients_to_bulk_update, update_fields, batch_size=1000)
+                logger.info(f"Bulk updated {len(clients_to_bulk_update)} clients successfully")
+                
+                # Update or create ClientExtended records
+                from core.models import ClientExtended
+                for update_data in clients_to_update:
+                    client = update_data['client']
+                    extended_data = update_data['extended_data']
+                    
+                    if extended_data:
+                        extended_record, created = ClientExtended.objects.get_or_create(
+                            client=client,
+                            defaults=extended_data
+                        )
+                        if not created:
+                            # Update existing record
+                            for field, value in extended_data.items():
+                                setattr(extended_record, field, value)
+                            extended_record.save()
+                            logger.info(f"Updated ClientExtended record for client {client.client_id}")
+                        else:
+                            logger.info(f"Created ClientExtended record for client {client.client_id}")
+                
+                # Process intake data for updated clients (optimized with pre-loaded caches)
+                if has_intake_data:
+                    for update_data in clients_to_update:
+                        try:
+                            client = update_data['client']
+                            row_index = update_data['row_index']
+                            row = df.iloc[row_index]
+                            # Pass pre-loaded caches to avoid repeated database queries
+                            process_intake_data(client, row, row_index, column_mapping, df.columns, departments_cache, programs_by_department)
+                        except Exception as e:
+                            logger.error(f"Error processing intake data for updated client {update_data['client'].client_id}: {str(e)}")
+                            errors.append(f"Row {update_data['row_index'] + 2}: Error processing intake data - {str(e)}")
+                
+            except Exception as e:
+                logger.error(f"Error in bulk update: {str(e)}")
+                raise
+        
         # Bulk create all clients
         if clients_to_create:
             try:
@@ -2668,9 +2855,9 @@ def upload_clients(request):
                 
                 logger.info(f"Bulk created {created_count} clients successfully")
                 
-                # Process intake data for all created clients
+                # Process intake data for all created clients (optimized with pre-loaded caches)
                 if has_intake_data and created_clients:
-                    print(f"DEBUG: Processing intake data for {len(created_clients)} created clients")
+                    logger.info(f"Processing intake data for {len(created_clients)} created clients")
                     for i, client in enumerate(created_clients):
                         try:
                             # Get the original row data for this client
@@ -2678,19 +2865,50 @@ def upload_clients(request):
                             row_index = client_data['row_index']
                             row = df.iloc[row_index]
                             
-                            print(f"DEBUG: Processing intake data for client {client.first_name} {client.last_name} (row {row_index + 2})")
-                            process_intake_data(client, row, row_index, column_mapping, df.columns)
+                            # Pass pre-loaded caches to avoid repeated database queries
+                            process_intake_data(client, row, row_index, column_mapping, df.columns, departments_cache, programs_by_department)
                         except Exception as e:
                             logger.error(f"Error processing intake data for client {client.first_name} {client.last_name}: {str(e)}")
                             errors.append(f"Row {row_index + 2}: Error processing intake data - {str(e)}")
                 
             except Exception as e:
                 logger.error(f"Error in bulk creation: {str(e)}")
-                errors.append(f"Bulk creation failed: {str(e)}")
-                created_count = 0
+                # Force rollback of the entire upload by raising the error to the outer handler
+                raise
         
-        # Prepare response
+        # Calculate completion time and update upload log
+        upload_completed_time = timezone.now()
         duplicate_created_count = len([d for d in duplicate_details if d['type'] == 'created_with_duplicate'])
+        
+        # Determine status
+        if len(errors) > 0 and (created_count == 0 and updated_count == 0):
+            status = 'failed'
+        elif len(errors) > 0:
+            status = 'partial'
+        else:
+            status = 'success'
+        
+        # Update upload log
+        if upload_log:
+            try:
+                upload_log.completed_at = upload_completed_time
+                upload_log.total_rows = len(df)
+                upload_log.records_created = created_count
+                upload_log.records_updated = updated_count
+                upload_log.records_skipped = skipped_count
+                upload_log.duplicates_flagged = duplicate_created_count
+                upload_log.errors_count = len(errors)
+                upload_log.status = status
+                upload_log.error_details = errors[:50]  # Store first 50 errors
+                upload_log.upload_details = {
+                    'has_intake_data': has_intake_data,
+                    'source': source,
+                    'file_extension': file_extension
+                }
+                upload_log.save()
+                logger.info(f"Upload log updated: {upload_log.id} - Duration: {upload_log.duration_seconds:.2f}s")
+            except Exception as e:
+                logger.error(f"Failed to update upload log: {e}")
         
         response_data = {
             'success': True,
@@ -2701,7 +2919,8 @@ def upload_clients(request):
                 'updated': updated_count,
                 'skipped': skipped_count,
                 'duplicates_flagged': duplicate_created_count,
-                'errors': len(errors)
+                'errors': len(errors),
+                'duration_seconds': upload_log.duration_seconds if upload_log else None
             },
             'duplicate_details': duplicate_details[:20],  # Limit to first 20 duplicates for display
             'errors': errors[:10] if errors else [],  # Limit to first 10 errors
@@ -2710,7 +2929,7 @@ def upload_clients(request):
                 'Existing clients with matching Client ID were updated with new information',
                 'New clients were created for records without existing Client ID matches',
                 'Missing date of birth values were set to 1900-01-01',
-                'Missing gender values were set to "Unknown"',
+                'Missing gender values were set to null',
                 f'{duplicate_created_count} clients were created with potential duplicate flags for review',
                 'Review flagged duplicates in the "Probable Duplicate Clients" section'
             ] if created_count > 0 or updated_count > 0 or duplicate_created_count > 0 else []
@@ -2720,11 +2939,96 @@ def upload_clients(request):
         
     except Exception as e:
         logger.error(f"Upload error: {str(e)}")
+        
+        # Update upload log with error
+        if upload_log:
+            try:
+                upload_log.completed_at = timezone.now()
+                upload_log.status = 'failed'
+                upload_log.error_message = str(e)
+                if 'file' in locals():
+                    upload_log.file_name = file.name if hasattr(file, 'name') else 'Unknown'
+                    upload_log.file_size = file.size if hasattr(file, 'size') else 0
+                upload_log.save()
+            except Exception as log_error:
+                logger.error(f"Failed to update upload log with error: {log_error}")
+        
         # Provide user-friendly error message
         return JsonResponse({
             'success': False, 
             'error': 'Upload failed. Please check your file format and try again. If the problem persists, contact your system administrator.'
         }, status=500)
+
+@require_http_methods(["GET"])
+@login_required
+def get_upload_logs(request):
+    """API endpoint to get client upload logs"""
+    try:
+        # Check permissions - same as upload permission
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Staff role users cannot view upload logs
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
+                    return JsonResponse({'success': False, 'error': 'You do not have permission to view upload logs.'}, status=403)
+            except Exception:
+                pass
+        
+        # Get pagination parameters
+        page = int(request.GET.get('page', 1))
+        per_page = int(request.GET.get('per_page', 20))
+        
+        # Get all upload logs ordered by most recent
+        logs = ClientUploadLog.objects.select_related('uploaded_by').order_by('-started_at')
+        
+        # Paginate
+        from django.core.paginator import Paginator
+        paginator = Paginator(logs, per_page)
+        page_obj = paginator.get_page(page)
+        
+        # Serialize logs
+        logs_data = []
+        for log in page_obj:
+            logs_data.append({
+                'id': str(log.external_id),
+                'file_name': log.file_name,
+                'file_size': log.file_size,
+                'file_type': log.file_type,
+                'source': log.source,
+                'total_rows': log.total_rows,
+                'records_created': log.records_created,
+                'records_updated': log.records_updated,
+                'records_skipped': log.records_skipped,
+                'duplicates_flagged': log.duplicates_flagged,
+                'errors_count': log.errors_count,
+                'started_at': log.started_at.strftime('%Y-%m-%d %H:%M:%S') if log.started_at else None,
+                'completed_at': log.completed_at.strftime('%Y-%m-%d %H:%M:%S') if log.completed_at else None,
+                'duration_seconds': round(log.duration_seconds, 2) if log.duration_seconds else None,
+                'status': log.status,
+                'error_message': log.error_message,
+                'uploaded_by': f"{log.uploaded_by.first_name} {log.uploaded_by.last_name}".strip() if log.uploaded_by else 'System',
+                'upload_details': log.upload_details
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'logs': logs_data,
+            'pagination': {
+                'page': page_obj.number,
+                'per_page': per_page,
+                'total_pages': paginator.num_pages,
+                'total_count': paginator.count,
+                'has_next': page_obj.has_next(),
+                'has_previous': page_obj.has_previous(),
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error fetching upload logs: {e}")
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @require_http_methods(["GET"])
 def download_sample(request, file_type):

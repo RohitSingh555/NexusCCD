@@ -302,20 +302,21 @@
                         <div class="space-y-2">
                             <div class="flex items-center text-sm text-neutral-700 font-body">
                                 <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
-                                <span class="font-semibold">First Name</span> (or first_name, firstname, fname, given name)
+                                <span class="font-semibold">Client ID</span> (or client_id, clientid, id, client number, Client ID)
                             </div>
                             <div class="flex items-center text-sm text-neutral-700 font-body">
                                 <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
-                                <span class="font-semibold">Last Name</span> (or last_name, lastname, lname, surname, family name)
+                                <span class="font-semibold">First Name & Last Name</span> - Use ONE of the following:
                             </div>
-                            <div class="flex items-center text-sm text-neutral-700 font-body">
-                                <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
-                                <span class="font-semibold">Phone</span> (or phone_number, telephone, tel, mobile, cell)
+                            <div class="ml-5 space-y-1 text-xs text-neutral-600">
+                                <div>• Separate columns: <span class="font-semibold">First Name</span> and <span class="font-semibold">Last Name</span></div>
+                                <div>• Combined column: <span class="font-semibold">Client</span> (supports "Last, First" or "First Last" format)</div>
+                                <div>• Combined column: <span class="font-semibold">Name</span> (supports "First Last" format)</div>
                             </div>
-                            <div class="flex items-center text-sm text-neutral-700 font-body">
-                                <div class="w-2 h-2 bg-red-500 rounded-full mr-3"></div>
-                                <span class="font-semibold">DOB</span> (or dob, date of birth, birthdate, birth date) - YYYY-MM-DD format
-                            </div>
+                        </div>
+                        <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p class="text-xs text-blue-800 font-semibold mb-1">Note:</p>
+                            <p class="text-xs text-blue-700">Phone and DOB are now <strong>optional</strong>. The system will process uploads even if these fields are missing.</p>
                         </div>
                     </div>
                     
@@ -329,7 +330,11 @@
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
-                                <span class="font-semibold">Client ID</span> (or client_id, clientid, id, client number)
+                                <span class="font-semibold">Phone</span> (or phone_number, telephone, tel, mobile, cell) - Optional
+                            </div>
+                            <div class="flex items-center text-sm text-neutral-600 font-body">
+                                <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                                <span class="font-semibold">DOB</span> (or dob, date of birth, birthdate, birth date) - YYYY-MM-DD format - Optional
                             </div>
                             <div class="flex items-center text-sm text-neutral-600 font-body">
                                 <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
@@ -593,11 +598,13 @@
                                 <p class="font-bold mb-2">Key Points:</p>
                                 <ul class="space-y-1 text-blue-700">
                                     <li>• <strong>UPDATE FUNCTIONALITY:</strong> If Client ID matches existing client, the record will be updated instead of creating a duplicate</li>
-                                    <li>• Only 4 columns are required: <strong>First Name, Last Name, Phone, DOB</strong> (case-insensitive)</li>
+                                    <li>• Only 3 items are required: <strong>Client ID, First Name, and Last Name</strong> (case-insensitive)</li>
+                                    <li>• <strong>Names can come from:</strong> Separate "First Name"/"Last Name" columns OR a "Client" column with "Last, First" or "First Last" format</li>
+                                    <li>• <strong>Client ID is required</strong> for all uploads (both new clients and updates)</li>
+                                    <li>• <strong>Phone and DOB are optional</strong> - uploads will process without them</li>
                                     <li>• <strong>All column names are case-insensitive</strong> - use any variation shown in parentheses</li>
-                                    <li>• <strong>DOB is required</strong> and must be in YYYY-MM-DD format</li>
                                     <li>• Missing <strong>Gender</strong> will default to "Unknown"</li>
-                                    <li>• <strong>Email is now optional</strong> - can be included or omitted</li>
+                                    <li>• <strong>Email is optional</strong> - can be included or omitted</li>
                                     <li>• Permission fields accept: true/false/yes/no/1/0 (case insensitive)</li>
                                     <li>• Comma-separated fields: Language, Ethnicity, Support Workers</li>
                                     <li>• Date format: YYYY-MM-DD for all date fields</li>
@@ -876,8 +883,8 @@ function uploadManager() {
                         <div class="space-y-2">
                             <p class="font-semibold">${result.error}</p>
                             <div class="text-sm text-red-600">
-                                <p><strong>Required columns:</strong> client_id, first_name, last_name, phone, dob</p>
-                                <p><strong>Note:</strong> client_id is now required for all uploads (both new and updates)</p>
+                                <p><strong>Required:</strong> Client ID, First Name, Last Name</p>
+                                <p><strong>Note:</strong> Names can come from separate columns or a combined "Client" column. Phone and DOB are optional.</p>
                             </div>
                         </div>
                     `;

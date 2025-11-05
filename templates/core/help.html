@@ -1,0 +1,146 @@
+{% extends 'dashboard_base.html' %}
+{% block title %}Help · Central Client Database{% endblock %}
+{% block page_title %}Help & Documentation{% endblock %}
+
+{% block content %}
+<div class="px-6 py-8">
+    <div class="max-w-6xl mx-auto">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <!-- TOC -->
+            <aside class="lg:col-span-1">
+                <div class="sticky top-24 space-y-2 bg-white border border-neutral-200 rounded-xl p-4 shadow-sm">
+                    <h2 class="text-sm font-bold text-neutral-700 uppercase tracking-wider">On this page</h2>
+                    <nav class="mt-2 space-y-1 text-sm">
+                        <a href="#overview" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Overview</a>
+                        <a href="#dashboard" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Dashboard</a>
+                        <a href="#clients" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Clients</a>
+                        <a href="#programs" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Programs & Services</a>
+                        <a href="#departments" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Departments</a>
+                        <a href="#enrollments" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Enrollments</a>
+                        <a href="#restrictions" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Restrictions</a>
+                        <a href="#reports" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Reports</a>
+                        <a href="#audit-log" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Audit Log</a>
+                        <a href="#staff" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Staff Management</a>
+                        <a href="#profile" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Profile & Settings</a>
+                        <a href="#permissions" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Roles & Permissions</a>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Content -->
+            <div class="lg:col-span-3 space-y-10">
+                <!-- Overview -->
+                <section id="overview" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
+                    <h2 class="text-xl font-black text-neutral-800 mb-2">Overview</h2>
+                    <p class="text-neutral-700">This system helps you manage clients, programs, enrollments, restrictions, reports, and staff. Use the left sidebar to navigate. Your available sections depend on your role and assigned permissions.</p>
+                </section>
+
+                <!-- Dashboard -->
+                <section id="dashboard" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
+                    <h2 class="text-xl font-black text-neutral-800 mb-3">Dashboard</h2>
+                    <ul class="list-disc ml-6 space-y-1 text-neutral-700">
+                        <li>Quick overview tailored to your role.</li>
+                        <li>Use the top bar menu for Profile, Settings, and Sign out.</li>
+                    </ul>
+                </section>
+
+                <!-- Clients -->
+                <section id="clients" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
+                    <h2 class="text-xl font-black text-neutral-800 mb-3">Clients</h2>
+                    <ul class="list-disc ml-6 space-y-1 text-neutral-700">
+                        <li>Search, view, create, and manage clients depending on your permissions.</li>
+                        <li>Client detail includes profile, enrollments, restrictions, notes, and attachments.</li>
+                        <li>Bulk actions are available where permitted.</li>
+                    </ul>
+                </section>
+
+                <!-- Programs & Services -->
+                <section id="programs" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
+                    <h2 class="text-xl font-black text-neutral-800 mb-3">Programs & Services</h2>
+                    <ul class="list-disc ml-6 space-y-1 text-neutral-700">
+                        <li>Browse programs and associated services.</li>
+                        <li>Managers/admins can create and edit programs and services.</li>
+                        <li>Capacity and assignment rules may limit access to certain programs.</li>
+                    </ul>
+                </section>
+
+                <!-- Departments -->
+                <section id="departments" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
+                    <h2 class="text-xl font-black text-neutral-800 mb-3">Departments</h2>
+                    <ul class="list-disc ml-6 space-y-1 text-neutral-700">
+                        <li>View department details; managers/admins can add, edit, or remove.</li>
+                        <li>Departments can scope access and reporting.</li>
+                    </ul>
+                </section>
+
+                <!-- Enrollments -->
+                <section id="enrollments" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
+                    <h2 class="text-xl font-black text-neutral-800 mb-3">Enrollments</h2>
+                    <ul class="list-disc ml-6 space-y-1 text-neutral-700">
+                        <li>Create and manage client enrollments into programs/services.</li>
+                        <li>Export enrollments when permitted.</li>
+                    </ul>
+                </section>
+
+                <!-- Restrictions -->
+                <section id="restrictions" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
+                    <h2 class="text-xl font-black text-neutral-800 mb-3">Restrictions</h2>
+                    <ul class="list-disc ml-6 space-y-1 text-neutral-700">
+                        <li>Track client restrictions with scope, duration, and status.</li>
+                        <li>Admins/managers can create, edit, and remove restrictions.</li>
+                        <li>Exports available from restriction list where permitted.</li>
+                    </ul>
+                </section>
+
+                <!-- Reports -->
+                <section id="reports" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
+                    <h2 class="text-xl font-black text-neutral-800 mb-3">Reports</h2>
+                    <ul class="list-disc ml-6 space-y-1 text-neutral-700">
+                        <li>Access curated reports depending on your role.</li>
+                        <li>Use filters to refine and export where available.</li>
+                    </ul>
+                </section>
+
+                <!-- Audit Log -->
+                <section id="audit-log" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
+                    <h2 class="text-xl font-black text-neutral-800 mb-3">Audit Log</h2>
+                    <ul class="list-disc ml-6 space-y-1 text-neutral-700">
+                        <li>Review system activity for compliance and troubleshooting.</li>
+                        <li>Admin-only section in most configurations.</li>
+                    </ul>
+                </section>
+
+                <!-- Staff Management -->
+                <section id="staff" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
+                    <h2 class="text-xl font-black text-neutral-800 mb-3">Staff Management</h2>
+                    <ul class="list-disc ml-6 space-y-1 text-neutral-700">
+                        <li>Manage staff accounts, roles, and assignments.</li>
+                        <li>Restricted to administrators.</li>
+                    </ul>
+                </section>
+
+                <!-- Profile & Settings -->
+                <section id="profile" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
+                    <h2 class="text-xl font-black text-neutral-800 mb-3">Profile & Settings</h2>
+                    <ul class="list-disc ml-6 space-y-1 text-neutral-700">
+                        <li>Update your profile, change password, and manage preferences.</li>
+                        <li>Access via the top-right user menu.</li>
+                    </ul>
+                </section>
+
+                <!-- Roles & Permissions -->
+                <section id="permissions" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
+                    <h2 class="text-xl font-black text-neutral-800 mb-3">Roles & Permissions</h2>
+                    <p class="text-neutral-700 mb-3">Access is governed by roles such as SuperAdmin, Admin, Manager, Leader, Staff, and User. Features in the sidebar appear only if you have permission.</p>
+                    <ul class="list-disc ml-6 space-y-1 text-neutral-700">
+                        <li>View permissions determine what sections you can access.</li>
+                        <li>Manage/create permissions allow creating, editing, and deleting.</li>
+                    </ul>
+                </section>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+

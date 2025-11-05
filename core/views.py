@@ -9,7 +9,7 @@ import csv
 from django.contrib import messages
 from .message_utils import success_message, error_message, warning_message, info_message, create_success, update_success, delete_success, validation_error, permission_error, not_found_error
 from django.urls import reverse_lazy, reverse
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView, View
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
@@ -955,25 +955,338 @@ class AuditLogListView(ListView):
             return self.paginate_by
     
     def get_queryset(self):
-        """Get audit logs ordered by most recent first"""
-        return AuditLog.objects.select_related('changed_by').order_by('-changed_at')
+        """Get audit logs with filtering by date range and entity"""
+        queryset = AuditLog.objects.select_related('changed_by')
+        
+        # Apply date range filtering
+        start_date = self.request.GET.get('start_date', '').strip()
+        end_date = self.request.GET.get('end_date', '').strip()
+        
+        if start_date:
+            try:
+                parsed_start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+                # Convert to datetime for comparison with changed_at (DateTimeField)
+                start_datetime = timezone.make_aware(datetime.combine(parsed_start_date, datetime.min.time()))
+                queryset = queryset.filter(changed_at__gte=start_datetime)
+            except ValueError:
+                pass
+        
+        if end_date:
+            try:
+                parsed_end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+                # Convert to datetime for comparison with changed_at (DateTimeField)
+                end_datetime = timezone.make_aware(datetime.combine(parsed_end_date, datetime.max.time()))
+                queryset = queryset.filter(changed_at__lte=end_datetime)
+            except ValueError:
+                pass
+        
+        # Apply entity filter
+        entity_filter = self.request.GET.get('entity', '').strip()
+        if entity_filter:
+            queryset = queryset.filter(entity=entity_filter)
+        
+        return queryset.order_by('-changed_at')
     
     def get_context_data(self, **kwargs):
         """Add statistics to context"""
         context = super().get_context_data(**kwargs)
         
-        # Get all audit logs for statistics (not just current page)
+        # Get filtered queryset for statistics
+        filtered_queryset = self.get_queryset()
         all_audit_logs = AuditLog.objects.all()
         
-        context['total_events'] = all_audit_logs.count()
-        context['create_events'] = all_audit_logs.filter(action='create').count()
-        context['update_events'] = all_audit_logs.filter(action='update').count()
-        context['delete_events'] = all_audit_logs.filter(action='delete').count()
+        # Statistics for filtered results
+        context['total_events'] = filtered_queryset.count()
+        context['create_events'] = filtered_queryset.filter(action='create').count()
+        context['update_events'] = filtered_queryset.filter(action='update').count()
+        context['delete_events'] = filtered_queryset.filter(action='delete').count()
+        
+        # Get all unique entities for filter dropdown
+        context['all_entities'] = sorted(all_audit_logs.values_list('entity', flat=True).distinct())
+        
+        # Add filter values to context
+        context['start_date'] = self.request.GET.get('start_date', '')
+        context['end_date'] = self.request.GET.get('end_date', '')
+        context['current_entity'] = self.request.GET.get('entity', '')
         
         # Add per_page to context for the template
         context['per_page'] = str(self.get_paginate_by(self.get_queryset()))
         
         return context
+
+
+@method_decorator(jwt_required, name='dispatch')
+class AuditLogRestoreView(View):
+    """Restore a deleted record from audit log"""
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to restore records"""
+        # Only SuperAdmin and Admin can restore records
+        if not request.user.is_superuser:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                if not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    return JsonResponse({'success': False, 'error': 'You do not have permission to restore records.'}, status=403)
+            except:
+                return JsonResponse({'success': False, 'error': 'You do not have permission to restore records.'}, status=403)
+        
+        return super().dispatch(request, *args, **kwargs)
+    
+    def post(self, request, log_id):
+        """Restore a deleted record"""
+        import json
+        from django.db import transaction
+        from django.http import JsonResponse
+        
+        try:
+            # Get the audit log entry
+            audit_log = AuditLog.objects.get(id=log_id, action='delete')
+            
+            # Get the diff data from request or audit log
+            if request.content_type == 'application/json':
+                data = json.loads(request.body)
+                diff_data = data.get('diff_data', audit_log.diff_json)
+                entity = data.get('entity', audit_log.entity)
+                entity_id = data.get('entity_id', audit_log.entity_id)
+            else:
+                diff_data = audit_log.diff_json
+                entity = audit_log.entity
+                entity_id = audit_log.entity_id
+            
+            if not diff_data:
+                return JsonResponse({'success': False, 'error': 'No data available to restore.'}, status=400)
+            
+            # Restore based on entity type
+            with transaction.atomic():
+                if entity == 'Client':
+                    restored = self._restore_client(entity_id, diff_data, request.user)
+                elif entity == 'Program':
+                    restored = self._restore_program(entity_id, diff_data, request.user)
+                elif entity == 'Enrollment':
+                    restored = self._restore_enrollment(entity_id, diff_data, request.user)
+                elif entity == 'Restriction':
+                    restored = self._restore_restriction(entity_id, diff_data, request.user)
+                else:
+                    return JsonResponse({'success': False, 'error': f'Entity type "{entity}" is not supported for restoration.'}, status=400)
+                
+                if restored:
+                    # Create audit log for restoration
+                    from .models import create_audit_log
+                    create_audit_log(
+                        entity_name=entity,
+                        entity_id=restored.external_id,
+                        action='create',
+                        changed_by=request.user,
+                        diff_data={'restored_from_audit_log': str(audit_log.id), 'restored_by': request.user.get_full_name() or request.user.username}
+                    )
+                    
+                    return JsonResponse({
+                        'success': True,
+                        'message': f'{entity} restored successfully.',
+                        'entity_id': str(restored.external_id)
+                    })
+                else:
+                    return JsonResponse({'success': False, 'error': 'Failed to restore record.'}, status=500)
+                    
+        except AuditLog.DoesNotExist:
+            return JsonResponse({'success': False, 'error': 'Audit log entry not found.'}, status=404)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error restoring record: {e}")
+            return JsonResponse({'success': False, 'error': f'An error occurred: {str(e)}'}, status=500)
+    
+    def _restore_client(self, entity_id, diff_data, user):
+        """Restore a deleted client"""
+        from core.models import Client
+        
+        # Check if client already exists
+        try:
+            existing = Client.objects.get(external_id=entity_id)
+            return existing  # Already exists
+        except Client.DoesNotExist:
+            pass
+        
+        # Create new client with stored data
+        client = Client.objects.create(
+            external_id=entity_id,
+            first_name=diff_data.get('first_name', ''),
+            last_name=diff_data.get('last_name', ''),
+            preferred_name=diff_data.get('preferred_name') or '',
+            alias=diff_data.get('alias') or '',
+            dob=diff_data.get('dob') if diff_data.get('dob') else None,
+            gender=diff_data.get('gender') or '',
+            sexual_orientation=diff_data.get('sexual_orientation') or '',
+            citizenship_status=diff_data.get('citizenship_status') or '',
+            indigenous_status=diff_data.get('indigenous_status') or '',
+            country_of_birth=diff_data.get('country_of_birth') or '',
+            address_2=diff_data.get('address_2') or '',
+            permission_to_email=diff_data.get('permission_to_email', False),
+            permission_to_phone=diff_data.get('permission_to_phone', False),
+            phone_work=diff_data.get('phone_work') or '',
+            phone_alt=diff_data.get('phone_alt') or '',
+            client_id=diff_data.get('client_id') or '',
+            medical_conditions=diff_data.get('medical_conditions') or '',
+            primary_diagnosis=diff_data.get('primary_diagnosis') or '',
+            comments=diff_data.get('comments') or '',
+        )
+        
+        # Restore JSON fields if they exist
+        if diff_data.get('languages_spoken'):
+            try:
+                import json
+                client.languages_spoken = json.loads(diff_data['languages_spoken']) if isinstance(diff_data['languages_spoken'], str) else diff_data['languages_spoken']
+            except:
+                pass
+        
+        if diff_data.get('ethnicity'):
+            try:
+                import json
+                client.ethnicity = json.loads(diff_data['ethnicity']) if isinstance(diff_data['ethnicity'], str) else diff_data['ethnicity']
+            except:
+                pass
+        
+        if diff_data.get('support_workers'):
+            try:
+                import json
+                client.support_workers = json.loads(diff_data['support_workers']) if isinstance(diff_data['support_workers'], str) else diff_data['support_workers']
+            except:
+                pass
+        
+        if diff_data.get('next_of_kin'):
+            try:
+                import json
+                client.next_of_kin = json.loads(diff_data['next_of_kin']) if isinstance(diff_data['next_of_kin'], str) else diff_data['next_of_kin']
+            except:
+                pass
+        
+        if diff_data.get('emergency_contact'):
+            try:
+                import json
+                client.emergency_contact = json.loads(diff_data['emergency_contact']) if isinstance(diff_data['emergency_contact'], str) else diff_data['emergency_contact']
+            except:
+                pass
+        
+        client.save()
+        return client
+    
+    def _restore_program(self, entity_id, diff_data, user):
+        """Restore a deleted program"""
+        from core.models import Program, Department
+        
+        # Check if program already exists
+        try:
+            existing = Program.objects.get(external_id=entity_id)
+            return existing
+        except Program.DoesNotExist:
+            pass
+        
+        # Find department by name
+        department = None
+        if diff_data.get('department'):
+            try:
+                department = Department.objects.filter(name__iexact=diff_data['department']).first()
+            except:
+                pass
+        
+        # Create new program
+        program = Program.objects.create(
+            external_id=entity_id,
+            name=diff_data.get('name', 'Restored Program'),
+            department=department,
+            location=diff_data.get('location') or '',
+            capacity_current=diff_data.get('capacity_current', 0),
+            capacity_effective_date=diff_data.get('capacity_effective_date') if diff_data.get('capacity_effective_date') else None,
+            status='active'
+        )
+        
+        return program
+    
+    def _restore_enrollment(self, entity_id, diff_data, user):
+        """Restore a deleted enrollment"""
+        from core.models import ClientProgramEnrollment, Client, Program
+        
+        # Check if enrollment already exists
+        try:
+            existing = ClientProgramEnrollment.objects.get(external_id=entity_id)
+            return existing
+        except ClientProgramEnrollment.DoesNotExist:
+            pass
+        
+        # Find client and program
+        client = None
+        program = None
+        
+        if diff_data.get('client'):
+            # Try to find client by name
+            try:
+                name_parts = diff_data['client'].split()
+                if len(name_parts) >= 2:
+                    client = Client.objects.filter(first_name__iexact=name_parts[0], last_name__iexact=name_parts[-1]).first()
+            except:
+                pass
+        
+        if diff_data.get('program'):
+            try:
+                program = Program.objects.filter(name__iexact=diff_data['program']).first()
+            except:
+                pass
+        
+        if not client or not program:
+            return None  # Cannot restore without client and program
+        
+        # Create enrollment
+        from datetime import datetime
+        enrollment = ClientProgramEnrollment.objects.create(
+            external_id=entity_id,
+            client=client,
+            program=program,
+            start_date=datetime.strptime(diff_data['start_date'], '%Y-%m-%d').date() if diff_data.get('start_date') else None,
+            end_date=datetime.strptime(diff_data['end_date'], '%Y-%m-%d').date() if diff_data.get('end_date') else None,
+            status=diff_data.get('status', 'pending')
+        )
+        
+        return enrollment
+    
+    def _restore_restriction(self, entity_id, diff_data, user):
+        """Restore a deleted restriction"""
+        from core.models import ServiceRestriction, Client
+        
+        # Check if restriction already exists
+        try:
+            existing = ServiceRestriction.objects.get(external_id=entity_id)
+            return existing
+        except ServiceRestriction.DoesNotExist:
+            pass
+        
+        # Find client
+        client = None
+        if diff_data.get('client'):
+            try:
+                name_parts = diff_data['client'].split()
+                if len(name_parts) >= 2:
+                    client = Client.objects.filter(first_name__iexact=name_parts[0], last_name__iexact=name_parts[-1]).first()
+            except:
+                pass
+        
+        if not client:
+            return None
+        
+        # Create restriction
+        from datetime import datetime
+        restriction = ServiceRestriction.objects.create(
+            external_id=entity_id,
+            client=client,
+            restriction_type=diff_data.get('restriction_type', ''),
+            start_date=datetime.strptime(diff_data['start_date'], '%Y-%m-%d').date() if diff_data.get('start_date') else None,
+            end_date=datetime.strptime(diff_data['end_date'], '%Y-%m-%d').date() if diff_data.get('end_date') else None,
+            notes=diff_data.get('notes', '')
+        )
+        
+        return restriction
 
 
 # Department CRUD Views
@@ -2926,3 +3239,10 @@ class RestrictionCSVExportView(AnalystAccessMixin, ProgramManagerAccessMixin, Li
             ])
         
         return response
+
+
+def help_page(request):
+    """Static Help page with grouped guidance for app features."""
+    if not request.user.is_authenticated:
+        return redirect('home')
+    return render(request, 'core/help.html')

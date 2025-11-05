@@ -25,6 +25,7 @@ urlpatterns = [
     path('restrictions/', views.RestrictionListView.as_view(), name='restrictions'),
     path('restrictions/export/', views.RestrictionCSVExportView.as_view(), name='restrictions_export'),
     path('audit-log/', views.AuditLogListView.as_view(), name='audit_log'),
+    path('audit-log/restore/<uuid:log_id>/', views.AuditLogRestoreView.as_view(), name='audit_log_restore'),
     path('test-messages/', views.test_messages, name='test_messages'),
     path('test-messages/success/', views.test_success, name='test_success'),
     path('test-messages/error/', views.test_error, name='test_error'),
@@ -72,6 +73,9 @@ urlpatterns = [
     # Permission error handling
     path('permission-error/', PermissionErrorView.as_view(), name='permission_error'),
     path('api/permission-error/', permission_error_ajax, name='permission_error_ajax'),
+
+    # Help page
+    path('help/', views.help_page, name='help'),
 ]
 
 # In your main urls.py, add:

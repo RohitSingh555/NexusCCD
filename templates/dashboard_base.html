@@ -227,6 +227,14 @@
                             <span class="font-bold font-subheader">Staff Management</span>
                         </a>
                         {% endif %}
+
+                        <!-- Help - visible to all authenticated users -->
+                        <a href="{% url 'core:help' %}" class="group flex items-center px-4 py-3 text-sm font-bold rounded-xl transition-all duration-200 {% if request.resolver_match.url_name == 'help' %}bg-primary-50 text-primary-700 border-l-4 border-brand-sky shadow-sm{% else %}text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 hover:shadow-sm{% endif %}">
+                            <svg class="mr-4 flex-shrink-0 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10a4 4 0 118 0c0 1.657-1 2.5-2.5 3.5S12 15 12 17m0 4h.01"></path>
+                            </svg>
+                            <span class="font-bold font-subheader">Help</span>
+                        </a>
                     </nav>
                 </div>
 

@@ -42,12 +42,78 @@
             <table class="w-full divide-y divide-neutral-200">
                 <thead class="bg-neutral-50">
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/4">Program</th>
-                        <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/6">Department</th>
-                        <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/12">Capacity</th>
-                        <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/12">Occupied</th>
-                        <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/12">Vacant</th>
-                        <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/6">Utilization</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/4">
+                            <a href="?sort=name&order={% if sort_by == 'name' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center hover:text-neutral-700">
+                                Program
+                                {% if sort_by == 'name' %}
+                                    {% if sort_order == 'asc' %}
+                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                    {% else %}
+                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    {% endif %}
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/6">
+                            <a href="?sort=department&order={% if sort_by == 'department' and sort_order == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center hover:text-neutral-700">
+                                Department
+                                {% if sort_by == 'department' %}
+                                    {% if sort_order == 'asc' %}
+                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                    {% else %}
+                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    {% endif %}
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/12">
+                            <a href="?sort=capacity&order={% if sort_by == 'capacity' and sort_order == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center hover:text-neutral-700">
+                                Capacity
+                                {% if sort_by == 'capacity' %}
+                                    {% if sort_order == 'desc' %}
+                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    {% else %}
+                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                    {% endif %}
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/12">
+                            <a href="?sort=occupied&order={% if sort_by == 'occupied' and sort_order == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center hover:text-neutral-700">
+                                Occupied
+                                {% if sort_by == 'occupied' %}
+                                    {% if sort_order == 'desc' %}
+                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    {% else %}
+                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                    {% endif %}
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/12">
+                            <a href="?sort=vacancy&order={% if sort_by == 'vacancy' and sort_order == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center hover:text-neutral-700">
+                                Vacant
+                                {% if sort_by == 'vacancy' %}
+                                    {% if sort_order == 'desc' %}
+                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    {% else %}
+                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                    {% endif %}
+                                {% endif %}
+                            </a>
+                        </th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/6">
+                            <a href="?sort=utilization&order={% if sort_by == 'utilization' and sort_order == 'desc' %}asc{% else %}desc{% endif %}" class="flex items-center hover:text-neutral-700">
+                                Utilization
+                                {% if sort_by == 'utilization' %}
+                                    {% if sort_order == 'desc' %}
+                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                    {% else %}
+                                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+                                    {% endif %}
+                                {% endif %}
+                            </a>
+                        </th>
                         <th class="px-4 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader w-1/6">Status</th>
                     </tr>
                 </thead>

@@ -9,6 +9,10 @@ from core.views import jwt_required, ProgramManagerAccessMixin, AnalystAccessMix
 from core.message_utils import success_message, error_message, warning_message, info_message, create_success, update_success, delete_success, validation_error, permission_error, not_found_error
 from django.utils.decorators import method_decorator
 import csv
+import io
+
+from django.contrib import messages
+from django.http import JsonResponse
 
 @method_decorator(jwt_required, name='dispatch')
 class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
@@ -94,7 +98,39 @@ class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
                 Q(description__icontains=search_query)
             ).distinct()
         
-        return queryset
+        # Sorting (case-insensitive by relevant text fields)
+        from django.db.models.functions import Lower, Coalesce
+        from django.db.models import Value
+        try:
+            queryset = queryset.annotate(
+                name_ci=Lower(Coalesce('name', Value(''))),
+                department_name_ci=Lower(Coalesce(models.F('department__name'), Value(''))),
+                location_ci=Lower(Coalesce('location', Value(''))),
+            )
+        except Exception:
+            # If queryset was converted to a list due to capacity filtering, skip annotations
+            pass
+        sort_key = self.request.GET.get('sort', 'name_asc')
+        sort_mapping = {
+            'name_asc': ['name_ci'],
+            'name_desc': ['-name_ci'],
+            'department_asc': ['department_name_ci', 'name_ci'],
+            'department_desc': ['-department_name_ci', 'name_ci'],
+            'status_asc': ['status', 'name'],
+            'status_desc': ['-status', 'name'],
+            'created_desc': ['-created_at'],
+            'created_asc': ['created_at'],
+            'updated_desc': ['-updated_at'],
+            'updated_asc': ['updated_at'],
+            'location_asc': ['location_ci', 'name_ci'],
+            'location_desc': ['-location_ci', 'name_ci'],
+        }
+        order_by_fields = sort_mapping.get(sort_key, ['name_ci'])
+        try:
+            return queryset.order_by(*order_by_fields)
+        except Exception:
+            # In case queryset was converted to list by capacity filter above
+            return queryset
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -151,6 +187,7 @@ class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         context['current_capacity'] = self.request.GET.get('capacity', '')
         context['search_query'] = self.request.GET.get('search', '')
         
+        context['sort'] = self.request.GET.get('sort', 'name_asc')
         return context
 
 @method_decorator(jwt_required, name='dispatch')
@@ -371,6 +408,151 @@ class ProgramDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, DetailVie
         })
         
         return context
+@method_decorator(jwt_required, name='dispatch')
+class ProgramCSVUploadView(AnalystAccessMixin, ProgramManagerAccessMixin, View):
+    """Upload programs via CSV. Avoid duplicates by case-insensitive program name match."""
+
+    def post(self, request):
+        try:
+            if 'file' not in request.FILES:
+                messages.error(request, 'No file provided')
+                return redirect('programs:list')
+
+            file = request.FILES['file']
+
+            try:
+                content = file.read()
+                decoded = content.decode('utf-8', errors='ignore')
+            except Exception:
+                messages.error(request, 'Unable to read the uploaded file. Please upload a valid CSV file.')
+                return redirect('programs:list')
+
+            reader = csv.DictReader(io.StringIO(decoded))
+
+            # Normalization helpers
+            def normalize_header(h):
+                # handle BOM and whitespace
+                return (h or '').replace('\ufeff', '').strip().lower()
+
+            def get_value(normalized_row, aliases):
+                for a in aliases:
+                    # exact
+                    if a in normalized_row and str(normalized_row.get(a, '')).strip() != '':
+                        return str(normalized_row[a]).strip()
+                    # startswith fallback (e.g., "program n" in header sample)
+                    for key in normalized_row.keys():
+                        if key.startswith(a) and str(normalized_row.get(key, '')).strip() != '':
+                            return str(normalized_row[key]).strip()
+                return ''
+
+            canonical = {
+                'name': {'program name', 'program', 'name', 'program_n', 'program_name'},
+                'department': {'department', 'dept', 'departme'},
+                'location': {'location', 'site'},
+                'status': {'status'},
+                'capacity_current': {'capacity', 'current capacity', 'capacity_current'},
+                'description': {'description', 'details'},
+            }
+
+            created_count = 0
+            updated_count = 0
+            skipped = 0
+            errors = []
+
+            # Helper: status mapping
+            def map_status(value: str):
+                v = (value or '').strip().lower()
+                if v in ('active', 'a', '1', 'yes', 'y'): return 'active'
+                if v in ('inactive', 'i', '0', 'no', 'n'): return 'inactive'
+                if v in ('suggested', 's', 'proposed'): return 'suggested'
+                return 'active'
+
+            # Process rows
+            for idx, row in enumerate(reader, start=2):
+                try:
+                    # Build a normalized row mapping once per row
+                    normalized_row = {normalize_header(k): v for k, v in (row or {}).items()}
+
+                    name = get_value(normalized_row, canonical['name'])
+                    if not name:
+                        skipped += 1
+                        continue
+
+                    # Normalize name (strip whitespace)
+                    name = name.strip()
+
+                    dept_name = get_value(normalized_row, canonical['department'])
+                    location = get_value(normalized_row, canonical['location'])
+                    status_val = map_status(get_value(normalized_row, canonical['status']) or 'active')
+                    description = get_value(normalized_row, canonical['description'])
+
+                    # Capacity parse
+                    cap_raw = get_value(normalized_row, canonical['capacity_current'])
+                    try:
+                        cap_clean = str(cap_raw).replace(',', '').strip()
+                        capacity_current = int(cap_clean) if cap_clean != '' else 0
+                    except Exception:
+                        capacity_current = 0
+
+                    # Department (create if not exists)
+                    if dept_name:
+                        department, _ = Department.objects.get_or_create(name=dept_name.strip())
+                    else:
+                        department, _ = Department.objects.get_or_create(name='NA')
+
+                    # Find existing program by case-insensitive name AND department (must match both)
+                    # This ensures we don't create duplicates or match programs from wrong departments
+                    program = Program.objects.filter(
+                        name__iexact=name,
+                        department=department
+                    ).first()
+
+                    if program:
+                        # Update existing program (only update non-empty fields)
+                        # Department is already correct since we matched by both name and department
+                        if location and location.strip():
+                            program.location = location.strip()
+                        if status_val:
+                            program.status = status_val
+                        if description and description.strip():
+                            program.description = description.strip()
+                        program.capacity_current = capacity_current
+                        # Audit
+                        if request.user.is_authenticated:
+                            program.updated_by = request.user.get_full_name() or request.user.username or request.user.email
+                        program.save()
+                        updated_count += 1
+                    else:
+                        # Create new program
+                        created_by = 'System'
+                        if request.user.is_authenticated:
+                            created_by = request.user.get_full_name() or request.user.username or request.user.email or 'System'
+                        Program.objects.create(
+                            name=name,
+                            department=department,
+                            location=location or 'TBD',
+                            status=status_val,
+                            description=description,
+                            capacity_current=capacity_current,
+                            created_by=created_by,
+                            updated_by=created_by,
+                        )
+                        created_count += 1
+                except Exception as e:
+                    errors.append(f"Row {idx}: {str(e)}")
+                    skipped += 1
+
+            msg = f"Upload complete. Created: {created_count}, Updated: {updated_count}, Skipped: {skipped}."
+            if errors:
+                messages.warning(request, msg + f" Errors: {len(errors)}")
+            else:
+                messages.success(request, msg)
+
+            return redirect('programs:list')
+        except Exception as e:
+            messages.error(request, f"Upload failed: {str(e)}")
+            return redirect('programs:list')
+
 
 @method_decorator(jwt_required, name='dispatch')
 class ProgramBulkEnrollView(ProgramManagerAccessMixin, View):
