@@ -145,6 +145,11 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         # which doesn't exist on Client model
         queryset = Client.objects.filter(is_archived=False).order_by('-created_at')
         
+        # Exclude clients that are marked as duplicates (i.e., they are duplicate_client in a pending ClientDuplicate record)
+        queryset = queryset.exclude(
+            duplicate_of__status='pending'
+        )
+        
         # Apply date range filtering
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
         
@@ -469,6 +474,18 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
                 client.age = age
             else:
                 client.age = None
+        
+        # Prefetch duplicate information for efficient badge display
+        # Get all clients that have pending duplicates (primary_duplicates with status='pending')
+        client_ids = [client.id for client in context['clients']]
+        if client_ids:
+            clients_with_duplicates = ClientDuplicate.objects.filter(
+                status='pending',
+                primary_client_id__in=client_ids
+            ).values_list('primary_client_id', flat=True)
+            context['clients_with_duplicates'] = set(clients_with_duplicates)
+        else:
+            context['clients_with_duplicates'] = set()
         
         return context
 

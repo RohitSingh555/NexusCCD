@@ -26,6 +26,7 @@ urlpatterns = [
     path('restrictions/export/', views.RestrictionCSVExportView.as_view(), name='restrictions_export'),
     path('audit-log/', views.AuditLogListView.as_view(), name='audit_log'),
     path('audit-log/restore/<int:log_id>/', views.AuditLogRestoreView.as_view(), name='audit_log_restore'),
+    path('audit-log/clear-old/', views.clear_old_audit_logs, name='audit_log_clear_old'),
     path('test-messages/', views.test_messages, name='test_messages'),
     path('test-messages/success/', views.test_success, name='test_success'),
     path('test-messages/error/', views.test_error, name='test_error'),

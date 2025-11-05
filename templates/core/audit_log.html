@@ -147,7 +147,16 @@
     
     <!-- Filters Section -->
     <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-6">
-        <h2 class="text-lg font-bold text-neutral-800 mb-4 font-header">Filters</h2>
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold text-neutral-800 font-header">Filters</h2>
+            <button onclick="showClearOldLogsModal()" 
+                    class="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 shadow-sm">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                </svg>
+                Clear Old Entries
+            </button>
+        </div>
         <form method="GET" class="space-y-4">
             <!-- Preserve pagination and per_page parameters -->
             {% for key, value in request.GET.items %}
@@ -965,6 +974,146 @@ function restoreFromAuditLog(logId, entity, entityId) {
             });
         }
     );
+}
+
+// Clear old audit logs modal and functionality
+function showClearOldLogsModal() {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.id = 'clearOldLogsModal';
+    modal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                        <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-neutral-900">Clear Old Audit Log Entries</h3>
+                </div>
+                <p class="text-neutral-600 mb-6">
+                    This will permanently delete all audit log entries older than 7 days. This action cannot be undone.
+                </p>
+                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-yellow-700">
+                                <strong>Warning:</strong> Only entries older than 7 days will be deleted. Recent audit logs will be preserved.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button id="cancelClearBtn" class="px-4 py-2 bg-neutral-200 text-neutral-700 rounded-lg hover:bg-neutral-300 transition-colors font-medium">
+                        Cancel
+                    </button>
+                    <button id="confirmClearBtn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">
+                        Clear Old Entries
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const confirmBtn = modal.querySelector('#confirmClearBtn');
+    const cancelBtn = modal.querySelector('#cancelClearBtn');
+    
+    confirmBtn.addEventListener('click', function() {
+        clearOldAuditLogs();
+        modal.remove();
+    });
+    
+    cancelBtn.addEventListener('click', function() {
+        modal.remove();
+    });
+    
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+}
+
+function clearOldAuditLogs() {
+    const button = document.querySelector('[onclick="showClearOldLogsModal()"]');
+    if (!button) return;
+    
+    const originalHTML = button.innerHTML;
+    button.innerHTML = '<span class="animate-spin mr-2">⟳</span> Clearing...';
+    button.disabled = true;
+    
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    const url = '/core/audit-log/clear-old/';
+    const requestBody = JSON.stringify({});
+    
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCookie('csrftoken')
+        },
+        body: requestBody
+    })
+    .then(function(response) {
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            return response.text().then(function(text) {
+                const error = {
+                    error: 'Server returned an error page. Please check the console for details.',
+                    status: response.status,
+                    statusText: response.statusText
+                };
+                return Promise.reject(error);
+            });
+        }
+        if (!response.ok) {
+            return response.json().then(function(err) {
+                return Promise.reject(err);
+            });
+        }
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            showNotification(data.message || 'Old audit log entries cleared successfully.', 'success');
+            setTimeout(function() {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showNotification(data.error || 'Failed to clear old audit log entries.', 'error');
+            button.innerHTML = originalHTML;
+            button.disabled = false;
+        }
+    })
+    .catch(function(error) {
+        console.error('Error:', error);
+        const errorMessage = error.error || error.message || 'An error occurred while clearing old audit log entries';
+        showNotification(errorMessage, 'error');
+        button.innerHTML = originalHTML;
+        button.disabled = false;
+    });
 }
 </script>
 {% endblock %}

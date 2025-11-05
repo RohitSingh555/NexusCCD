@@ -6,6 +6,8 @@ from django.contrib.auth import get_user_model
 from functools import wraps
 import json
 import csv
+import uuid
+import logging
 from django.contrib import messages
 from .message_utils import success_message, error_message, warning_message, info_message, create_success, update_success, delete_success, validation_error, permission_error, not_found_error
 from django.urls import reverse_lazy, reverse
@@ -1018,6 +1020,88 @@ class AuditLogListView(ListView):
         context['per_page'] = str(self.get_paginate_by(self.get_queryset()))
         
         return context
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@jwt_required
+def clear_old_audit_logs(request):
+    """Clear audit log entries older than 7 days - SuperAdmin/Admin only"""
+    # Check if user has permission
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
+    
+    # Only SuperAdmin or Admin can clear audit logs
+    if not request.user.is_superuser:
+        try:
+            staff = request.user.staff_profile
+            user_roles = staff.staffrole_set.select_related('role').all()
+            role_names = [staff_role.role.name for staff_role in user_roles]
+            
+            if not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                return JsonResponse({
+                    'success': False,
+                    'error': 'You do not have permission to clear audit logs. Only SuperAdmin and Admin users can perform this action.'
+                }, status=403)
+        except Exception:
+            return JsonResponse({
+                'success': False,
+                'error': 'You do not have permission to clear audit logs.'
+            }, status=403)
+    
+    try:
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # Calculate the cutoff date (7 days ago)
+        cutoff_date = timezone.now() - timedelta(days=7)
+        
+        # Get count of entries to be deleted
+        old_logs = AuditLog.objects.filter(changed_at__lt=cutoff_date)
+        deleted_count = old_logs.count()
+        
+        if deleted_count == 0:
+            return JsonResponse({
+                'success': True,
+                'deleted_count': 0,
+                'message': 'No audit log entries older than 7 days found.'
+            })
+        
+        # Delete the entries
+        old_logs.delete()
+        
+        # Create audit log for this action
+        from .models import create_audit_log
+        try:
+            create_audit_log(
+                entity_name='AuditLog',
+                entity_id=uuid.uuid4(),
+                action='delete',
+                changed_by=request.user,
+                diff_data={
+                    'deleted_count': deleted_count,
+                    'cutoff_date': cutoff_date.isoformat(),
+                    'cleared_by': request.user.get_full_name() or request.user.username
+                }
+            )
+        except Exception as e:
+            logging.getLogger(__name__).error(f"Error creating audit log for clearing old logs: {e}")
+        
+        return JsonResponse({
+            'success': True,
+            'deleted_count': deleted_count,
+            'message': f'Successfully cleared {deleted_count} audit log entr{"y" if deleted_count == 1 else "ies"} older than 7 days.'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error clearing old audit logs: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'An error occurred while clearing audit logs: {str(e)}'
+        }, status=500)
 
 
 @method_decorator(jwt_required, name='dispatch')
