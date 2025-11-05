@@ -140,9 +140,10 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         from django.db.models import Q
         from datetime import date
         
-        # Start with base queryset - don't use ProgramManagerAccessMixin's get_queryset
-        # because it tries to select_related('program') which doesn't exist on Client model
-        queryset = Client.objects.all().order_by('-created_at')
+        # Start with base queryset - exclude archived clients by default
+        # Don't use ProgramManagerAccessMixin's get_queryset because it tries to select_related('program') 
+        # which doesn't exist on Client model
+        queryset = Client.objects.filter(is_archived=False).order_by('-created_at')
         
         # Apply date range filtering
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
@@ -607,12 +608,21 @@ class ClientDetailView(AnalystAccessMixin, DetailView):
         client = context['client']
         
         # Get enrollments with optimized queries, ordered by start_date descending
+        # Exclude archived (soft-deleted) enrollments from the main view
         enrollments = client.clientprogramenrollment_set.select_related(
             'program__department',
             'sub_program'
-        ).order_by('-start_date', 'program__name')
+        ).filter(is_archived=False).order_by('-start_date', 'program__name')
+        
+        # Also get archived enrollments for restore functionality
+        archived_enrollments = client.clientprogramenrollment_set.select_related(
+            'program__department',
+            'sub_program'
+        ).filter(is_archived=True).order_by('-start_date', 'program__name')
         
         context['enrollments'] = enrollments
+        context['archived_enrollments'] = archived_enrollments
+        context['archived_count'] = archived_enrollments.count()
         return context
 
 class ClientCreateView(AnalystAccessMixin, CreateView):
@@ -1200,21 +1210,32 @@ class ClientDeleteView(DeleteView):
             'deleted_by': f"{self.request.user.first_name} {self.request.user.last_name}".strip() or self.request.user.username
         }
         
-        # Create audit log entry before deletion
+        # Create audit log entry before archiving
         try:
             from core.models import create_audit_log
             create_audit_log(
                 entity_name='Client',
                 entity_id=client.external_id,
-                action='delete',
+                action='archive',
                 changed_by=self.request.user,
                 diff_data=client_data
             )
         except Exception as e:
-            logger.error(f"Error creating audit log for client deletion: {e}")
+            logger.error(f"Error creating audit log for client archiving: {e}")
         
-        delete_success(self.request, 'Client')
-        return super().form_valid(form)
+        # Soft delete: set is_archived=True and archived_at timestamp
+        from django.utils import timezone
+        client.is_archived = True
+        client.archived_at = timezone.now()
+        user_name = self.request.user.get_full_name() or self.request.user.username if self.request.user.is_authenticated else 'System'
+        client.updated_by = user_name
+        client.save()
+        
+        messages.success(
+            self.request, 
+            f'Client {client.first_name} {client.last_name} has been archived. You can restore it from the archived clients section.'
+        )
+        return redirect(self.success_url)
 
 class ClientUploadView(TemplateView):
     template_name = 'clients/client_upload.html'
@@ -3401,6 +3422,7 @@ def upload_clients(request):
                 raise
         
         # Bulk create all clients
+        created_clients = []  # Initialize outside the if block to track created clients
         if clients_to_create:
             try:
                 # Extract just the client fields for bulk creation
@@ -3505,6 +3527,52 @@ def upload_clients(request):
                 logger.error(f"Error in bulk creation: {str(e)}")
                 # Force rollback of the entire upload by raising the error to the outer handler
                 raise
+        
+        # Update inactive status for all processed clients based on active enrollments
+        # This is done after all clients and enrollments have been processed
+        try:
+            all_processed_client_ids = []
+            
+            # Collect IDs from updated clients
+            if clients_to_update:
+                for update_data in clients_to_update:
+                    client = update_data['client']
+                    all_processed_client_ids.append(client.id)
+            
+            # Collect IDs from created clients
+            if created_clients:
+                for client in created_clients:
+                    all_processed_client_ids.append(client.id)
+            
+            # Update inactive status for all processed clients
+            if all_processed_client_ids:
+                logger.info(f"Updating inactive status for {len(all_processed_client_ids)} processed clients")
+                inactive_count = 0
+                
+                # Get all processed clients with their enrollments prefetched
+                processed_clients = Client.objects.filter(
+                    id__in=all_processed_client_ids
+                ).prefetch_related('clientprogramenrollment_set')
+                
+                clients_to_update_status = []
+                for client in processed_clients:
+                    status_changed = client.update_inactive_status()
+                    if status_changed:
+                        clients_to_update_status.append(client)
+                        if client.is_inactive:
+                            inactive_count += 1
+                
+                # Bulk update inactive status
+                if clients_to_update_status:
+                    Client.objects.bulk_update(
+                        clients_to_update_status,
+                        ['is_inactive'],
+                        batch_size=1000
+                    )
+                    logger.info(f"Updated inactive status for {len(clients_to_update_status)} clients ({inactive_count} marked as inactive)")
+        except Exception as e:
+            # Don't fail the upload if inactive status update fails
+            logger.error(f"Error updating inactive status for processed clients: {str(e)}")
         
         # Calculate completion time and update upload log
         upload_completed_time = timezone.now()
@@ -3948,15 +4016,42 @@ def bulk_delete_clients(request):
                 'error': 'No clients found with provided IDs'
             }, status=404)
         
-        # Delete clients
-        clients_to_delete.delete()
+        # Soft delete: archive clients instead of actually deleting them
+        from django.utils import timezone
+        from core.models import create_audit_log
+        user_name = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
+        archived_at = timezone.now()
         
-        logger.info(f"Bulk deleted {deleted_count} clients: {client_ids}")
+        for client in clients_to_delete:
+            # Create audit log entry before archiving
+            try:
+                create_audit_log(
+                    entity_name='Client',
+                    entity_id=client.external_id,
+                    action='archive',
+                    changed_by=request.user,
+                    diff_data={
+                        'first_name': client.first_name,
+                        'last_name': client.last_name,
+                        'client_id': client.client_id or '',
+                        'archived_by': user_name
+                    }
+                )
+            except Exception as e:
+                logger.error(f"Error creating audit log for client archiving: {e}")
+            
+            # Soft delete: set is_archived=True and archived_at timestamp
+            client.is_archived = True
+            client.archived_at = archived_at
+            client.updated_by = user_name
+            client.save()
+        
+        logger.info(f"Bulk archived {deleted_count} clients: {client_ids}")
         
         return JsonResponse({
             'success': True,
             'deleted_count': deleted_count,
-            'message': f'Successfully deleted {deleted_count} client(s)'
+            'message': f'Successfully archived {deleted_count} client(s). You can restore them from the archived clients section.'
         })
         
     except json.JSONDecodeError:
@@ -3969,6 +4064,89 @@ def bulk_delete_clients(request):
         return JsonResponse({
             'success': False, 
             'error': f'An error occurred: {str(e)}'
+        }, status=500)
+
+
+@csrf_protect
+@require_http_methods(["POST"])
+@jwt_required
+def bulk_restore_clients(request):
+    """Bulk restore archived clients"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
+    
+    try:
+        import json
+        data = json.loads(request.body)
+        client_ids = data.get('client_ids', [])
+        
+        if not client_ids:
+            return JsonResponse({
+                'success': False,
+                'error': 'No clients selected for restoration'
+            }, status=400)
+        
+        # Get the archived clients to restore
+        clients_to_restore = Client.objects.filter(
+            external_id__in=client_ids,
+            is_archived=True
+        )
+        restored_count = clients_to_restore.count()
+        
+        if restored_count == 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'No archived clients found with the provided IDs'
+            }, status=404)
+        
+        # Restore clients: set is_archived=False and clear archived_at
+        from django.utils import timezone
+        from core.models import create_audit_log
+        user_name = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
+        
+        for client in clients_to_restore:
+            # Create audit log entry for restoration
+            try:
+                create_audit_log(
+                    entity_name='Client',
+                    entity_id=client.external_id,
+                    action='restore',
+                    changed_by=request.user,
+                    diff_data={
+                        'first_name': client.first_name,
+                        'last_name': client.last_name,
+                        'client_id': client.client_id or '',
+                        'restored_by': user_name
+                    }
+                )
+            except Exception as e:
+                logger.error(f"Error creating audit log for client restoration: {e}")
+            
+            # Restore: set is_archived=False and clear archived_at
+            client.is_archived = False
+            client.archived_at = None
+            client.updated_by = user_name
+            client.save()
+        
+        return JsonResponse({
+            'success': True,
+            'restored_count': restored_count,
+            'message': f'Successfully restored {restored_count} client(s)'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        logger.error(f"Error restoring clients: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'Error restoring clients: {str(e)}'
         }, status=500)
 
 

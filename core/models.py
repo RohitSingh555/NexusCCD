@@ -62,6 +62,8 @@ class BaseModel(models.Model):
 class Department(BaseModel):
     name = models.CharField(max_length=255, unique=True, db_index=True)
     owner = models.ForeignKey('Staff', on_delete=models.SET_NULL, null=True, blank=True, related_name='owned_departments', help_text="Department leader/owner")
+    is_archived = models.BooleanField(default=False, db_index=True, help_text="Whether this department is archived")
+    archived_at = models.DateTimeField(null=True, blank=True, db_index=True, help_text="Timestamp when this department was archived")
     
     class Meta:
         db_table = 'departments'
@@ -235,6 +237,8 @@ class Program(BaseModel):
     # Audit fields
     created_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who created this record")
     updated_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who last updated this record")
+    is_archived = models.BooleanField(default=False, db_index=True, help_text="Whether this program is archived")
+    archived_at = models.DateTimeField(null=True, blank=True, db_index=True, help_text="Timestamp when this program was archived")
     
     class Meta:
         db_table = 'programs'
@@ -488,6 +492,9 @@ class Client(BaseModel):
     # 🧾 ADMINISTRATIVE / SYSTEM FIELDS
     chart_number = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     source = models.CharField(max_length=50, choices=[('SMIMS', 'SMIMS'), ('EMHware', 'EMHware')], null=True, blank=True, db_index=True, help_text="Source system where client data originated")
+    is_archived = models.BooleanField(default=False, db_index=True, help_text="Whether this client is archived")
+    archived_at = models.DateTimeField(null=True, blank=True, db_index=True, help_text="Timestamp when this client was archived")
+    is_inactive = models.BooleanField(default=False, db_index=True, help_text="Whether this client is inactive (has zero active enrollments)")
     
     # Legacy fields (keeping for backward compatibility)
     image = models.URLField(max_length=500, null=True, blank=True)
@@ -554,6 +561,42 @@ class Client(BaseModel):
             dob_date = self.dob
             return today.year - dob_date.year - ((today.month, today.day) < (dob_date.month, dob_date.day))
         return None
+    
+    def has_active_enrollments(self, as_of_date=None):
+        """
+        Check if client has any active enrollments.
+        An enrollment is active if:
+        - is_archived=False
+        - start_date <= as_of_date (or today if not provided)
+        - end_date is None OR end_date > as_of_date
+        """
+        from django.utils import timezone
+        from django.db.models import Q
+        
+        if as_of_date is None:
+            as_of_date = timezone.now().date()
+        
+        active_enrollments = self.clientprogramenrollment_set.filter(
+            is_archived=False,
+            start_date__lte=as_of_date
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gt=as_of_date)
+        )
+        
+        return active_enrollments.exists()
+    
+    def update_inactive_status(self, as_of_date=None):
+        """
+        Update is_inactive status based on active enrollments.
+        Client is inactive if they have zero active enrollments.
+        Returns True if status was changed, False otherwise.
+        """
+        has_active = self.has_active_enrollments(as_of_date)
+        was_inactive = self.is_inactive
+        self.is_inactive = not has_active
+        
+        # Return True if status changed
+        return was_inactive != self.is_inactive
     
     class Meta:
         db_table = 'clients'
@@ -703,6 +746,7 @@ class ClientProgramEnrollment(BaseModel):
     created_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who created this record")
     updated_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who last updated this record")
     is_archived = models.BooleanField(default=False, db_index=True, help_text="Whether this enrollment is archived")
+    archived_at = models.DateTimeField(null=True, blank=True, db_index=True, help_text="Timestamp when this enrollment was archived")
     
     class Meta:
         db_table = 'client_program_enrollments'
@@ -832,6 +876,7 @@ class ServiceRestriction(BaseModel):
     end_date = models.DateField(null=True, blank=True, db_index=True)
     is_indefinite = models.BooleanField(default=False, db_index=True, help_text="Check if this restriction has no end date")
     is_archived = models.BooleanField(default=False, db_index=True, help_text="Check if this restriction has been archived")
+    archived_at = models.DateTimeField(null=True, blank=True, db_index=True, help_text="Timestamp when this restriction was archived")
     behaviors = models.JSONField(default=list, help_text="List of behaviors that led to this restriction")
     notes = models.TextField(null=True, blank=True, help_text="Additional notes about the restriction")
     
@@ -964,6 +1009,8 @@ class AuditLog(BaseModel):
         ('create', 'Create'),
         ('update', 'Update'),
         ('delete', 'Delete'),
+        ('archive', 'Archive'),
+        ('restore', 'Restore'),
         ('import', 'Import'),
         ('login', 'Login'),
         ('logout', 'Logout'),

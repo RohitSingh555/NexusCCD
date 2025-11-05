@@ -707,6 +707,11 @@ class RestrictionListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListVie
         # First apply the ProgramManagerAccessMixin filtering
         queryset = super().get_queryset()
         
+        # Exclude archived restrictions by default unless explicitly requested
+        status_filter = self.request.GET.get('status', '')
+        if status_filter != 'archived':
+            queryset = queryset.filter(is_archived=False)
+        
         # Apply date range filtering
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
         
@@ -1042,8 +1047,11 @@ class AuditLogRestoreView(View):
         from django.http import JsonResponse
         
         try:
-            # Get the audit log entry
-            audit_log = AuditLog.objects.get(id=log_id, action='delete')
+            # Get the audit log entry - handle both 'delete' and 'archive' actions
+            try:
+                audit_log = AuditLog.objects.get(id=log_id, action__in=['delete', 'archive'])
+            except AuditLog.DoesNotExist:
+                return JsonResponse({'success': False, 'error': 'Audit log entry not found or not restorable.'}, status=404)
             
             # Get the diff data from request or audit log
             if request.content_type == 'application/json':
@@ -1069,24 +1077,55 @@ class AuditLogRestoreView(View):
                     restored = self._restore_enrollment(entity_id, diff_data, request.user)
                 elif entity == 'Restriction':
                     restored = self._restore_restriction(entity_id, diff_data, request.user)
+                elif entity == 'Department':
+                    restored = self._restore_department(entity_id, diff_data, request.user)
                 else:
                     return JsonResponse({'success': False, 'error': f'Entity type "{entity}" is not supported for restoration.'}, status=400)
                 
                 if restored:
+                    # Get a descriptive name for the restored item
+                    restore_name = None
+                    if hasattr(restored, '_restore_name'):
+                        restore_name = restored._restore_name
+                    elif entity == 'Client':
+                        restore_name = f"{restored.first_name} {restored.last_name}"
+                    elif entity == 'Program':
+                        restore_name = f"{restored.name} ({restored.department.name})"
+                    elif entity == 'Enrollment':
+                        restore_name = f"{restored.client.first_name} {restored.client.last_name} - {restored.program.name}"
+                    elif entity == 'Restriction':
+                        restore_name = f"{restored.client.first_name} {restored.client.last_name} - {restored.get_restriction_type_display()}"
+                    elif entity == 'Department':
+                        restore_name = restored.name
+                    
                     # Create audit log for restoration
                     from .models import create_audit_log
                     create_audit_log(
                         entity_name=entity,
                         entity_id=restored.external_id,
-                        action='create',
+                        action='restore',
                         changed_by=request.user,
-                        diff_data={'restored_from_audit_log': str(audit_log.id), 'restored_by': request.user.get_full_name() or request.user.username}
+                        diff_data={
+                            'restored_from_audit_log': str(audit_log.id),
+                            'restored_by': request.user.get_full_name() or request.user.username,
+                            'restored_item': restore_name or str(restored)
+                        }
                     )
+                    
+                    # Delete the original archive/delete audit log entry since the item has been restored
+                    audit_log.delete()
+                    
+                    # Create a clear success message
+                    if restore_name:
+                        success_message = f'{entity} "{restore_name}" has been restored successfully.'
+                    else:
+                        success_message = f'{entity} restored successfully.'
                     
                     return JsonResponse({
                         'success': True,
-                        'message': f'{entity} restored successfully.',
-                        'entity_id': str(restored.external_id)
+                        'message': success_message,
+                        'entity_id': str(restored.external_id),
+                        'restored_item': restore_name
                     })
                 else:
                     return JsonResponse({'success': False, 'error': 'Failed to restore record.'}, status=500)
@@ -1100,13 +1139,19 @@ class AuditLogRestoreView(View):
             return JsonResponse({'success': False, 'error': f'An error occurred: {str(e)}'}, status=500)
     
     def _restore_client(self, entity_id, diff_data, user):
-        """Restore a deleted client"""
+        """Restore a deleted/archived client"""
         from core.models import Client
         
-        # Check if client already exists
+        # Check if client already exists (including archived)
         try:
             existing = Client.objects.get(external_id=entity_id)
-            return existing  # Already exists
+            # If archived, restore it
+            if existing.is_archived:
+                existing.is_archived = False
+                existing.archived_at = None
+                existing.updated_by = user.get_full_name() or user.username
+                existing.save()
+            return existing  # Already exists (restored or active)
         except Client.DoesNotExist:
             pass
         
@@ -1174,13 +1219,19 @@ class AuditLogRestoreView(View):
         return client
     
     def _restore_program(self, entity_id, diff_data, user):
-        """Restore a deleted program"""
+        """Restore a deleted/archived program"""
         from core.models import Program, Department
         
-        # Check if program already exists
+        # Check if program already exists (including archived)
         try:
             existing = Program.objects.get(external_id=entity_id)
-            return existing
+            # If archived, restore it
+            if existing.is_archived:
+                existing.is_archived = False
+                existing.archived_at = None
+                existing.updated_by = user.get_full_name() or user.username
+                existing.save()
+            return existing  # Already exists (restored or active)
         except Program.DoesNotExist:
             pass
         
@@ -1206,16 +1257,38 @@ class AuditLogRestoreView(View):
         return program
     
     def _restore_enrollment(self, entity_id, diff_data, user):
-        """Restore a deleted enrollment"""
+        """Restore a deleted/archived enrollment"""
         from core.models import ClientProgramEnrollment, Client, Program
+        import uuid
         
-        # Check if enrollment already exists
+        # Convert entity_id to UUID if it's a string
         try:
-            existing = ClientProgramEnrollment.objects.get(external_id=entity_id)
-            return existing
-        except ClientProgramEnrollment.DoesNotExist:
+            if isinstance(entity_id, str):
+                entity_id = uuid.UUID(entity_id)
+        except (ValueError, TypeError):
             pass
         
+        # Check if enrollment already exists (including archived) by external_id
+        try:
+            existing = ClientProgramEnrollment.objects.get(external_id=entity_id)
+            enrollment_name = f"{existing.client.first_name} {existing.client.last_name} - {existing.program.name}"
+            
+            # If archived, restore it
+            if existing.is_archived:
+                existing.is_archived = False
+                existing.archived_at = None
+                existing.updated_by = user.get_full_name() or user.username
+                existing.save()
+                # Store enrollment name for success message
+                existing._restore_name = enrollment_name
+            return existing  # Already exists (restored or active)
+        except ClientProgramEnrollment.DoesNotExist:
+            pass
+        except (ValueError, TypeError):
+            # entity_id is not a valid UUID, try to find by other means
+            pass
+        
+        # If enrollment doesn't exist, try to recreate from diff_data
         # Find client and program
         client = None
         program = None
@@ -1223,42 +1296,73 @@ class AuditLogRestoreView(View):
         if diff_data.get('client'):
             # Try to find client by name
             try:
-                name_parts = diff_data['client'].split()
-                if len(name_parts) >= 2:
-                    client = Client.objects.filter(first_name__iexact=name_parts[0], last_name__iexact=name_parts[-1]).first()
-            except:
-                pass
+                client_name = diff_data['client']
+                if isinstance(client_name, str):
+                    name_parts = client_name.split()
+                    if len(name_parts) >= 2:
+                        client = Client.objects.filter(
+                            first_name__iexact=name_parts[0], 
+                            last_name__iexact=name_parts[-1]
+                        ).first()
+                    elif len(name_parts) == 1:
+                        # Try last name only
+                        client = Client.objects.filter(last_name__iexact=name_parts[0]).first()
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error finding client for enrollment restore: {e}")
         
         if diff_data.get('program'):
             try:
-                program = Program.objects.filter(name__iexact=diff_data['program']).first()
-            except:
-                pass
+                program_name = diff_data['program']
+                if isinstance(program_name, str):
+                    program = Program.objects.filter(name__iexact=program_name).first()
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error finding program for enrollment restore: {e}")
         
         if not client or not program:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Cannot restore enrollment: client={client}, program={program}, diff_data={diff_data}")
             return None  # Cannot restore without client and program
         
         # Create enrollment
         from datetime import datetime
-        enrollment = ClientProgramEnrollment.objects.create(
-            external_id=entity_id,
-            client=client,
-            program=program,
-            start_date=datetime.strptime(diff_data['start_date'], '%Y-%m-%d').date() if diff_data.get('start_date') else None,
-            end_date=datetime.strptime(diff_data['end_date'], '%Y-%m-%d').date() if diff_data.get('end_date') else None,
-            status=diff_data.get('status', 'pending')
-        )
-        
-        return enrollment
+        try:
+            enrollment = ClientProgramEnrollment.objects.create(
+                external_id=entity_id,
+                client=client,
+                program=program,
+                start_date=datetime.strptime(diff_data['start_date'], '%Y-%m-%d').date() if diff_data.get('start_date') else None,
+                end_date=datetime.strptime(diff_data['end_date'], '%Y-%m-%d').date() if diff_data.get('end_date') else None,
+                status=diff_data.get('status', 'pending'),
+                created_by=user.get_full_name() or user.username
+            )
+            enrollment_name = f"{client.first_name} {client.last_name} - {program.name}"
+            enrollment._restore_name = enrollment_name
+            return enrollment
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error creating enrollment during restore: {e}")
+            return None
     
     def _restore_restriction(self, entity_id, diff_data, user):
-        """Restore a deleted restriction"""
+        """Restore a deleted/archived restriction"""
         from core.models import ServiceRestriction, Client
         
-        # Check if restriction already exists
+        # Check if restriction already exists (including archived)
         try:
             existing = ServiceRestriction.objects.get(external_id=entity_id)
-            return existing
+            # If archived, restore it
+            if existing.is_archived:
+                existing.is_archived = False
+                existing.archived_at = None
+                existing.updated_by = user.get_full_name() or user.username
+                existing.save()
+            return existing  # Already exists (restored or active)
         except ServiceRestriction.DoesNotExist:
             pass
         
@@ -1287,6 +1391,30 @@ class AuditLogRestoreView(View):
         )
         
         return restriction
+    
+    def _restore_department(self, entity_id, diff_data, user):
+        """Restore a deleted/archived department"""
+        from core.models import Department
+        
+        # Check if department already exists (including archived)
+        try:
+            existing = Department.objects.get(external_id=entity_id)
+            # If archived, restore it
+            if existing.is_archived:
+                existing.is_archived = False
+                existing.archived_at = None
+                existing.save()
+            return existing  # Already exists (restored or active)
+        except Department.DoesNotExist:
+            pass
+        
+        # Create new department with stored data
+        department = Department.objects.create(
+            external_id=entity_id,
+            name=diff_data.get('name', '')
+        )
+        
+        return department
 
 
 # Department CRUD Views
@@ -1297,7 +1425,8 @@ class DepartmentListView(AnalystAccessMixin, ListView):
     paginate_by = 10
     
     def get_queryset(self):
-        return Department.objects.annotate(
+        # Exclude archived departments by default
+        return Department.objects.filter(is_archived=False).annotate(
             program_count=Count('program', distinct=True),
             staff_count=Count('program__programstaff__staff', distinct=True)
         ).order_by('name')
@@ -1456,9 +1585,38 @@ class DepartmentDeleteView(AnalystAccessMixin, DeleteView):
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:departments')
     
-    def delete(self, request, *args, **kwargs):
-        messages.success(self.request, 'Department deleted successfully.')
-        return super().delete(request, *args, **kwargs)
+    def form_valid(self, form):
+        """Override to soft delete (archive) department instead of hard delete"""
+        department = self.get_object()
+        
+        # Create audit log entry before archiving
+        try:
+            from .models import create_audit_log
+            create_audit_log(
+                entity_name='Department',
+                entity_id=department.external_id,
+                action='archive',
+                changed_by=self.request.user,
+                diff_data={
+                    'name': department.name,
+                    'owner': str(department.owner) if department.owner else None,
+                    'archived_by': self.request.user.get_full_name() or self.request.user.username
+                }
+            )
+        except Exception as e:
+            print(f"Error creating audit log for department archiving: {e}")
+        
+        # Soft delete: set is_archived=True and archived_at timestamp
+        from django.utils import timezone
+        department.is_archived = True
+        department.archived_at = timezone.now()
+        department.save()
+        
+        messages.success(
+            self.request, 
+            f'Department {department.name} has been archived. You can restore it from the archived departments section.'
+        )
+        return redirect(self.success_url)
 
 
 # Enrollment CRUD Views
@@ -1969,25 +2127,19 @@ class EnrollmentDeleteView(AnalystAccessMixin, ProgramManagerAccessMixin, Delete
         return context
     
     def form_valid(self, form):
-        """Override to actually delete enrollment"""
+        """Override to soft delete (archive) enrollment instead of hard delete"""
         try:
-            print(f"Form valid method called for enrollment deletion")
-            print(f"Request method: {self.request.method}")
-            print(f"Request POST data: {self.request.POST}")
-            
             # Get the enrollment object first
             enrollment = self.get_object()
-            print(f"Found enrollment: {enrollment.client.first_name} {enrollment.client.last_name}")
-            
             client_name = f"{enrollment.client.first_name} {enrollment.client.last_name}"
             program_name = enrollment.program.name
             
-            # Create audit log entry before deletion
+            # Create audit log entry before archiving
             from .models import create_audit_log
             create_audit_log(
                 entity_name='Enrollment',
                 entity_id=enrollment.external_id,
-                action='delete',
+                action='archive',
                 changed_by=self.request.user,
                 diff_data={
                     'client': str(enrollment.client),
@@ -1995,18 +2147,21 @@ class EnrollmentDeleteView(AnalystAccessMixin, ProgramManagerAccessMixin, Delete
                     'start_date': str(enrollment.start_date),
                     'end_date': str(enrollment.end_date) if enrollment.end_date else None,
                     'status': enrollment.status,
-                    'deleted_by': self.request.user.get_full_name() or self.request.user.username
+                    'archived_by': self.request.user.get_full_name() or self.request.user.username
                 }
             )
             
-            # Actually delete the enrollment
-            enrollment.delete()
-            
-            print(f"Enrollment deleted successfully: {client_name} - {program_name}")
+            # Soft delete: set is_archived=True and archived_at timestamp
+            from django.utils import timezone
+            enrollment.is_archived = True
+            enrollment.archived_at = timezone.now()
+            user_name = self.request.user.get_full_name() or self.request.user.username if self.request.user.is_authenticated else 'System'
+            enrollment.updated_by = user_name
+            enrollment.save()
             
             messages.success(
                 self.request, 
-                f'Enrollment for {client_name} in {program_name} has been deleted successfully.'
+                f'Enrollment for {client_name} in {program_name} has been archived. You can restore it from the archived enrollments section.'
             )
             return redirect(self.success_url)
             
@@ -2541,7 +2696,9 @@ class RestrictionDeleteView(AnalystAccessMixin, ProgramManagerAccessMixin, Delet
         
         # Archive the restriction instead of deleting
         print("Archiving restriction...")
+        from django.utils import timezone
         restriction.is_archived = True
+        restriction.archived_at = timezone.now()
         restriction.updated_by = f"{self.request.user.first_name} {self.request.user.last_name}".strip() or self.request.user.username
         restriction.save()
         print("Restriction archived successfully")
@@ -2582,8 +2739,14 @@ def bulk_delete_restrictions(request):
             }, status=404)
         
         # Archive the restrictions instead of deleting
+        from django.utils import timezone
         updated_by = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
-        restrictions_to_archive.update(is_archived=True, updated_by=updated_by)
+        archived_at = timezone.now()
+        for restriction in restrictions_to_archive:
+            restriction.is_archived = True
+            restriction.archived_at = archived_at
+            restriction.updated_by = updated_by
+            restriction.save()
         
         return JsonResponse({
             'success': True,
@@ -2650,13 +2813,16 @@ def bulk_delete_departments(request):
                 }
             )
             
-            # Actually delete the department
-            department.delete()
+            # Soft delete: set is_archived=True and archived_at timestamp
+            from django.utils import timezone
+            department.is_archived = True
+            department.archived_at = timezone.now()
+            department.save()
         
         return JsonResponse({
             'success': True,
             'deleted_count': deleted_count,
-            'message': f'Successfully deleted {deleted_count} department(s)'
+            'message': f'Successfully archived {deleted_count} department(s). You can restore them from the archived departments section.'
         })
         
     except json.JSONDecodeError:
@@ -2702,14 +2868,16 @@ def bulk_delete_enrollments(request):
                 'error': 'No enrollments found with the provided IDs'
             }, status=404)
         
-        # Actually delete the enrollments
+        # Soft delete: archive enrollments instead of actually deleting them
         from .models import create_audit_log
+        user_name = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
+        
         for enrollment in enrollments_to_delete:
-            # Create audit log entry before deletion
+            # Create audit log entry before archiving
             create_audit_log(
                 entity_name='Enrollment',
                 entity_id=enrollment.external_id,
-                action='delete',
+                action='archive',
                 changed_by=request.user,
                 diff_data={
                     'client': str(enrollment.client),
@@ -2717,17 +2885,21 @@ def bulk_delete_enrollments(request):
                     'start_date': str(enrollment.start_date),
                     'end_date': str(enrollment.end_date) if enrollment.end_date else None,
                     'status': enrollment.status,
-                    'deleted_by': request.user.get_full_name() or request.user.username
+                    'archived_by': user_name
                 }
             )
             
-            # Actually delete the enrollment
-            enrollment.delete()
+            # Soft delete: set is_archived=True and archived_at timestamp
+            from django.utils import timezone
+            enrollment.is_archived = True
+            enrollment.archived_at = timezone.now()
+            enrollment.updated_by = user_name
+            enrollment.save()
         
         return JsonResponse({
             'success': True,
             'deleted_count': deleted_count,
-            'message': f'Successfully deleted {deleted_count} enrollment(s)'
+            'message': f'Successfully archived {deleted_count} enrollment(s). You can restore them from the archived enrollments section.'
         })
         
     except json.JSONDecodeError:
@@ -2738,7 +2910,250 @@ def bulk_delete_enrollments(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': f'Error deleting enrollments: {str(e)}'
+            'error': f'Error archiving enrollments: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@jwt_required
+def bulk_restore_enrollments(request):
+    """Bulk restore archived client program enrollments"""
+    # Check if user is authenticated
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        enrollment_ids = data.get('enrollment_ids', [])
+        
+        if not enrollment_ids:
+            return JsonResponse({
+                'success': False,
+                'error': 'No enrollments selected for restoration'
+            }, status=400)
+        
+        # Get the archived enrollments to restore
+        enrollments_to_restore = ClientProgramEnrollment.objects.filter(
+            id__in=enrollment_ids,
+            is_archived=True
+        )
+        restored_count = enrollments_to_restore.count()
+        
+        if restored_count == 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'No archived enrollments found with the provided IDs'
+            }, status=404)
+        
+        # Restore enrollments: set is_archived=False
+        from .models import create_audit_log
+        user_name = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
+        
+        restored_items = []
+        for enrollment in enrollments_to_restore:
+            enrollment_name = f"{enrollment.client.first_name} {enrollment.client.last_name} - {enrollment.program.name}"
+            restored_items.append(enrollment_name)
+            
+            # Create audit log entry for restoration
+            create_audit_log(
+                entity_name='Enrollment',
+                entity_id=enrollment.external_id,
+                action='restore',
+                changed_by=request.user,
+                diff_data={
+                    'client': str(enrollment.client),
+                    'program': str(enrollment.program),
+                    'start_date': str(enrollment.start_date),
+                    'end_date': str(enrollment.end_date) if enrollment.end_date else None,
+                    'status': enrollment.status,
+                    'restored_by': user_name,
+                    'restored_item': enrollment_name
+                }
+            )
+            
+            # Restore: set is_archived=False and clear archived_at
+            enrollment.is_archived = False
+            enrollment.archived_at = None
+            enrollment.updated_by = user_name
+            enrollment.save()
+        
+        # Create a clear success message
+        if restored_count == 1:
+            message = f'Enrollment "{restored_items[0]}" has been restored successfully.'
+        else:
+            message = f'Successfully restored {restored_count} enrollment(s): ' + ', '.join(restored_items[:3])
+            if restored_count > 3:
+                message += f' and {restored_count - 3} more.'
+        
+        return JsonResponse({
+            'success': True,
+            'restored_count': restored_count,
+            'message': message,
+            'restored_items': restored_items
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error restoring enrollments: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@jwt_required
+def bulk_restore_departments(request):
+    """Bulk restore archived departments"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        department_ids = data.get('department_ids', [])
+        
+        if not department_ids:
+            return JsonResponse({
+                'success': False,
+                'error': 'No departments selected for restoration'
+            }, status=400)
+        
+        # Get the archived departments to restore
+        departments_to_restore = Department.objects.filter(
+            external_id__in=department_ids,
+            is_archived=True
+        )
+        restored_count = departments_to_restore.count()
+        
+        if restored_count == 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'No archived departments found with the provided IDs'
+            }, status=404)
+        
+        # Restore departments: set is_archived=False and clear archived_at
+        from .models import create_audit_log
+        user_name = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
+        
+        for department in departments_to_restore:
+            # Create audit log entry for restoration
+            create_audit_log(
+                entity_name='Department',
+                entity_id=department.external_id,
+                action='restore',
+                changed_by=request.user,
+                diff_data={
+                    'name': department.name,
+                    'restored_by': user_name
+                }
+            )
+            
+            # Restore: set is_archived=False and clear archived_at
+            department.is_archived = False
+            department.archived_at = None
+            department.save()
+        
+        return JsonResponse({
+            'success': True,
+            'restored_count': restored_count,
+            'message': f'Successfully restored {restored_count} department(s)'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error restoring departments: {str(e)}'
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@jwt_required
+def bulk_restore_restrictions(request):
+    """Bulk restore archived service restrictions"""
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        restriction_ids = data.get('restriction_ids', [])
+        
+        if not restriction_ids:
+            return JsonResponse({
+                'success': False,
+                'error': 'No restrictions selected for restoration'
+            }, status=400)
+        
+        # Get the archived restrictions to restore
+        restrictions_to_restore = ServiceRestriction.objects.filter(
+            id__in=restriction_ids,
+            is_archived=True
+        )
+        restored_count = restrictions_to_restore.count()
+        
+        if restored_count == 0:
+            return JsonResponse({
+                'success': False,
+                'error': 'No archived restrictions found with the provided IDs'
+            }, status=404)
+        
+        # Restore restrictions: set is_archived=False and clear archived_at
+        from .models import create_audit_log
+        user_name = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
+        
+        for restriction in restrictions_to_restore:
+            # Create audit log entry for restoration
+            create_audit_log(
+                entity_name='Restriction',
+                entity_id=restriction.external_id,
+                action='restore',
+                changed_by=request.user,
+                diff_data={
+                    'client': str(restriction.client),
+                    'restored_by': user_name
+                }
+            )
+            
+            # Restore: set is_archived=False and clear archived_at
+            restriction.is_archived = False
+            restriction.archived_at = None
+            restriction.updated_by = user_name
+            restriction.save()
+        
+        return JsonResponse({
+            'success': True,
+            'restored_count': restored_count,
+            'message': f'Successfully restored {restored_count} restriction(s)'
+        })
+        
+    except json.JSONDecodeError:
+        return JsonResponse({
+            'success': False,
+            'error': 'Invalid JSON data'
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error restoring restrictions: {str(e)}'
         }, status=500)
 
 

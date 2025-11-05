@@ -38,6 +38,8 @@ class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
     def get_queryset(self):
         # First apply the ProgramManagerAccessMixin filtering
         queryset = super().get_queryset()
+        # Exclude archived programs by default
+        queryset = queryset.filter(is_archived=False)
         
         # For staff-only users, filter to only their assigned programs
         if self.request.user.is_authenticated:
@@ -1004,11 +1006,20 @@ class ProgramDeleteView(ProgramManagerAccessMixin, DeleteView):
         except Exception as e:
             print(f"Error creating audit log for program deletion: {e}")
         
-        # Delete the program
-        program.delete()
+        # Soft delete: set is_archived=True and archived_at timestamp
+        from django.utils import timezone
+        program.is_archived = True
+        program.archived_at = timezone.now()
+        user_name = f"{self.request.user.first_name} {self.request.user.last_name}".strip() or self.request.user.username
+        program.updated_by = user_name
+        program.save()
         
         delete_success(self.request, 'Program', program.name)
-        return super().form_valid(form)
+        messages.success(
+            self.request, 
+            f'Program {program.name} has been archived. You can restore it from the archived programs section.'
+        )
+        return redirect(self.success_url)
 
 @method_decorator(jwt_required, name="dispatch")
 class ProgramCSVExportView(ProgramManagerAccessMixin, ListView):
@@ -1331,12 +1342,13 @@ class ProgramBulkDeleteView(ProgramManagerAccessMixin, View):
                         except Exception as e:
                             print(f"Error creating audit log for program deletion: {e}")
                         
-                        # Delete related data first
-                        ClientProgramEnrollment.objects.filter(program=program).delete()
-                        ProgramManagerAssignment.objects.filter(program=program).delete()
-                        
-                        # Delete the program
-                        program.delete()
+                        # Soft delete: archive program instead of actually deleting
+                        # Note: We don't delete related enrollments/assignments - they remain but the program is archived
+                        from django.utils import timezone
+                        program.is_archived = True
+                        program.archived_at = timezone.now()
+                        program.updated_by = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+                        program.save()
                         deleted_count += 1
                         
                     except Exception as e:
@@ -1346,12 +1358,120 @@ class ProgramBulkDeleteView(ProgramManagerAccessMixin, View):
                 return JsonResponse({
                     'success': True,
                     'deleted_count': deleted_count,
-                    'message': f'Successfully deleted {deleted_count} program(s).'
+                    'message': f'Successfully archived {deleted_count} program(s). You can restore them from the archived programs section.'
                 })
             else:
                 return JsonResponse({
                     'success': False,
                     'error': 'Failed to delete any programs.',
+                    'errors': errors
+                })
+                
+        except json.JSONDecodeError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON data.'
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'An error occurred: {str(e)}'
+            })
+
+
+@method_decorator(jwt_required, name="dispatch")
+class ProgramBulkRestoreView(ProgramManagerAccessMixin, View):
+    """Handle bulk restoration of archived programs"""
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to restore programs"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Only SuperAdmin and Admin users can bulk restore programs
+                if not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    from django.http import JsonResponse
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'You do not have permission to restore programs.'
+                    }, status=403)
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
+    
+    def post(self, request):
+        """Restore archived programs"""
+        try:
+            import json
+            data = json.loads(request.body)
+            program_ids = data.get('program_ids', [])
+            
+            if not program_ids:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No programs selected for restoration'
+                })
+            
+            # Get archived programs to restore
+            programs_to_restore = Program.objects.filter(
+                external_id__in=program_ids,
+                is_archived=True
+            )
+            
+            if not programs_to_restore.exists():
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No archived programs found with the provided IDs.'
+                })
+            
+            restored_count = 0
+            errors = []
+            
+            with transaction.atomic():
+                for program in programs_to_restore:
+                    try:
+                        # Create audit log entry for restoration
+                        try:
+                            from core.models import create_audit_log
+                            create_audit_log(
+                                entity_name='Program',
+                                entity_id=program.external_id,
+                                action='restore',
+                                changed_by=request.user,
+                                diff_data={
+                                    'name': program.name,
+                                    'department': str(program.department),
+                                    'restored_by': f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username,
+                                    'source': 'bulk_restore'
+                                }
+                            )
+                        except Exception as e:
+                            print(f"Error creating audit log for program restoration: {e}")
+                        
+                        # Restore: set is_archived=False and clear archived_at
+                        program.is_archived = False
+                        program.archived_at = None
+                        program.updated_by = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
+                        program.save()
+                        restored_count += 1
+                        
+                    except Exception as e:
+                        errors.append(f"Error restoring {program.name}: {str(e)}")
+            
+            if restored_count > 0:
+                return JsonResponse({
+                    'success': True,
+                    'restored_count': restored_count,
+                    'message': f'Successfully restored {restored_count} program(s).'
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Failed to restore any programs.',
                     'errors': errors
                 })
                 

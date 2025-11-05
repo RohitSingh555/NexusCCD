@@ -14,5 +14,6 @@ urlpatterns = [
     path('<uuid:external_id>/enroll/', views.ProgramBulkEnrollView.as_view(), name='bulk_enroll'),
     path('<uuid:external_id>/assign-managers/', views.ProgramBulkAssignManagersView.as_view(), name='bulk_assign_managers'),
     path('bulk-delete/', views.ProgramBulkDeleteView.as_view(), name='bulk_delete'),
+    path('bulk-restore/', views.ProgramBulkRestoreView.as_view(), name='bulk_restore'),
     path('bulk-change-department/', views.ProgramBulkChangeDepartmentView.as_view(), name='bulk_change_department'),
 ]

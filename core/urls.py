@@ -25,7 +25,7 @@ urlpatterns = [
     path('restrictions/', views.RestrictionListView.as_view(), name='restrictions'),
     path('restrictions/export/', views.RestrictionCSVExportView.as_view(), name='restrictions_export'),
     path('audit-log/', views.AuditLogListView.as_view(), name='audit_log'),
-    path('audit-log/restore/<uuid:log_id>/', views.AuditLogRestoreView.as_view(), name='audit_log_restore'),
+    path('audit-log/restore/<int:log_id>/', views.AuditLogRestoreView.as_view(), name='audit_log_restore'),
     path('test-messages/', views.test_messages, name='test_messages'),
     path('test-messages/success/', views.test_success, name='test_success'),
     path('test-messages/error/', views.test_error, name='test_error'),
@@ -53,6 +53,7 @@ urlpatterns = [
     path('departments/<uuid:external_id>/edit/', views.DepartmentUpdateView.as_view(), name='departments_edit'),
     path('departments/<uuid:external_id>/delete/', views.DepartmentDeleteView.as_view(), name='departments_delete'),
     path('departments/bulk-delete/', views.bulk_delete_departments, name='departments_bulk_delete'),
+    path('departments/bulk-restore/', views.bulk_restore_departments, name='departments_bulk_restore'),
     
     # Enrollment CRUD views
     path('enrollments/create/', views.EnrollmentCreateView.as_view(), name='enrollments_create'),
@@ -66,9 +67,11 @@ urlpatterns = [
     path('restrictions/<uuid:external_id>/edit/', views.RestrictionUpdateView.as_view(), name='restrictions_edit'),
     path('restrictions/<uuid:external_id>/delete/', views.RestrictionDeleteView.as_view(), name='restrictions_delete'),
     path('restrictions/bulk-delete/', views.bulk_delete_restrictions, name='restrictions_bulk_delete'),
+    path('restrictions/bulk-restore/', views.bulk_restore_restrictions, name='restrictions_bulk_restore'),
     
     # Enrollment bulk operations
     path('enrollments/bulk-delete/', views.bulk_delete_enrollments, name='enrollments_bulk_delete'),
+    path('enrollments/bulk-restore/', views.bulk_restore_enrollments, name='enrollments_bulk_restore'),
     
     # Permission error handling
     path('permission-error/', PermissionErrorView.as_view(), name='permission_error'),

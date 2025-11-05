@@ -218,8 +218,9 @@
                 </thead>
                 <tbody class="bg-white divide-y divide-neutral-200">
                     {% for log in audit_logs %}
-                    <tr class="hover:bg-neutral-50 cursor-pointer transition-colors duration-200" 
-                        {% if log.action != 'delete' %}
+                    <tr class="hover:bg-neutral-50 transition-colors duration-200" 
+                        {% if log.action != 'delete' and log.action != 'archive' %}
+                            class="cursor-pointer"
                             {% if log.entity == 'Enrollment' %}
                                 onclick="checkEntityExists('{% url 'core:enrollments_detail' log.entity_id %}', 'Enrollment', '{{ log.entity_id }}')"
                             {% elif log.entity == 'Client' %}
@@ -245,6 +246,8 @@
                                         {{ log.entity|title }}
                                         {% if log.action == 'delete' %}
                                             <span class="text-xs text-red-600 font-bold">(Deleted)</span>
+                                        {% elif log.action == 'archive' %}
+                                            <span class="text-xs text-orange-600 font-bold">(Archived)</span>
                                         {% endif %}
                                     </div>
                                     <div class="text-xs text-neutral-500 font-body">
@@ -254,7 +257,7 @@
                             </div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {% if log.action == 'create' %}bg-brand-lime text-neutral-800{% elif log.action == 'update' %}bg-brand-sky text-white{% elif log.action == 'delete' %}bg-accent-400 text-white{% elif log.action == 'login' %}bg-green-500 text-white{% elif log.action == 'logout' %}bg-orange-500 text-white{% else %}bg-neutral-100 text-neutral-800{% endif %}">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {% if log.action == 'create' %}bg-brand-lime text-neutral-800{% elif log.action == 'update' %}bg-brand-sky text-white{% elif log.action == 'delete' or log.action == 'archive' %}bg-accent-400 text-white{% elif log.action == 'login' %}bg-green-500 text-white{% elif log.action == 'logout' %}bg-orange-500 text-white{% else %}bg-neutral-100 text-neutral-800{% endif %}">
                                 {{ log.get_action_display }}
                             </span>
                         </td>
@@ -262,16 +265,27 @@
                             {{ log.changed_by.first_name|default:"System" }} {{ log.changed_by.last_name|default:"" }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">
-                            {% if log.diff_json and log.diff_json|length > 0 %}
-                                <button onclick='event.stopPropagation(); showChangeDetailsFromData("{{ log.id }}", "{{ log.diff_json|escapejs }}", "{{ log.entity }}", "{{ log.action }}")' 
-                                        class="text-brand-sky hover:text-brand-darkBlue font-bold transition-colors duration-200 cursor-pointer underline">
-                                    View Changes
-                                </button>
-                            {% else %}
-                                <span class="text-neutral-400 font-bold">
-                                    No Changes
-                                </span>
-                            {% endif %}
+                            <div class="flex items-center space-x-3">
+                                {% if log.diff_json and log.diff_json|length > 0 %}
+                                    <button onclick='event.stopPropagation(); showChangeDetailsFromData("{{ log.id }}", "{{ log.diff_json|escapejs }}", "{{ log.entity }}", "{{ log.action }}")' 
+                                            class="text-brand-sky hover:text-brand-darkBlue font-bold transition-colors duration-200 cursor-pointer underline">
+                                        View Changes
+                                    </button>
+                                {% else %}
+                                    <span class="text-neutral-400 font-bold">
+                                        No Changes
+                                    </span>
+                                {% endif %}
+                                {% if log.action == 'delete' or log.action == 'archive' %}
+                                    <button onclick="event.stopPropagation(); restoreFromAuditLog('{{ log.id }}', '{{ log.entity }}', '{{ log.entity_id }}')" 
+                                            class="inline-flex items-center px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition-colors duration-200 shadow-sm">
+                                        <svg class="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                        </svg>
+                                        Restore
+                                    </button>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% empty %}
@@ -773,5 +787,184 @@ document.getElementById('changeDetailsModal').addEventListener('click', function
         closeChangeDetailsModal();
     }
 });
+
+// Helper function to show notifications
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500';
+    notification.className = `fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50 flex items-center space-x-2 transform transition-all duration-300`;
+    notification.style.transform = 'translateX(100%)';
+    
+    const icon = type === 'success' 
+        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>'
+        : type === 'error'
+        ? '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>'
+        : '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>';
+    
+    notification.innerHTML = `
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            ${icon}
+        </svg>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.style.transform = 'translateX(0)';
+    }, 100);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 5000);
+}
+
+// Confirmation modal
+function showConfirmModal(message, onConfirm, onCancel) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+        <div class="bg-white rounded-xl shadow-2xl max-w-md w-full mx-4">
+            <div class="p-6">
+                <div class="flex items-center mb-4">
+                    <div class="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mr-4">
+                        <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-lg font-bold text-neutral-900">Confirm Action</h3>
+                </div>
+                <p class="text-neutral-600 mb-6">${message}</p>
+                <div class="flex justify-end space-x-3">
+                    <button id="cancelBtn" class="px-4 py-2 bg-neutral-200 text-neutral-700 rounded-lg hover:bg-neutral-300 transition-colors font-medium">
+                        Cancel
+                    </button>
+                    <button id="confirmBtn" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors font-medium">
+                        Confirm
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    const confirmBtn = modal.querySelector('#confirmBtn');
+    const cancelBtn = modal.querySelector('#cancelBtn');
+    
+    confirmBtn.addEventListener('click', () => {
+        modal.remove();
+        if (onConfirm) onConfirm();
+    });
+    
+    cancelBtn.addEventListener('click', () => {
+        modal.remove();
+        if (onCancel) onCancel();
+    });
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+            if (onCancel) onCancel();
+        }
+    });
+}
+
+// Restore function for audit log
+function restoreFromAuditLog(logId, entity, entityId) {
+    // Capture the button reference before showing modal
+    const button = event.target.closest('button');
+    if (!button) return;
+    
+    const confirmMessage = 'Are you sure you want to restore this ' + entity + '?';
+    
+    showConfirmModal(
+        confirmMessage,
+        function() {
+            const originalHTML = button.innerHTML;
+            button.innerHTML = '<span class="animate-spin mr-1.5">⟳</span> Restoring...';
+            button.disabled = true;
+            
+            // Get CSRF token
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+            
+            const url = '/core/audit-log/restore/' + logId + '/';
+            const requestBody = JSON.stringify({
+                entity: entity,
+                entity_id: entityId
+            });
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: requestBody
+            })
+            .then(function(response) {
+                // Check if response is HTML (error page) instead of JSON
+                const contentType = response.headers.get('content-type');
+                if (!contentType || !contentType.includes('application/json')) {
+                    return response.text().then(function(text) {
+                        const error = {
+                            error: 'Server returned an error page. Please check the console for details.',
+                            status: response.status,
+                            statusText: response.statusText
+                        };
+                        return Promise.reject(error);
+                    });
+                }
+                if (!response.ok) {
+                    return response.json().then(function(err) {
+                        return Promise.reject(err);
+                    });
+                }
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.success) {
+                    const successMsg = data.message || (entity + ' restored successfully.');
+                    showNotification(successMsg, 'success');
+                    // Reload page after a short delay to show the restored item
+                    setTimeout(function() {
+                        window.location.reload();
+                    }, 1500);
+                } else {
+                    showNotification(data.error || 'Failed to restore item.', 'error');
+                    button.innerHTML = originalHTML;
+                    button.disabled = false;
+                }
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+                const errorMessage = error.error || error.message || 'An error occurred while restoring the item';
+                showNotification(errorMessage, 'error');
+                button.innerHTML = originalHTML;
+                button.disabled = false;
+            });
+        }
+    );
+}
 </script>
 {% endblock %}

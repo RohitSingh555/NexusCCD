@@ -13,6 +13,7 @@ urlpatterns = [
     path('upload/process/', views.upload_clients, name='upload_process'),
     path('download-sample/<str:file_type>/', views.download_sample, name='download_sample'),
     path('bulk-delete/', views.bulk_delete_clients, name='bulk_delete'),
+    path('bulk-restore/', views.bulk_restore_clients, name='bulk_restore'),
     path('dedupe/', views.ClientDedupeView.as_view(), name='dedupe'),
     path('dedupe/action/<int:duplicate_id>/<str:action>/', views.mark_duplicate_action, name='duplicate_action'),
     path('dedupe/bulk-action/', views.bulk_duplicate_action, name='bulk_duplicate_action'),
