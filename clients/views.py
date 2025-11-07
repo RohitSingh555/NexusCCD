@@ -3,40 +3,28 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.urls import reverse_lazy, reverse
 from django.contrib import messages
 from core.message_utils import success_message, error_message, warning_message, info_message, create_success, update_success, delete_success, validation_error, permission_error, not_found_error
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_protect
-from django.utils.decorators import method_decorator
 from django.utils import timezone
 from django.db.models import Q
-from django.contrib.auth.decorators import login_required
-from django.utils.decorators import method_decorator
-from django.db import IntegrityError
-from django.db import transaction
-from django.http import HttpResponse
-import csv
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.db import IntegrityError, transaction
 from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate, ClientUploadLog
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from core.views import ProgramManagerAccessMixin, AnalystAccessMixin, jwt_required
 from core.fuzzy_matching import fuzzy_matcher
 from .forms import ClientForm
 import pandas as pd
 import json
 import uuid
-from datetime import datetime
 import logging
-from django.http import HttpResponse, JsonResponse
-from django.views.decorators.http import require_http_methods
+import csv
+import io
 from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.conf import settings
-from django.utils import timezone
-from datetime import timedelta
-import csv
-import io
-from django.contrib.auth.decorators import user_passes_test
 from functools import wraps
 from core.security import require_permission, SecurityManager
 
@@ -250,16 +238,16 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         program_filter = self.request.GET.get('program', '').strip()
         age_range = self.request.GET.get('age_range', '').strip()
         gender_filter = self.request.GET.get('gender', '').strip()
-        discharge_status = self.request.GET.get('discharge_status', '').strip()
+        status_filter = self.request.GET.get('status', '').strip()
         
-        # Filter by discharge status (active vs discharged)
-        if discharge_status == 'active':
-            # Show only clients without a discharge date (active clients)
-            queryset = queryset.filter(discharge_date__isnull=True)
-        elif discharge_status == 'discharged':
-            # Show only clients with a discharge date (discharged clients)
-            queryset = queryset.filter(discharge_date__isnull=False)
-        # If discharge_status is empty or 'all', show all clients
+        # Filter by status (active vs inactive)
+        if status_filter == 'active':
+            # Show only active clients (is_inactive=False)
+            queryset = queryset.filter(is_inactive=False)
+        elif status_filter == 'inactive':
+            # Show only inactive clients (is_inactive=True)
+            queryset = queryset.filter(is_inactive=True)
+        # If status is empty or 'all', show all clients
         
         # No need to filter duplicates - they are physically deleted
         # when marked as duplicates
@@ -337,11 +325,26 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         
         # Sorting (case-insensitive by name)
         from django.db.models.functions import Lower, Coalesce
-        from django.db.models import Value
+        from django.db.models import Value, Count
+        from django.db.models.query import Prefetch
+        
+        # Annotate enrollment count to avoid N+1 queries in template
+        # Count only non-archived enrollments
         queryset = queryset.annotate(
             last_name_ci=Lower(Coalesce('last_name', Value(''))),
             first_name_ci=Lower(Coalesce('first_name', Value(''))),
+            enrollment_count=Count('clientprogramenrollment', filter=Q(clientprogramenrollment__is_archived=False), distinct=True),
         )
+        
+        # Prefetch related objects to optimize queries
+        queryset = queryset.select_related('extended').prefetch_related(
+            Prefetch(
+                'clientprogramenrollment_set',
+                queryset=ClientProgramEnrollment.objects.select_related('program', 'sub_program').filter(is_archived=False),
+                to_attr='active_enrollments'
+            )
+        )
+        
         sort_key = self.request.GET.get('sort', 'name_asc')
         sort_mapping = {
             'name_asc': ['first_name_ci', 'last_name_ci'],
@@ -460,7 +463,7 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         # Add current filter values (like programs page)
         context['current_program'] = self.request.GET.get('program', '')
         context['current_manager'] = self.request.GET.get('manager', '')
-        context['current_discharge_status'] = self.request.GET.get('discharge_status', '')
+        context['current_status'] = self.request.GET.get('status', '')
         
         # Calculate age for each client
         from datetime import date
@@ -477,17 +480,143 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         
         # Prefetch duplicate information for efficient badge display
         # Get all clients that have pending duplicates (primary_duplicates with status='pending')
+        # Use select_related and only fetch primary_client_id for efficiency
         client_ids = [client.id for client in context['clients']]
         if client_ids:
             clients_with_duplicates = ClientDuplicate.objects.filter(
                 status='pending',
                 primary_client_id__in=client_ids
-            ).values_list('primary_client_id', flat=True)
+            ).only('primary_client_id').values_list('primary_client_id', flat=True)
             context['clients_with_duplicates'] = set(clients_with_duplicates)
         else:
             context['clients_with_duplicates'] = set()
         
+        # Calculate client status counts for the cards
+        # Get base queryset WITHOUT date filters or other GET parameter filters
+        # This ensures counts show totals, not filtered results
+        from django.db.models import Count, Exists, OuterRef
+        from django.utils import timezone
+        from datetime import date
+        today = timezone.now().date()
+        
+        base_queryset = Client.objects.filter(is_archived=False)
+        
+        # Exclude clients marked as duplicates
+        base_queryset = base_queryset.exclude(duplicate_of__status='pending')
+        
+        # Apply the same permission filters as get_queryset (but NOT date/search/filter params)
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                if staff.is_program_manager():
+                    assigned_programs = staff.get_assigned_programs()
+                    relationship_filters = Q()
+                    relationship_filters |= Q(clientprogramenrollment__program__in=assigned_programs)
+                    staff_name = f"{staff.user.first_name} {staff.user.last_name}".strip() or staff.user.username
+                    relationship_filters |= Q(clientprogramenrollment__created_by=staff_name)
+                    relationship_filters |= Q(servicerestriction__created_by=staff_name)
+                    relationship_filters |= Q(updated_by=staff_name)
+                    base_queryset = base_queryset.filter(relationship_filters)
+                elif 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
+                    from staff.models import StaffProgramAssignment, StaffClientAssignment
+                    relationship_filters = Q()
+                    assigned_program_ids = StaffProgramAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('program_id', flat=True)
+                    if assigned_program_ids:
+                        relationship_filters |= Q(clientprogramenrollment__program_id__in=assigned_program_ids)
+                    assigned_client_ids = StaffClientAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('client_id', flat=True)
+                    if assigned_client_ids:
+                        relationship_filters |= Q(id__in=assigned_client_ids)
+                    if relationship_filters:
+                        base_queryset = base_queryset.filter(relationship_filters)
+                    else:
+                        base_queryset = base_queryset.none()
+                elif staff.is_leader():
+                    from core.models import Department
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    assigned_programs = Program.objects.filter(
+                        department__in=assigned_departments
+                    ).distinct()
+                    base_queryset = base_queryset.filter(
+                        clientprogramenrollment__program__in=assigned_programs
+                    )
+            except Exception:
+                pass
+        
+        # Optimize count queries by using a single queryset with annotations
+        # This reduces the number of database queries from 3 to 1
+        base_ids = base_queryset.values('id').distinct()
+        context['total_clients_count'] = base_ids.count()
+        
+        # Active: clients with at least one active enrollment
+        # Use Exists subquery for better performance
+        active_enrollments = ClientProgramEnrollment.objects.filter(
+            client=OuterRef('pk'),
+            is_archived=False,
+            start_date__lte=today
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gt=today)
+        )
+        active_queryset = base_queryset.annotate(has_active_enrollment=Exists(active_enrollments))
+        context['active_clients_count'] = active_queryset.filter(has_active_enrollment=True).values('id').distinct().count()
+        
+        # Inactive: clients with is_inactive=True (uses the is_inactive field from the model)
+        inactive_ids = base_queryset.filter(is_inactive=True).values('id').distinct()
+        context['inactive_clients_count'] = inactive_ids.count()
+        
         return context
+
+@csrf_protect
+@require_http_methods(["POST"])
+@login_required
+def toggle_client_status(request, external_id):
+    """Toggle client inactive status (only for SuperAdmin/Admin)"""
+    try:
+        client = Client.objects.get(external_id=external_id, is_archived=False)
+    except Client.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Client not found'}, status=404)
+    
+    # Check if user is SuperAdmin or Admin
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
+    
+    try:
+        staff = request.user.staff_profile
+        user_roles = staff.staffrole_set.select_related('role').all()
+        role_names = [staff_role.role.name for staff_role in user_roles]
+        
+        if 'SuperAdmin' not in role_names and 'Admin' not in role_names:
+            return JsonResponse({'success': False, 'error': 'Permission denied. Only SuperAdmin and Admin can change client status.'}, status=403)
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
+    
+    # Get the new status from request
+    import json
+    data = json.loads(request.body)
+    new_status = data.get('is_inactive', False)
+    
+    # Update client status
+    client.is_inactive = new_status
+    user_name = request.user.get_full_name() or request.user.username
+    client.updated_by = user_name
+    client.save()
+    
+    return JsonResponse({
+        'success': True,
+        'message': f'Client status updated to {"inactive" if new_status else "active"}',
+        'is_inactive': client.is_inactive
+    })
 
 class ClientDetailView(AnalystAccessMixin, DetailView):
     model = Client
@@ -1193,6 +1322,21 @@ class ClientDeleteView(DeleteView):
         
         return super().dispatch(request, *args, **kwargs)
     
+    def get_context_data(self, **kwargs):
+        """Add enrollment and restriction counts to context"""
+        context = super().get_context_data(**kwargs)
+        client = context['client']
+        
+        # Get counts of non-archived enrollments and restrictions
+        from core.models import ServiceRestriction
+        enrollment_count = ClientProgramEnrollment.objects.filter(client=client, is_archived=False).count()
+        restriction_count = ServiceRestriction.objects.filter(client=client, is_archived=False).count()
+        
+        context['enrollment_count'] = enrollment_count
+        context['restriction_count'] = restriction_count
+        
+        return context
+    
     def form_valid(self, form):
         client = self.get_object()
         
@@ -1242,15 +1386,46 @@ class ClientDeleteView(DeleteView):
         
         # Soft delete: set is_archived=True and archived_at timestamp
         from django.utils import timezone
-        client.is_archived = True
-        client.archived_at = timezone.now()
+        from core.models import ServiceRestriction
+        
+        archived_at = timezone.now()
         user_name = self.request.user.get_full_name() or self.request.user.username if self.request.user.is_authenticated else 'System'
+        
+        # Archive all enrollments associated with this client
+        enrollments = ClientProgramEnrollment.objects.filter(client=client, is_archived=False)
+        enrollment_count = enrollments.count()
+        for enrollment in enrollments:
+            enrollment.is_archived = True
+            enrollment.archived_at = archived_at
+            enrollment.updated_by = user_name
+            enrollment.save()
+        
+        # Archive all restrictions associated with this client
+        restrictions = ServiceRestriction.objects.filter(client=client, is_archived=False)
+        restriction_count = restrictions.count()
+        for restriction in restrictions:
+            restriction.is_archived = True
+            restriction.archived_at = archived_at
+            restriction.updated_by = user_name
+            restriction.save()
+        
+        # Archive the client
+        client.is_archived = True
+        client.archived_at = archived_at
         client.updated_by = user_name
         client.save()
         
+        # Create success message with details about what was archived
+        message_parts = [f'Client {client.first_name} {client.last_name} has been archived.']
+        if enrollment_count > 0:
+            message_parts.append(f'{enrollment_count} enrollment(s) have been archived.')
+        if restriction_count > 0:
+            message_parts.append(f'{restriction_count} restriction(s) have been archived.')
+        message_parts.append('You can restore them from the archived clients section.')
+        
         messages.success(
             self.request, 
-            f'Client {client.first_name} {client.last_name} has been archived. You can restore it from the archived clients section.'
+            ' '.join(message_parts)
         )
         return redirect(self.success_url)
 
@@ -1373,7 +1548,7 @@ def upload_clients(request):
                         # Try to decode with error replacement
                         try:
                             decoded_content = content.decode('latin-1')
-                        except:
+                        except (UnicodeDecodeError, UnicodeError):
                             decoded_content = content.decode('utf-8', errors='replace')
                         
                         # Create StringIO object and read with pandas
@@ -1739,6 +1914,14 @@ def upload_clients(request):
                             if pd.notna(value) and str(value).strip():
                                 return str(value).strip()
                     return default
+                
+                # Helper function to ensure proper defaults for optional fields (convert empty strings to None)
+                def get_field_with_default(field_name, default=None):
+                    """Get field data and ensure empty strings become None for optional fields"""
+                    value = get_field_data(field_name, '')
+                    if value == '' or value is None:
+                        return default
+                    return value
                 
                 # Helper function to parse boolean values safely
                 def parse_boolean(value, default=False):
@@ -2362,10 +2545,16 @@ def upload_clients(request):
         # Optimized find_duplicate_client function using pre-loaded data
         def find_duplicate_client_optimized(client_data, row_index):
             """Find duplicate client using pre-loaded batch data"""
-            contact_info = client_data.get('contact_information', {})
-            email = contact_info.get('email', '').strip().lower()
-            phone = contact_info.get('phone', '').strip()
-            full_name = f"{client_data.get('first_name', '')} {client_data.get('last_name', '')}".strip()
+            contact_info = client_data.get('contact_information', {}) or {}
+            email_val = contact_info.get('email') or ''
+            email = email_val.strip().lower() if isinstance(email_val, str) else ''
+            phone_val = contact_info.get('phone') or ''
+            phone = phone_val.strip() if isinstance(phone_val, str) else ''
+            first_name_val = client_data.get('first_name') or ''
+            last_name_val = client_data.get('last_name') or ''
+            first_name_str = first_name_val.strip() if isinstance(first_name_val, str) else str(first_name_val)
+            last_name_str = last_name_val.strip() if isinstance(last_name_val, str) else str(last_name_val)
+            full_name = f"{first_name_str} {last_name_str}".strip()
             dob = client_data.get('dob', '')
 
             # Priority 1: Exact email match (from batch data)
@@ -2405,15 +2594,19 @@ def upload_clients(request):
                 for client in candidates:
                     client_full_name = f"{client.first_name} {client.last_name}".strip()
                     similarity = calculate_name_similarity(full_name, client_full_name)
-                    if similarity >= 0.8:
+                    if similarity >= 0.9:
                         return client, f"name_similarity_{similarity:.2f}"
             
             # Priority 5: Name + Date of Birth combination (limited query)
             # Only check against clients from different sources when source is SMIMS or EMHware
             if full_name and dob and dob != datetime(1900, 1, 1).date():
+                first_name_val = client_data.get('first_name') or ''
+                last_name_val = client_data.get('last_name') or ''
+                first_name_clean = first_name_val.strip() if isinstance(first_name_val, str) else str(first_name_val)
+                last_name_clean = last_name_val.strip() if isinstance(last_name_val, str) else str(last_name_val)
                 name_dob_query = Client.objects.filter(
-                    first_name__iexact=client_data.get('first_name', '').strip(),
-                    last_name__iexact=client_data.get('last_name', '').strip(),
+                    first_name__iexact=first_name_clean,
+                    last_name__iexact=last_name_clean,
                     dob=dob
                 )
                 # Exclude same source for SMIMS/EMHware cross-source duplicate detection
@@ -2426,10 +2619,13 @@ def upload_clients(request):
             # Priority 6: Date of Birth + Name similarity (limited query)
             # Only check against clients from different sources when source is SMIMS or EMHware
             if dob and dob != datetime(1900, 1, 1).date():
-                dob_query = Client.objects.filter(dob=dob).only('id', 'first_name', 'last_name')[:100]  # Limit to 100
+                # Build query with exclude before slicing
+                dob_query = Client.objects.filter(dob=dob).only('id', 'first_name', 'last_name')
                 # Exclude same source for SMIMS/EMHware cross-source duplicate detection
                 if source in ['SMIMS', 'EMHware']:
                     dob_query = dob_query.exclude(source=source)
+                # Apply limit after all filters
+                dob_query = dob_query[:100]  # Limit to 100
                 for client in dob_query:
                     client_full_name = f"{client.first_name} {client.last_name}".strip()
                     similarity = calculate_name_similarity(full_name, client_full_name)
@@ -2455,6 +2651,14 @@ def upload_clients(request):
                             if pd.notna(value) and str(value).strip():
                                 return str(value).strip()
                     return default
+                
+                # Helper function to ensure proper defaults for optional fields (convert empty strings to None)
+                def get_field_with_default(field_name, default=None):
+                    """Get field data and ensure empty strings become None for optional fields"""
+                    value = get_field_data(field_name, '')
+                    if value == '' or value is None:
+                        return default
+                    return value
                 
                 # Helper function to parse boolean values safely
                 def parse_boolean(value, default=False):
@@ -2656,23 +2860,23 @@ def upload_clients(request):
                             try:
                                 # First try pandas automatic parsing
                                 dob = pd.to_datetime(dob_value).date()
-                            except:
+                            except (ValueError, TypeError, OverflowError):
                                 # If that fails, try specific date formats
                                 dob_str = str(dob_value).strip()
                                 try:
                                     # Try YYYY-MM-DD format
                                     dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
-                                except:
+                                except (ValueError, TypeError):
                                     # Try other common formats
                                     try:
                                         dob = datetime.strptime(dob_str, '%Y/%m/%d').date()
-                                    except:
+                                    except (ValueError, TypeError):
                                         try:
                                             dob = datetime.strptime(dob_str, '%m/%d/%Y').date()
-                                        except:
+                                        except (ValueError, TypeError):
                                             try:
                                                 dob = datetime.strptime(dob_str, '%d/%m/%Y').date()
-                                            except:
+                                            except (ValueError, TypeError):
                                                 # If all parsing attempts fail, raise the original error
                                                 raise ValueError(f"Unable to parse date: {dob_str}")
                     else:
@@ -2685,123 +2889,123 @@ def upload_clients(request):
                 client_data = {
                     'first_name': get_field_data('first_name'),
                     'last_name': get_field_data('last_name'),
-                    'middle_name': get_field_data('middle_name'),
+                    'middle_name': get_field_with_default('middle_name'),
                     'dob': dob,
-                    'preferred_name': get_field_data('preferred_name'),
-                    'alias': get_field_data('alias'),
-                    'gender': get_field_data('gender', None),
-                    'gender_identity': get_field_data('gender_identity'),
-                    'pronoun': get_field_data('pronoun'),
-                    'marital_status': get_field_data('marital_status'),
-                    'citizenship_status': get_field_data('citizenship_status'),
-                    'location_county': get_field_data('location_county'),
-                    'province': get_field_data('province'),
-                    'city': get_field_data('city'),
-                    'postal_code': get_field_data('postal_code'),
-                    'address': get_field_data('address'),
-                    'address_2': get_field_data('address_2'),
-                    'language': get_field_data('language'),
-                    'preferred_language': get_field_data('preferred_language'),
-                    'mother_tongue': get_field_data('mother_tongue'),
-                    'official_language': get_field_data('official_language'),
+                    'preferred_name': get_field_with_default('preferred_name'),
+                    'alias': get_field_with_default('alias'),
+                    'gender': get_field_with_default('gender'),
+                    'gender_identity': get_field_with_default('gender_identity'),
+                    'pronoun': get_field_with_default('pronoun'),
+                    'marital_status': get_field_with_default('marital_status'),
+                    'citizenship_status': get_field_with_default('citizenship_status'),
+                    'location_county': get_field_with_default('location_county'),
+                    'province': get_field_with_default('province'),
+                    'city': get_field_with_default('city'),
+                    'postal_code': get_field_with_default('postal_code'),
+                    'address': get_field_with_default('address'),
+                    'address_2': get_field_with_default('address_2'),
+                    'language': get_field_with_default('language'),
+                    'preferred_language': get_field_with_default('preferred_language'),
+                    'mother_tongue': get_field_with_default('mother_tongue'),
+                    'official_language': get_field_with_default('official_language'),
                     'language_interpreter_required': parse_boolean(get_field_data('language_interpreter_required')),
-                    'self_identification_race_ethnicity': get_field_data('self_identification_race_ethnicity'),
-                    'indigenous_status': get_field_data('indigenous_status'),
-                    'lgbtq_status': get_field_data('lgbtq_status'),
-                    'highest_level_education': get_field_data('highest_level_education'),
+                    'self_identification_race_ethnicity': get_field_with_default('self_identification_race_ethnicity'),
+                    'indigenous_status': get_field_with_default('indigenous_status'),
+                    'lgbtq_status': get_field_with_default('lgbtq_status'),
+                    'highest_level_education': get_field_with_default('highest_level_education'),
                     'children_home': parse_boolean(get_field_data('children_home')),
                     'children_number': parse_integer(get_field_data('children_number')),
-                    'lhin': get_field_data('lhin'),
+                    'lhin': get_field_with_default('lhin'),
                     'client_id': clean_client_id(get_field_data('client_id')),
-                    'phone': get_field_data('phone'),
-                    'email': email,  # Add email to direct field
+                    'phone': get_field_with_default('phone'),
+                    'email': email if email else None,  # Add email to direct field, None if empty
                     'source': source,  # Add the source field from the form
-                    'level_of_support': get_field_data('level_of_support'),
-                    'client_type': get_field_data('client_type'),
-                    'referral_source': get_field_data('referral_source'),
-                    'phone_work': get_field_data('phone_work'),
-                    'phone_alt': get_field_data('phone_alt'),
+                    'level_of_support': get_field_with_default('level_of_support'),
+                    'client_type': get_field_with_default('client_type'),
+                    'referral_source': get_field_with_default('referral_source'),
+                    'phone_work': get_field_with_default('phone_work'),
+                    'phone_alt': get_field_with_default('phone_alt'),
                     'permission_to_phone': parse_boolean(get_field_data('permission_to_phone')),
                     'permission_to_email': parse_boolean(get_field_data('permission_to_email')),
-                    'medical_conditions': get_field_data('medical_conditions'),
-                    'primary_diagnosis': get_field_data('primary_diagnosis'),
-                    'family_doctor': get_field_data('family_doctor'),
-                    'health_card_number': get_field_data('health_card_number'),
-                    'health_card_version': get_field_data('health_card_version'),
+                    'medical_conditions': get_field_with_default('medical_conditions'),
+                    'primary_diagnosis': get_field_with_default('primary_diagnosis'),
+                    'family_doctor': get_field_with_default('family_doctor'),
+                    'health_card_number': get_field_with_default('health_card_number'),
+                    'health_card_version': get_field_with_default('health_card_version'),
                     'health_card_exp_date': parse_date(get_field_data('health_card_exp_date')),
-                    'health_card_issuing_province': get_field_data('health_card_issuing_province'),
-                    'no_health_card_reason': get_field_data('no_health_card_reason'),
-                    'next_of_kin': get_field_data('next_of_kin'),
-                    'emergency_contact': get_field_data('emergency_contact'),
-                    'comments': get_field_data('comments'),
-                    'chart_number': get_field_data('chart_number'),
+                    'health_card_issuing_province': get_field_with_default('health_card_issuing_province'),
+                    'no_health_card_reason': get_field_with_default('no_health_card_reason'),
+                    'next_of_kin': get_field_with_default('next_of_kin'),
+                    'emergency_contact': get_field_with_default('emergency_contact'),
+                    'comments': get_field_with_default('comments'),
+                    'chart_number': get_field_with_default('chart_number'),
                     'contact_information': {
-                        'email': email,
-                        'phone': phone,
+                        'email': email if email else None,
+                        'phone': phone if phone else None,
                     },
                     # Extended fields for ClientExtended model
-                    'indigenous_identity': get_field_data('indigenous_identity'),
-                    'military_status': get_field_data('military_status'),
-                    'refugee_status': get_field_data('refugee_status'),
+                    'indigenous_identity': get_field_with_default('indigenous_identity'),
+                    'military_status': get_field_with_default('military_status'),
+                    'refugee_status': get_field_with_default('refugee_status'),
                     'household_size': parse_integer(get_field_data('household_size')),
-                    'family_head_client_no': get_field_data('family_head_client_no'),
-                    'relationship': get_field_data('relationship'),
-                    'primary_worker': get_field_data('primary_worker'),
+                    'family_head_client_no': get_field_with_default('family_head_client_no'),
+                    'relationship': get_field_with_default('relationship'),
+                    'primary_worker': get_field_with_default('primary_worker'),
                     'chronically_homeless': parse_boolean(get_field_data('chronically_homeless')),
                     'num_bednights_current_stay': parse_integer(get_field_data('num_bednights_current_stay')),
                     'length_homeless_3yrs': parse_integer(get_field_data('length_homeless_3yrs')),
-                    'income_source': get_field_data('income_source'),
-                    'taxation_year_filed': get_field_data('taxation_year_filed'),
-                    'status_id': get_field_data('status_id'),
-                    'picture_id': get_field_data('picture_id'),
-                    'other_id': get_field_data('other_id'),
+                    'income_source': get_field_with_default('income_source'),
+                    'taxation_year_filed': get_field_with_default('taxation_year_filed'),
+                    'status_id': get_field_with_default('status_id'),
+                    'picture_id': get_field_with_default('picture_id'),
+                    'other_id': get_field_with_default('other_id'),
                     'bnl_consent': parse_boolean(get_field_data('bnl_consent')),
-                    'allergies': get_field_data('allergies'),
+                    'allergies': get_field_with_default('allergies'),
                     'harm_reduction_support': parse_boolean(get_field_data('harm_reduction_support')),
                     'medication_support': parse_boolean(get_field_data('medication_support')),
                     'pregnancy_support': parse_boolean(get_field_data('pregnancy_support')),
                     'mental_health_support': parse_boolean(get_field_data('mental_health_support')),
                     'physical_health_support': parse_boolean(get_field_data('physical_health_support')),
                     'daily_activities_support': parse_boolean(get_field_data('daily_activities_support')),
-                    'other_health_supports': get_field_data('other_health_supports'),
+                    'other_health_supports': get_field_with_default('other_health_supports'),
                     'cannot_use_stairs': parse_boolean(get_field_data('cannot_use_stairs')),
                     'limited_mobility': parse_boolean(get_field_data('limited_mobility')),
                     'wheelchair_accessibility': parse_boolean(get_field_data('wheelchair_accessibility')),
-                    'vision_hearing_speech_supports': get_field_data('vision_hearing_speech_supports'),
+                    'vision_hearing_speech_supports': get_field_with_default('vision_hearing_speech_supports'),
                     'english_translator': parse_boolean(get_field_data('english_translator')),
                     'reading_supports': parse_boolean(get_field_data('reading_supports')),
-                    'other_accessibility_supports': get_field_data('other_accessibility_supports'),
+                    'other_accessibility_supports': get_field_with_default('other_accessibility_supports'),
                     'pet_owner': parse_boolean(get_field_data('pet_owner')),
                     'legal_support': parse_boolean(get_field_data('legal_support')),
                     'immigration_support': parse_boolean(get_field_data('immigration_support')),
-                    'religious_cultural_supports': get_field_data('religious_cultural_supports'),
-                    'safety_concerns': get_field_data('safety_concerns'),
+                    'religious_cultural_supports': get_field_with_default('religious_cultural_supports'),
+                    'safety_concerns': get_field_with_default('safety_concerns'),
                     'intimate_partner_violence_support': parse_boolean(get_field_data('intimate_partner_violence_support')),
                     'human_trafficking_support': parse_boolean(get_field_data('human_trafficking_support')),
-                    'other_supports': get_field_data('other_supports'),
-                    'access_to_housing_application': get_field_data('access_to_housing_application'),
-                    'access_to_housing_no': get_field_data('access_to_housing_no'),
-                    'access_point_application': get_field_data('access_point_application'),
-                    'access_point_no': get_field_data('access_point_no'),
-                    'cars': get_field_data('cars'),
+                    'other_supports': get_field_with_default('other_supports'),
+                    'access_to_housing_application': get_field_with_default('access_to_housing_application'),
+                    'access_to_housing_no': get_field_with_default('access_to_housing_no'),
+                    'access_point_application': get_field_with_default('access_point_application'),
+                    'access_point_no': get_field_with_default('access_point_no'),
+                    'cars': get_field_with_default('cars'),
                     'cars_no': parse_integer(get_field_data('cars_no')),
-                    'discharge_disposition': get_field_data('discharge_disposition'),
-                    'intake_status': get_field_data('intake_status'),
-                    'lived_last_12_months': get_field_data('lived_last_12_months'),
-                    'reason_for_service': get_field_data('reason_for_service'),
+                    'discharge_disposition': get_field_with_default('discharge_disposition'),
+                    'intake_status': get_field_with_default('intake_status'),
+                    'lived_last_12_months': get_field_with_default('lived_last_12_months'),
+                    'reason_for_service': get_field_with_default('reason_for_service'),
                     'intake_date': parse_date(get_field_data('intake_date')),
                     'service_end_date': parse_date(get_field_data('service_end_date')),
                     'rejection_date': parse_date(get_field_data('rejection_date')),
-                    'rejection_reason': get_field_data('rejection_reason'),
-                    'room': get_field_data('room'),
-                    'bed': get_field_data('bed'),
-                    'occupancy_status': get_field_data('occupancy_status'),
+                    'rejection_reason': get_field_with_default('rejection_reason'),
+                    'room': get_field_with_default('room'),
+                    'bed': get_field_with_default('bed'),
+                    'occupancy_status': get_field_with_default('occupancy_status'),
                     'bed_nights_historical': parse_integer(get_field_data('bed_nights_historical')),
-                    'restriction_reason': get_field_data('restriction_reason'),
+                    'restriction_reason': get_field_with_default('restriction_reason'),
                     'restriction_date': parse_date(get_field_data('restriction_date')),
                     'restriction_duration_days': parse_integer(get_field_data('restriction_duration_days')),
-                    'restriction_status': get_field_data('restriction_status'),
-                    'early_termination_by': get_field_data('early_termination_by')
+                    'restriction_status': get_field_with_default('restriction_status'),
+                    'early_termination_by': get_field_with_default('early_termination_by')
                 }
                 
                 # OPTIONAL: Check for combined client field (only if present) - MUST happen before validation
@@ -2849,27 +3053,33 @@ def upload_clients(request):
                     
                     # Override names if parsing was successful
                     if parsed_first and parsed_last:
-                        if not client_data.get('first_name') or client_data.get('first_name', '').strip() == '':
+                        if not client_data.get('first_name') or (isinstance(client_data.get('first_name'), str) and client_data.get('first_name', '').strip() == ''):
                             client_data['first_name'] = parsed_first
-                        if not client_data.get('last_name') or client_data.get('last_name', '').strip() == '':
+                        if not client_data.get('last_name') or (isinstance(client_data.get('last_name'), str) and client_data.get('last_name', '').strip() == ''):
                             client_data['last_name'] = parsed_last
                         
                         # Override client_id if we successfully parsed it and it's missing
-                        if parsed_client_id and (not client_data.get('client_id') or client_data.get('client_id', '').strip() == ''):
+                        if parsed_client_id and (not client_data.get('client_id') or (isinstance(client_data.get('client_id'), str) and client_data.get('client_id', '').strip() == '')):
                             client_data['client_id'] = clean_client_id(parsed_client_id)
                 
                 # If client_id is still missing, try to get it from Client ID column
-                if (not client_data.get('client_id') or client_data.get('client_id', '').strip() == '') and client_id_from_separate_field:
+                client_id_value = client_data.get('client_id')
+                if (not client_id_value or (isinstance(client_id_value, str) and client_id_value.strip() == '')) and client_id_from_separate_field:
                     try:
                         if not pd.isna(client_id_from_separate_field):
                             cleaned_id = clean_client_id(client_id_from_separate_field)
                             if cleaned_id:
                                 client_data['client_id'] = cleaned_id
-                    except:
+                    except Exception:
                         pass
                 
                 # If names are still missing, try to extract from a simple "name" column (First Last format)
-                if (not client_data.get('first_name') or client_data.get('first_name', '').strip() == '') or (not client_data.get('last_name') or client_data.get('last_name', '').strip() == ''):
+                first_name_val = client_data.get('first_name')
+                last_name_val = client_data.get('last_name')
+                first_name_empty = not first_name_val or (isinstance(first_name_val, str) and first_name_val.strip() == '')
+                last_name_empty = not last_name_val or (isinstance(last_name_val, str) and last_name_val.strip() == '')
+                
+                if first_name_empty or last_name_empty:
                     # Check for a "name" column that might contain "First Last" format
                     name_field_value = None
                     for col in df.columns:
@@ -2886,9 +3096,9 @@ def upload_clients(request):
                         name_parts = name_str.split()
                         if len(name_parts) >= 2:
                             # First part is first name, rest is last name
-                            if not client_data.get('first_name') or client_data.get('first_name', '').strip() == '':
+                            if first_name_empty:
                                 client_data['first_name'] = name_parts[0]
-                            if not client_data.get('last_name') or client_data.get('last_name', '').strip() == '':
+                            if last_name_empty:
                                 client_data['last_name'] = ' '.join(name_parts[1:])
                 
                 # Handle languages_spoken (expect comma-separated string)
@@ -2938,7 +3148,7 @@ def upload_clients(request):
                 if 'addresses' in row and pd.notna(row['addresses']):
                     try:
                         addresses = json.loads(str(row['addresses']))
-                    except:
+                    except (json.JSONDecodeError, ValueError, TypeError):
                         addresses = []
                 elif get_field_data('address'):
                     address = {
@@ -2954,6 +3164,26 @@ def upload_clients(request):
                         addresses = [address]
                 
                 client_data['addresses'] = addresses
+                
+                # Early validation: Check if we have at least client_id, first_name, or last_name before processing
+                # This helps catch errors early and provide better error messages
+                def safe_check_field(field_value):
+                    """Safely check if a field has a non-empty value"""
+                    if field_value is None:
+                        return False
+                    if isinstance(field_value, str):
+                        return bool(field_value.strip())
+                    return bool(field_value)
+                
+                has_client_id = safe_check_field(client_data.get('client_id'))
+                has_first_name = safe_check_field(client_data.get('first_name'))
+                has_last_name = safe_check_field(client_data.get('last_name'))
+                
+                # If we're missing all three required fields, skip early with a clear error
+                if not has_client_id and not has_first_name and not has_last_name:
+                    errors.append(f"Row {index + 2}: Missing all required fields (client_id, first_name, last_name). Row appears to be empty or invalid.")
+                    skipped_count += 1
+                    continue
                 
                 # Parse discharge_date and reason_discharge early to check if we should update instead of create
                 discharge_date_value = get_field_data('discharge_date')
@@ -3163,10 +3393,12 @@ def upload_clients(request):
                             logger.error(f"Error finding client by ID for discharge: {e}")
                     
                     # If still not found, try to find by name + DOB matching
-                    if not is_update and client_data.get('first_name') and client_data.get('last_name'):
+                    first_name_val = client_data.get('first_name')
+                    last_name_val = client_data.get('last_name')
+                    if not is_update and first_name_val and last_name_val:
                         try:
-                            first_name = client_data.get('first_name', '').strip()
-                            last_name = client_data.get('last_name', '').strip()
+                            first_name = first_name_val.strip() if isinstance(first_name_val, str) else str(first_name_val or '')
+                            last_name = last_name_val.strip() if isinstance(last_name_val, str) else str(last_name_val or '')
                             dob = client_data.get('dob')
                             
                             # Search for matching client
@@ -3210,7 +3442,7 @@ def upload_clients(request):
                     # (You can't create a new client that's already discharged at the client level)
                     # However, if a program IS present, discharge_date is enrollment-level only, so creating a new client is fine
                     if has_discharge_date and (not program_name or not program_name.strip()):
-                        error_msg = f"Row {index + 1}: Discharge date present (without program) but no existing client found. Cannot create new client with client-level discharge date."
+                        error_msg = f"Row {index + 2}: Discharge date present (without program) but no existing client found. Cannot create new client with client-level discharge date."
                         errors.append(error_msg)
                         skipped_count += 1
                         continue
@@ -3222,13 +3454,13 @@ def upload_clients(request):
                     
                     for field in required_fields:
                         value = client_data.get(field)
-                        if not value or (isinstance(value, str) and value.strip() == ''):
+                        if not value or (isinstance(value, str) and value.strip() == '') or value is None:
                             missing_required.append(field)
                     
                     # Phone and DOB are both optional - no requirement check needed
                     
                     if missing_required:
-                        error_msg = f"Row {index + 1}: Missing required fields for client creation: {', '.join(missing_required)}"
+                        error_msg = f"Row {index + 2}: Missing required fields for client creation: {', '.join(missing_required)}"
                         errors.append(error_msg)
                         skipped_count += 1
                         continue
@@ -3240,7 +3472,9 @@ def upload_clients(request):
                     
                     if source in ['SMIMS', 'EMHware']:
                         # Check for name-based duplicates using fuzzy matching
-                        client_name = f"{client_data.get('first_name', '')} {client_data.get('last_name', '')}".strip()
+                        first_name_str = str(client_data.get('first_name') or '')
+                        last_name_str = str(client_data.get('last_name') or '')
+                        client_name = f"{first_name_str} {last_name_str}".strip()
                         
                         if client_name:
                             # Get all existing clients (excluding those from the same source to avoid cross-source duplicates)
@@ -3251,16 +3485,23 @@ def upload_clients(request):
                             
                             # Use fuzzy_matcher to find potential duplicates by name
                             potential_duplicates = fuzzy_matcher.find_potential_duplicates(
-                                client_data, existing_clients, similarity_threshold=0.7
+                                client_data, existing_clients, similarity_threshold=0.9
                             )
                             
                             if potential_duplicates:
                                 # Found name-based duplicate - mark it for duplicate record creation
+                                # Only mark as duplicate if similarity is >= 0.9 (90%)
                                 duplicate_client, match_type, similarity = potential_duplicates[0]  # Take the first/highest match
-                                name_duplicate_similarity = similarity
-                                duplicates_flagged += 1
-                                
-                                logger.info(f"Name duplicate found for {client_name} (similarity: {similarity:.2f}). Will mark as duplicate after client creation.")
+                                if similarity >= 0.9:
+                                    name_duplicate_similarity = similarity
+                                    duplicates_flagged += 1
+                                    
+                                    logger.info(f"Name duplicate found for {client_name} (similarity: {similarity:.2f}). Will mark as duplicate after client creation.")
+                                else:
+                                    # Similarity below 90%, don't mark as duplicate
+                                    duplicate_client = None
+                                    match_type = None
+                                    logger.info(f"Name similarity found for {client_name} (similarity: {similarity:.2f}) but below 90% threshold, not marking as duplicate.")
                     
                     # If no name duplicate found, check for other types of duplicates using optimized batch function
                     if not duplicate_client:
@@ -3360,17 +3601,41 @@ def upload_clients(request):
                     
             except Exception as e:
                 error_message = str(e)
+                import traceback
+                error_traceback = traceback.format_exc()
                 
-                # Handle other types of errors
+                # Log full error details for debugging
+                logger.error(f"Error processing row {index + 2}: {error_message}")
+                logger.debug(f"Full traceback for row {index + 2}:\n{error_traceback}")
+                
+                # Handle specific types of errors with more detailed messages
                 if "NOT NULL constraint" in error_message:
-                    errors.append(f"Row {index + 2}: Required information is missing. Please ensure all required fields are filled.")
-                elif "invalid input syntax" in error_message:
+                    # Extract field name from error if possible
+                    field_match = None
+                    if "column" in error_message.lower():
+                        import re
+                        field_match = re.search(r"column ['\"]?(\w+)['\"]?", error_message, re.IGNORECASE)
+                    if field_match:
+                        field_name = field_match.group(1)
+                        errors.append(f"Row {index + 2}: Required field '{field_name}' is missing. Please ensure this field is filled.")
+                    else:
+                        errors.append(f"Row {index + 2}: Required information is missing. Please ensure all required fields are filled.")
+                elif "invalid input syntax" in error_message or "invalid literal" in error_message:
                     errors.append(f"Row {index + 2}: Invalid data format. Please check the data in this row.")
+                elif "duplicate key" in error_message.lower() or "unique constraint" in error_message.lower():
+                    errors.append(f"Row {index + 2}: Duplicate entry detected. This client may already exist in the system.")
+                elif "foreign key constraint" in error_message.lower():
+                    errors.append(f"Row {index + 2}: Invalid reference. Please check related data (program, department, etc.).")
+                elif "value too long" in error_message.lower() or "string too long" in error_message.lower():
+                    errors.append(f"Row {index + 2}: Data value is too long. Please shorten the value.")
+                elif "missing required" in error_message.lower() or "required field" in error_message.lower():
+                    errors.append(f"Row {index + 2}: {error_message}")
                 else:
-                    # Generic user-friendly error
-                    errors.append(f"Row {index + 2}: Unable to process this client. Please check the data and try again.")
-                
-                logger.error(f"Error processing row {index + 2}: {str(e)}")
+                    # Show actual error message but make it user-friendly
+                    # Truncate very long error messages
+                    if len(error_message) > 200:
+                        error_message = error_message[:200] + "..."
+                    errors.append(f"Row {index + 2}: {error_message}")
         
         # Bulk update existing clients first
         if clients_to_update:
@@ -3482,10 +3747,16 @@ def upload_clients(request):
                             # Extract similarity from match_type string like "name_similarity_0.85"
                             try:
                                 similarity = float(match_type.replace('name_similarity_', ''))
+                                # Only mark as duplicate if similarity >= 0.9 (90%)
+                                if similarity < 0.9:
+                                    # Skip creating duplicate record if similarity is below 90%
+                                    continue
                             except (ValueError, AttributeError):
-                                similarity = 0.8
+                                # Default similarity below threshold, skip duplicate creation
+                                continue
                         else:
-                            similarity = 0.8
+                            # Default similarity below threshold, skip duplicate creation
+                            continue
                         
                         confidence_level = fuzzy_matcher.get_duplicate_confidence_level(similarity)
                         
@@ -4035,9 +4306,12 @@ def bulk_delete_clients(request):
         
         # Soft delete: archive clients instead of actually deleting them
         from django.utils import timezone
-        from core.models import create_audit_log
+        from core.models import create_audit_log, ServiceRestriction
         user_name = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
         archived_at = timezone.now()
+        
+        total_enrollments_archived = 0
+        total_restrictions_archived = 0
         
         for client in clients_to_delete:
             # Create audit log entry before archiving
@@ -4057,6 +4331,26 @@ def bulk_delete_clients(request):
             except Exception as e:
                 logger.error(f"Error creating audit log for client archiving: {e}")
             
+            # Archive all enrollments associated with this client
+            enrollments = ClientProgramEnrollment.objects.filter(client=client, is_archived=False)
+            enrollment_count = enrollments.count()
+            total_enrollments_archived += enrollment_count
+            for enrollment in enrollments:
+                enrollment.is_archived = True
+                enrollment.archived_at = archived_at
+                enrollment.updated_by = user_name
+                enrollment.save()
+            
+            # Archive all restrictions associated with this client
+            restrictions = ServiceRestriction.objects.filter(client=client, is_archived=False)
+            restriction_count = restrictions.count()
+            total_restrictions_archived += restriction_count
+            for restriction in restrictions:
+                restriction.is_archived = True
+                restriction.archived_at = archived_at
+                restriction.updated_by = user_name
+                restriction.save()
+            
             # Soft delete: set is_archived=True and archived_at timestamp
             client.is_archived = True
             client.archived_at = archived_at
@@ -4064,11 +4358,22 @@ def bulk_delete_clients(request):
             client.save()
         
         logger.info(f"Bulk archived {deleted_count} clients: {client_ids}")
+        logger.info(f"Archived {total_enrollments_archived} enrollments and {total_restrictions_archived} restrictions")
+        
+        # Create message with details
+        message_parts = [f'Successfully archived {deleted_count} client(s).']
+        if total_enrollments_archived > 0:
+            message_parts.append(f'{total_enrollments_archived} enrollment(s) have been archived.')
+        if total_restrictions_archived > 0:
+            message_parts.append(f'{total_restrictions_archived} restriction(s) have been archived.')
+        message_parts.append('You can restore them from the archived clients section.')
         
         return JsonResponse({
             'success': True,
             'deleted_count': deleted_count,
-            'message': f'Successfully archived {deleted_count} client(s). You can restore them from the archived clients section.'
+            'enrollments_archived': total_enrollments_archived,
+            'restrictions_archived': total_restrictions_archived,
+            'message': ' '.join(message_parts)
         })
         
     except json.JSONDecodeError:
@@ -4477,7 +4782,7 @@ def resolve_duplicate_selection(request, duplicate_id):
         if hasattr(request, 'user') and request.user.is_authenticated:
             try:
                 reviewed_by = request.user.staff_profile
-            except:
+            except Exception:
                 pass
         
         # Determine which client to keep and which to delete
@@ -4658,11 +4963,12 @@ def update_profile_picture(request, external_id):
                     'error': 'File size must be less than 5MB'
                 }, status=400)
             
-            # Check file type
-            if not file.content_type.startswith('image/'):
+            # Check file type - allow PNG, JPEG, GIF, WebP
+            allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+            if file.content_type not in allowed_types:
                 return JsonResponse({
                     'success': False,
-                    'error': 'Please upload an image file'
+                    'error': 'Please upload a valid image file (JPEG, PNG, GIF, or WebP)'
                 }, status=400)
             
             client.profile_picture = file

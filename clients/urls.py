@@ -5,6 +5,7 @@ app_name = 'clients'
 
 urlpatterns = [
     path('', views.ClientListView.as_view(), name='list'),
+    path('<uuid:external_id>/toggle-status/', views.toggle_client_status, name='toggle_status'),
     path('<uuid:external_id>/', views.ClientDetailView.as_view(), name='detail'),
     path('create/', views.ClientCreateView.as_view(), name='create'),
     path('<uuid:external_id>/edit/', views.ClientUpdateView.as_view(), name='edit'),

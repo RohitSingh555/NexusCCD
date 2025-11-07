@@ -523,6 +523,10 @@ class Client(BaseModel):
             dob_date = self.dob
             self.age = today.year - dob_date.year - ((today.month, today.day) < (dob_date.month, dob_date.day))
         
+        # Automatically set is_inactive=True when discharge_date is set
+        if self.discharge_date and not self.is_inactive:
+            self.is_inactive = True
+        
         # Set updated_by if not already set
         if not self.updated_by:
             # Try to get the current user from the request if available
@@ -880,6 +884,9 @@ class ServiceRestriction(BaseModel):
     behaviors = models.JSONField(default=list, help_text="List of behaviors that led to this restriction")
     notes = models.TextField(null=True, blank=True, help_text="Additional notes about the restriction")
     
+    # Staff member who entered the restriction (organization/program agnostic)
+    entered_by = models.ForeignKey('Staff', on_delete=models.SET_NULL, null=True, blank=True, db_index=True, related_name='restrictions_entered', help_text="Staff member who entered this restriction")
+    
     # Audit fields
     created_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who created this record")
     updated_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who last updated this record")
@@ -926,13 +933,15 @@ class ServiceRestriction(BaseModel):
     
     def get_behavior_tags(self):
         """Get behaviors as a list of tuples (value, display_name) for template rendering"""
-        if not self.restriction_type:
+        # Behaviors are stored in the behaviors field, not restriction_type
+        if not self.behaviors or not isinstance(self.behaviors, list):
             return []
         
-        behavior_dict = dict(self.BEHAVIOR_CHOICES)
+        # Use DETAILED_BEHAVIOR_CHOICES which matches what the form uses
+        behavior_dict = dict(self.DETAILED_BEHAVIOR_CHOICES)
         tags = []
         
-        for behavior in self.restriction_type:
+        for behavior in self.behaviors:
             if behavior in behavior_dict:
                 tags.append((behavior, behavior_dict[behavior]))
         

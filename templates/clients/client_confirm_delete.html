@@ -34,15 +34,30 @@
             <div class="ml-3">
                 <h3 class="text-lg font-bold text-red-800 font-header">Warning: This action cannot be undone</h3>
                 <p class="text-red-700 mt-2 font-body">
-                    Deleting this client will permanently remove all their information from the system, including:
+                    Deleting this client will permanently archive all their information from the system, including:
                 </p>
                 <ul class="list-disc list-inside text-red-700 mt-2 space-y-1 font-body">
                     <li>Personal information and demographics</li>
                     <li>Contact details</li>
+                    {% if enrollment_count > 0 %}
+                    <li><strong>{{ enrollment_count }} program enrollment(s)</strong> - These will be permanently archived and cannot be retrieved</li>
+                    {% else %}
                     <li>Program enrollments</li>
+                    {% endif %}
+                    {% if restriction_count > 0 %}
+                    <li><strong>{{ restriction_count }} service restriction(s)</strong> - These will be permanently archived and cannot be retrieved</li>
+                    {% else %}
                     <li>Service restrictions</li>
+                    {% endif %}
                     <li>All associated records</li>
                 </ul>
+                {% if enrollment_count > 0 or restriction_count > 0 %}
+                <div class="mt-4 p-4 bg-red-100 border border-red-300 rounded-lg">
+                    <p class="text-red-800 font-bold font-body">
+                        ⚠️ IMPORTANT: Once you delete this client, there is <strong>no way to retrieve</strong> the {{ enrollment_count|add:restriction_count }} associated enrollment{% if enrollment_count|add:restriction_count != 1 %}s{% endif %} and restriction{% if enrollment_count|add:restriction_count != 1 %}s{% endif %}. They will be permanently archived.
+                    </p>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -120,9 +135,10 @@
             <a href="{% url 'clients:detail' client.external_id %}" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                 Cancel
             </a>
-            <button type="submit" 
+            <button type="button" 
                     id="delete-button"
                     disabled
+                    onclick="showDeleteWarningModal()"
                     class="px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                 <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -131,6 +147,59 @@
             </button>
         </div>
     </form>
+</div>
+
+<!-- Warning Modal -->
+<div id="deleteWarningModal" class="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full hidden z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-2xl rounded-xl bg-white">
+        <div class="mt-3">
+            <div class="flex items-start mb-6">
+                <div class="flex-shrink-0">
+                    <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                        <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="ml-4 flex-1">
+                    <h3 class="text-2xl font-bold text-red-800 font-header mb-2">Final Warning: Permanent Deletion</h3>
+                    <p class="text-neutral-700 font-body mb-4">
+                        You are about to permanently archive this client and all associated data. This action cannot be undone.
+                    </p>
+                    <div class="bg-red-50 border-2 border-red-300 rounded-lg p-4 mb-4">
+                        <p class="text-red-800 font-bold font-body mb-2">
+                            ⚠️ CRITICAL: The following data will be permanently archived and cannot be retrieved:
+                        </p>
+                        <ul class="list-disc list-inside text-red-700 space-y-1 font-body">
+                            <li><strong>All program enrollments</strong>{% if enrollment_count > 0 %} ({{ enrollment_count }} total){% endif %} - All enrollment history will be permanently archived and cannot be retrieved</li>
+                            <li><strong>All service restrictions</strong>{% if restriction_count > 0 %} ({{ restriction_count }} total){% endif %} - All restriction records will be permanently archived and cannot be retrieved</li>
+                        </ul>
+                        <p class="text-red-800 font-bold font-body mt-3">
+                            There is <strong>NO WAY TO RETRIEVE</strong> enrollments and restrictions once the client is deleted, even if there are currently none associated with this client.
+                        </p>
+                    </div>
+                    <p class="text-neutral-600 font-body">
+                        Are you absolutely sure you want to proceed? This will archive:
+                    </p>
+                    <ul class="list-disc list-inside text-neutral-600 mt-2 space-y-1 font-body">
+                        <li>All client personal information</li>
+                        <li>All contact details and addresses</li>
+                        <li>All program enrollments{% if enrollment_count > 0 %} ({{ enrollment_count }} total){% endif %}</li>
+                        <li>All service restrictions{% if restriction_count > 0 %} ({{ restriction_count }} total){% endif %}</li>
+                        <li>All associated records and history</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="flex items-center justify-end space-x-4 bg-neutral-50 rounded-b-xl px-6 py-4 -mx-5 -mb-5">
+                <button onclick="closeDeleteWarningModal()" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-500 transition-all duration-200 shadow-sm">
+                    Cancel
+                </button>
+                <button onclick="confirmDelete()" class="px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-sm">
+                    Yes, Delete Permanently
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -156,6 +225,59 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Please type the exact name to confirm deletion.');
         }
     });
+    
+    // Close modal when clicking outside
+    const modal = document.getElementById('deleteWarningModal');
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeDeleteWarningModal();
+            }
+        });
+    }
+    
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('deleteWarningModal');
+            if (modal && !modal.classList.contains('hidden')) {
+                closeDeleteWarningModal();
+            }
+        }
+    });
 });
+
+function showDeleteWarningModal() {
+    const confirmationInput = document.getElementById('confirmation_name');
+    const expectedName = '{{ client.first_name }} {{ client.last_name }}';
+    
+    // Check if name is confirmed
+    if (confirmationInput.value.trim() !== expectedName) {
+        alert('Please type the exact name "' + expectedName + '" to confirm deletion first.');
+        confirmationInput.focus();
+        return;
+    }
+    
+    // Show modal
+    const modal = document.getElementById('deleteWarningModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeDeleteWarningModal() {
+    const modal = document.getElementById('deleteWarningModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        document.body.style.overflow = 'auto';
+    }
+}
+
+function confirmDelete() {
+    // Close modal and submit form
+    closeDeleteWarningModal();
+    document.querySelector('form').submit();
+}
 </script>
 {% endblock %}

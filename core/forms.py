@@ -320,14 +320,20 @@ class ServiceRestrictionForm(forms.ModelForm):
         })
     )
     
+    # Explicitly define behaviors as MultipleChoiceField to ensure proper handling
+    behaviors = forms.MultipleChoiceField(
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'space-y-2'}),
+        choices=[]  # Will be set in __init__
+    )
+    
     class Meta:
         model = ServiceRestriction
-        fields = ['client', 'scope', 'program', 'restriction_type', 'is_bill_168', 'is_no_trespass', 'start_date', 'end_date', 'is_indefinite', 'behaviors', 'notes']
+        fields = ['client', 'scope', 'program', 'restriction_type', 'is_bill_168', 'is_no_trespass', 'start_date', 'end_date', 'is_indefinite', 'behaviors', 'notes', 'entered_by']
         widgets = {
             'restriction_type': forms.HiddenInput(),
             'start_date': forms.DateInput(attrs={'type': 'date', 'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent'}),
             'end_date': forms.DateInput(attrs={'type': 'date', 'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent'}),
-            'behaviors': forms.CheckboxSelectMultiple(attrs={'class': 'space-y-2'}),
             'notes': forms.Textarea(attrs={'rows': 4, 'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent'}),
             'is_indefinite': forms.CheckboxInput(attrs={'class': 'h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded'}),
         }
@@ -335,6 +341,12 @@ class ServiceRestrictionForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         program_queryset = kwargs.pop('program_queryset', None)
         super().__init__(*args, **kwargs)
+        
+        # Debug: Print initial data if available
+        if args and len(args) > 0:
+            print(f"ServiceRestrictionForm.__init__ - data keys: {args[0].keys() if hasattr(args[0], 'keys') else 'No data'}")
+            if hasattr(args[0], 'getlist'):
+                print(f"ServiceRestrictionForm.__init__ - behaviors from POST: {args[0].getlist('behaviors', [])}")
         
         # Set up field styling
         self.fields['client'].widget.attrs.update({
@@ -356,6 +368,16 @@ class ServiceRestrictionForm(forms.ModelForm):
             'class': 'w-4 h-4 text-brand-sky bg-neutral-100 border-neutral-300 rounded focus:ring-brand-sky focus:ring-2'
         })
         
+        # Set up entered_by field styling and queryset
+        self.fields['entered_by'].widget.attrs.update({
+            'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent'
+        })
+        # Filter staff to only show active staff members with user accounts
+        from .models import Staff
+        self.fields['entered_by'].queryset = Staff.objects.filter(active=True, user__isnull=False).select_related('user').order_by('first_name', 'last_name')
+        self.fields['entered_by'].help_text = "Select the staff member who entered this restriction"
+        self.fields['entered_by'].required = False
+        
         # Filter programs if provided
         if program_queryset is not None:
             self.fields['program'].queryset = program_queryset
@@ -365,8 +387,10 @@ class ServiceRestrictionForm(forms.ModelForm):
         self.fields['behaviors'].help_text = "Select all behaviors that apply to this restriction (only shown for Behavioral Issues type)"
         self.fields['notes'].help_text = "Additional notes about the restriction (required for Behavioral Issues type)"
         
-        # Set initial value for behaviors field to empty list and make it not required by default
+        # Set choices for behaviors field using DETAILED_BEHAVIOR_CHOICES
         if 'behaviors' in self.fields:
+            from .models import ServiceRestriction
+            self.fields['behaviors'].choices = ServiceRestriction.DETAILED_BEHAVIOR_CHOICES
             self.fields['behaviors'].initial = []
             self.fields['behaviors'].required = False
         
@@ -420,11 +444,26 @@ class ServiceRestrictionForm(forms.ModelForm):
                 raise ValidationError("End date must be after start date.")
         
         # Validate behavioral issues type
-        if restriction_type == 'behaviors':
+        # restriction_type is a JSONField, so it might be stored as a string or parsed JSON
+        # Handle both cases: 'behaviors' string or ["behaviors"] array
+        restriction_type_value = restriction_type
+        if isinstance(restriction_type, list) and len(restriction_type) > 0:
+            restriction_type_value = restriction_type[0] if isinstance(restriction_type[0], str) else str(restriction_type[0])
+        elif isinstance(restriction_type, str):
+            # Try to parse if it's a JSON string
+            try:
+                parsed = json.loads(restriction_type) if restriction_type.startswith('"') or restriction_type.startswith('[') else restriction_type
+                if isinstance(parsed, list) and len(parsed) > 0:
+                    restriction_type_value = parsed[0] if isinstance(parsed[0], str) else str(parsed[0])
+                elif isinstance(parsed, str):
+                    restriction_type_value = parsed
+            except (json.JSONDecodeError, AttributeError):
+                restriction_type_value = restriction_type
+        
+        if restriction_type_value == 'behaviors':
             if not behaviors or len(behaviors) == 0:
                 raise ValidationError("At least one behavior must be selected for Behavioral Issues restrictions.")
-            if not notes or not notes.strip():
-                raise ValidationError("Notes are required for Behavioral Issues restrictions to describe the specific behaviors.")
+            # Notes are optional, not required
         
         # Ensure behaviors is always a list (but only required for behavioral issues type)
         if behaviors is None:
@@ -434,17 +473,26 @@ class ServiceRestrictionForm(forms.ModelForm):
     
     def clean_start_date(self):
         start_date = self.cleaned_data.get('start_date')
-        if start_date and start_date < date.today():
-            raise ValidationError("Start date cannot be in the past.")
+        # Allow past dates to permit accurate entry of historical restrictions
+        # No validation needed - any valid date is acceptable
         return start_date
     
     def clean_behaviors(self):
         print("ServiceRestrictionForm.clean_behaviors called")
-        behaviors = self.cleaned_data.get('behaviors')
-        print(f"Raw behaviors value: {behaviors}")
+        # Get the value from cleaned_data (it's already been cleaned by the field)
+        behaviors = self.cleaned_data.get('behaviors', [])
+        print(f"Raw behaviors value: {behaviors}, type: {type(behaviors)}")
+        
+        # If it's None or empty, return empty list
         if behaviors is None:
             print("Behaviors is None, returning empty list")
             return []
+        
+        # Ensure it's a list
+        if not isinstance(behaviors, list):
+            print(f"Behaviors is not a list, converting: {behaviors}")
+            behaviors = [behaviors] if behaviors else []
+        
         print(f"Returning behaviors: {behaviors}")
         return behaviors
     
@@ -469,6 +517,14 @@ class ServiceRestrictionForm(forms.ModelForm):
         print(f"Instance client: {instance.client}")
         print(f"Instance scope: {instance.scope}")
         print(f"Instance restriction_type: {instance.restriction_type}")
+        print(f"Instance behaviors: {instance.behaviors}")
+        print(f"Behaviors type: {type(instance.behaviors)}")
+        
+        # Ensure behaviors is a list (MultipleChoiceField returns a list, but let's be safe)
+        if instance.behaviors is None:
+            instance.behaviors = []
+        elif not isinstance(instance.behaviors, list):
+            instance.behaviors = list(instance.behaviors) if instance.behaviors else []
         
         if commit:
             print("Saving instance...")

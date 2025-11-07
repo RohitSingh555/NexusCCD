@@ -478,8 +478,8 @@
                             this.showLoginModal = false;
                             this.loginForm = { email: '', password: '', remember: false };
                             
-                            // Redirect to dashboard
-                            window.location.href = '/dashboard/';
+                            // Redirect to restrictions page
+                            window.location.href = '/core/restrictions/';
                         } else {
                             this.loginError = data.error || 'Login failed';
                         }
@@ -534,8 +534,8 @@
                                 password_confirm: ''
                             };
                             
-                            // Redirect to dashboard
-                            window.location.href = '/dashboard/';
+                            // Redirect to restrictions page
+                            window.location.href = '/core/restrictions/';
                         } else {
                             this.registerError = data.error || 'Registration failed';
                         }

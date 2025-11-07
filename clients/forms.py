@@ -705,23 +705,42 @@ class ClientForm(forms.ModelForm):
             
             # Check file type by reading the file header
             try:
+                # Reset file pointer to beginning
                 profile_picture.seek(0)
-                header = profile_picture.read(10)
-                profile_picture.seek(0)  # Reset file pointer
+                header = profile_picture.read(12)
+                profile_picture.seek(0)  # Reset file pointer for Django to save
                 
                 # Check for common image file signatures
+                # PNG: First 4 bytes are \x89PNG (more reliable than checking full 8-byte signature)
                 is_image = (
                     header.startswith(b'\xff\xd8\xff') or  # JPEG
-                    header.startswith(b'\x89PNG\r\n\x1a\n') or  # PNG
+                    header.startswith(b'\x89PNG') or  # PNG (check first 4 bytes)
                     header.startswith(b'GIF87a') or  # GIF87a
                     header.startswith(b'GIF89a') or  # GIF89a
-                    header.startswith(b'RIFF') and b'WEBP' in header[:12]  # WebP
+                    (header.startswith(b'RIFF') and b'WEBP' in header[:12])  # WebP
                 )
                 
                 if not is_image:
-                    raise forms.ValidationError('Please upload a valid image file (JPEG, PNG, GIF, or WebP)')
-            except Exception:
-                raise forms.ValidationError('Please upload a valid image file')
+                    # Also check content_type as fallback
+                    content_type = getattr(profile_picture, 'content_type', None)
+                    if content_type:
+                        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+                        if content_type.lower() in allowed_types:
+                            is_image = True
+                    
+                    if not is_image:
+                        raise forms.ValidationError('Please upload a valid image file (JPEG, PNG, GIF, or WebP)')
+            except forms.ValidationError:
+                raise
+            except Exception as e:
+                # If header reading fails, try content_type as fallback
+                content_type = getattr(profile_picture, 'content_type', None)
+                if content_type:
+                    allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+                    if content_type.lower() not in allowed_types:
+                        raise forms.ValidationError('Please upload a valid image file (JPEG, PNG, GIF, or WebP)')
+                else:
+                    raise forms.ValidationError('Please upload a valid image file')
         
         return profile_picture
     

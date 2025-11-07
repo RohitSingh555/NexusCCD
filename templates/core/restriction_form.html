@@ -18,19 +18,19 @@
 
 
 {% block content %}
-<div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <!-- Header -->
-    <div class="mb-8">
+    <div class="mb-10">
         <div class="flex items-center justify-between">
             <div>
-                <h1 class="text-3xl font-bold text-neutral-800 font-header">
+                <h1 class="text-4xl font-black text-neutral-800 font-header mb-3">
                     {% if object %}Edit Service Restriction{% else %}Add New Service Restriction{% endif %}
                 </h1>
-                <p class="text-neutral-600 mt-2 font-body">
+                <p class="text-lg text-neutral-600 font-body">
                     {% if object %}Update service restriction information{% else %}Create a new service restriction for a client{% endif %}
                 </p>
             </div>
-            <a href="{% url 'core:restrictions' %}" class="inline-flex items-center px-4 py-2 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+            <a href="{% url 'core:restrictions' %}" class="inline-flex items-center px-5 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-md hover:shadow-lg">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                 </svg>
@@ -40,21 +40,24 @@
     </div>
 
     <!-- Form -->
-    <form method="post" enctype="multipart/form-data" class="space-y-8" x-data="restrictionForm()">
+    <form method="post" enctype="multipart/form-data" class="space-y-8" x-data="restrictionForm()" onsubmit="return logFormData(event)">
         {% csrf_token %}
         
         <!-- Restriction Information Section -->
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
-            <div class="flex items-center mb-6">
-                <div class="w-10 h-10 bg-gradient-to-br from-accent-400 to-accent-600 rounded-lg flex items-center justify-center shadow-sm mr-4">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="bg-white rounded-2xl shadow-lg border border-neutral-200 p-8 mb-8">
+            <div class="flex items-center mb-8 pb-6 border-b border-neutral-200">
+                <div class="w-14 h-14 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-lg mr-4">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
                     </svg>
                 </div>
-                <h2 class="text-xl font-bold text-neutral-800 font-header">Restriction Information</h2>
+                <div>
+                    <h2 class="text-2xl font-black text-neutral-800 font-header">Restriction Information</h2>
+                    <p class="text-sm text-neutral-500 font-body mt-1">Enter the details for this service restriction</p>
+                </div>
             </div>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-7">
                 <div>
                     <label for="{{ form.client.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Client *</label>
                     
@@ -114,7 +117,7 @@
                 
                 <div>
                     <label for="{{ form.scope.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Scope *</label>
-                    <select name="{{ form.scope.name }}" id="{{ form.scope.id_for_label }}" @change="updateProgramVisibility()" class="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent">
+                    <select name="{{ form.scope.name }}" id="{{ form.scope.id_for_label }}" @change="updateProgramVisibility()" class="w-full px-4 py-3.5 border-2 border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-brand-sky transition-all duration-200 hover:border-brand-sky/50">
                         <option value="">Select Scope</option>
                         <option value="org" {% if form.scope.value == 'org' %}selected{% endif %}>Organization-wide</option>
                         <option value="program" {% if form.scope.value == 'program' %}selected{% endif %}>Program-Specific</option>
@@ -134,42 +137,35 @@
                 </div>
                 
                 <div>
+                    <label for="{{ form.entered_by.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Entered By</label>
+                    {{ form.entered_by }}
+                    <p class="mt-1 text-sm text-neutral-500 font-body">{{ form.entered_by.help_text }}</p>
+                    {% if form.entered_by.errors %}
+                        <div class="mt-1 text-sm text-red-600">{{ form.entered_by.errors.0 }}</div>
+                    {% endif %}
+                </div>
+                
+                <div>
                     <label for="{{ form.restriction_type.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Behavior *</label>
                     <div class="relative">
                         <div class="w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent bg-white cursor-pointer" id="behavior-dropdown-trigger" onclick="toggleBehaviorDropdown()">
                             <span id="behavior-display">Select behaviors...</span>
                             <span class="float-right">▼</span>
                         </div>
-                        <div id="behavior-dropdown" class="absolute z-10 w-full mt-1 bg-white border border-neutral-300 rounded-xl shadow-lg">
+                        <div id="behavior-dropdown" class="absolute z-10 w-full mt-1 bg-white border border-neutral-300 rounded-xl shadow-lg max-h-80 overflow-y-auto">
                             <div class="p-2">
+                                {% for choice in form.behaviors.field.choices %}
                                 <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
-                                    <input type="checkbox" value="aggressive" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
-                                    <span>Weapons</span>
+                                    <input type="checkbox" 
+                                           name="{{ form.behaviors.name }}"
+                                           value="{{ choice.0 }}" 
+                                           class="behavior-dropdown-checkbox mr-3" 
+                                           data-behavior-value="{{ choice.0 }}"
+                                           {% if choice.0 in form.behaviors.value %}checked{% endif %}
+                                           onchange="updateBehaviorDisplay(); console.log('Behavior checkbox changed:', this.name, this.value, this.checked);">
+                                    <span>{{ choice.1 }}</span>
                                 </label>
-                                <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
-                                    <input type="checkbox" value="harassment" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
-                                    <span>Physical and Sexual Assault</span>
-                                </label>
-                                <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
-                                    <input type="checkbox" value="theft" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
-                                    <span>Serious Threat of Violence</span>
-                                </label>
-                                <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
-                                    <input type="checkbox" value="threatening" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
-                                    <span>Domestic Violence</span>
-                                </label>
-                                <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
-                                    <input type="checkbox" value="intoxicated" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
-                                    <span>Threatening Behaviour / Destroying Property</span>
-                                </label>
-                                <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
-                                    <input type="checkbox" value="property_damage" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
-                                    <span>Abusive and / or Oppressive Language</span>
-                                </label>
-                                <label class="flex items-center p-2 hover:bg-neutral-50 cursor-pointer">
-                                    <input type="checkbox" value="property_damage" class="behavior-checkbox mr-3" onchange="updateBehaviorDisplay()">
-                                    <span>Minor Physical Violence</span>
-                                </label>
+                                {% endfor %}
                             </div>
                         </div>
                         <input type="hidden" name="{{ form.restriction_type.name }}" id="{{ form.restriction_type.id_for_label }}" value="">
@@ -199,7 +195,14 @@
                 
                 <div>
                     <label for="{{ form.start_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Start Date *</label>
-                    {{ form.start_date }}
+                    <div class="relative group cursor-pointer" onclick="document.getElementById('{{ form.start_date.id_for_label }}').showPicker ? document.getElementById('{{ form.start_date.id_for_label }}').showPicker() : document.getElementById('{{ form.start_date.id_for_label }}').focus()">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-neutral-400 group-hover:text-brand-sky transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                        {{ form.start_date }}
+                    </div>
                     {% if form.start_date.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.start_date.errors.0 }}</div>
                     {% endif %}
@@ -207,7 +210,14 @@
                 
                 <div>
                     <label for="{{ form.end_date.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">End Date</label>
-                    {{ form.end_date }}
+                    <div class="relative group cursor-pointer" onclick="document.getElementById('{{ form.end_date.id_for_label }}').showPicker ? document.getElementById('{{ form.end_date.id_for_label }}').showPicker() : document.getElementById('{{ form.end_date.id_for_label }}').focus()">
+                        <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-neutral-400 group-hover:text-brand-sky transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                        {{ form.end_date }}
+                    </div>
                     <p class="mt-1 text-sm text-neutral-500 font-body">Leave blank for indefinite restriction</p>
                     {% if form.end_date.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.end_date.errors.0 }}</div>
@@ -228,37 +238,15 @@
                 </div>
             </div>
             
-            <!-- Behaviors Section (only for Behavioral Issues type) -->
-            <div id="behaviors-section" class="mt-6" :class="{'hidden': restrictionType !== 'behaviors'}">
-                <label class="block text-sm font-bold text-neutral-700 mb-3 font-subheader">Behaviors *</label>
-                <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {% for choice in form.behaviors.field.choices %}
-                        <div class="flex items-center">
-                            <input type="checkbox" 
-                                   name="{{ form.behaviors.name }}" 
-                                   value="{{ choice.0 }}" 
-                                   id="behavior_{{ forloop.counter }}"
-                                   {% if choice.0 in form.behaviors.value %}checked{% endif %}
-                                   class="h-4 w-4 text-brand-sky focus:ring-brand-sky border-neutral-300 rounded">
-                            <label for="behavior_{{ forloop.counter }}" class="ml-2 text-sm text-neutral-700 font-body">
-                                {{ choice.1 }}
-                            </label>
-                        </div>
-                    {% endfor %}
-                </div>
-                <p class="mt-2 text-sm text-neutral-500 font-body">Select all behaviors that apply to this restriction</p>
-                {% if form.behaviors.errors %}
-                    <div class="mt-1 text-sm text-red-600">{{ form.behaviors.errors.0 }}</div>
-                {% endif %}
-            </div>
-            
             <!-- Notes Section -->
-            <div class="mt-6">
-                <label for="{{ form.notes.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">
+            <div class="mt-8 pt-6 border-t border-neutral-200">
+                <label for="{{ form.notes.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-3 font-subheader">
                     <span id="notes-label">Additional Notes</span>
                 </label>
-                {{ form.notes }}
-                <p id="notes-help" class="mt-1 text-sm text-neutral-500 font-body">Additional notes about the restriction (optional)</p>
+                <div class="relative">
+                    {{ form.notes }}
+                </div>
+                <p id="notes-help" class="mt-2 text-sm text-neutral-500 font-body">Additional notes about the restriction (optional)</p>
                 {% if form.notes.errors %}
                     <div class="mt-1 text-sm text-red-600">{{ form.notes.errors.0 }}</div>
                 {% endif %}
@@ -306,11 +294,11 @@
         </div>
 
         <!-- Form Actions -->
-        <div class="flex justify-end space-x-4 pt-6">
-            <a href="{% url 'core:restrictions' %}" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+        <div class="flex justify-end space-x-4 pt-8 mt-8 border-t border-neutral-200">
+            <a href="{% url 'core:restrictions' %}" class="px-8 py-3.5 border-2 border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-md hover:shadow-lg">
                 Cancel
             </a>
-            <button type="submit" class="px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
+            <button type="submit" class="px-8 py-3.5 border border-transparent text-sm font-bold rounded-xl text-white bg-gradient-to-r from-brand-sky to-brand-darkBlue hover:from-brand-darkBlue hover:to-brand-sky focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
                 {% if object %}Update Restriction{% else %}Create Restriction{% endif %}
             </button>
         </div>
@@ -372,20 +360,30 @@
             
             updateBehaviorVisibility() {
                 const restrictionTypeSelect = document.getElementById('{{ form.restriction_type.id_for_label }}');
-                const behaviorsSection = document.getElementById('behaviors-section');
                 const notesLabel = document.getElementById('notes-label');
                 const notesHelp = document.getElementById('notes-help');
                 
-                this.restrictionType = restrictionTypeSelect.value;
+                this.restrictionType = restrictionTypeSelect ? restrictionTypeSelect.value : '';
                 
-                if (this.restrictionType === 'behaviors') {
-                    behaviorsSection.classList.remove('hidden');
-                    notesLabel.textContent = 'Behavior Notes *';
-                    notesHelp.textContent = 'Describe the specific behaviors that led to this restriction (required)';
+                // Check if any behaviors are selected
+                const behaviorsCheckboxes = document.querySelectorAll('input[name="{{ form.behaviors.name }}"]:checked');
+                const hasBehaviors = behaviorsCheckboxes.length > 0;
+                
+                // Notes are always optional, but update label if behaviors are selected
+                if (this.restrictionType === 'behaviors' || hasBehaviors) {
+                    if (notesLabel) {
+                        notesLabel.textContent = 'Behavior Notes';
+                    }
+                    if (notesHelp) {
+                        notesHelp.textContent = 'Describe the specific behaviors that led to this restriction (optional)';
+                    }
                 } else {
-                    behaviorsSection.classList.add('hidden');
-                    notesLabel.textContent = 'Additional Notes';
-                    notesHelp.textContent = 'Additional notes about the restriction (optional)';
+                    if (notesLabel) {
+                        notesLabel.textContent = 'Additional Notes';
+                    }
+                    if (notesHelp) {
+                        notesHelp.textContent = 'Additional notes about the restriction (optional)';
+                    }
                 }
             },
             
@@ -666,13 +664,40 @@ document.addEventListener('DOMContentLoaded', function() {
     input[type="date"],
     textarea,
     select {
-        @apply w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body;
+        @apply w-full px-4 py-3.5 border-2 border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-brand-sky font-body transition-all duration-200;
+    }
+    
+    input[type="date"] {
+        padding-left: 2.75rem !important;
+        cursor: pointer;
+    }
+    
+    input[type="date"]:hover {
+        border-color: #0ea5e9 !important;
+        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
     }
     
     input[type="date"]:focus,
     textarea:focus,
     select:focus {
-        @apply ring-2 ring-brand-sky border-transparent;
+        @apply ring-2 ring-brand-sky border-brand-sky shadow-lg;
+        transform: translateY(-1px);
+    }
+    
+    /* Enhanced form field hover states */
+    select:hover,
+    textarea:hover {
+        border-color: #0ea5e9;
+        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.05);
+    }
+    
+    /* Better visual hierarchy for form sections */
+    .form-section {
+        transition: all 0.3s ease;
+    }
+    
+    .form-section:hover {
+        transform: translateY(-2px);
     }
     
     /* Error state styling */
@@ -723,6 +748,30 @@ document.addEventListener('DOMContentLoaded', function() {
 </style>
 
 <script>
+function logFormData(event) {
+    // Log form data before submission for debugging
+    const form = event.target;
+    const formData = new FormData(form);
+    
+    // Get the actual field name from the form
+    const behaviorFieldName = '{{ form.behaviors.name }}';
+    console.log('Form submission - behavior field name:', behaviorFieldName);
+    
+    const behaviors = formData.getAll(behaviorFieldName);
+    console.log('Form submission - behaviors selected from FormData:', behaviors);
+    console.log('Form submission - all form data keys:', Array.from(formData.keys()));
+    
+    // Check if behaviors checkboxes are in the form
+    const behaviorCheckboxes = form.querySelectorAll(`input[name="${behaviorFieldName}"]:checked`);
+    console.log('Form submission - checked behavior checkboxes:', Array.from(behaviorCheckboxes).map(cb => ({name: cb.name, value: cb.value, checked: cb.checked})));
+    
+    // Also check all behavior checkboxes (checked and unchecked)
+    const allBehaviorCheckboxes = form.querySelectorAll(`input[name="${behaviorFieldName}"]`);
+    console.log('Form submission - all behavior checkboxes:', Array.from(allBehaviorCheckboxes).map(cb => ({name: cb.name, value: cb.value, checked: cb.checked})));
+    
+    return true; // Allow form to submit
+}
+
 function toggleBehaviorDropdown() {
     const dropdown = document.getElementById('behavior-dropdown');
     if (dropdown) {
@@ -731,22 +780,39 @@ function toggleBehaviorDropdown() {
 }
 
 function updateBehaviorDisplay() {
-    const checkboxes = document.querySelectorAll('.behavior-checkbox:checked');
+    const checkboxes = document.querySelectorAll('.behavior-dropdown-checkbox:checked');
     const display = document.getElementById('behavior-display');
     const hiddenInput = document.getElementById('{{ form.restriction_type.id_for_label }}');
     
-    if (checkboxes.length === 0) {
+    // Get selected values from dropdown (these now have name attribute and will submit)
+    const selectedValues = Array.from(checkboxes).map(cb => cb.value);
+    const selectedLabels = Array.from(checkboxes).map(cb => {
+        const label = cb.nextElementSibling.textContent;
+        return label;
+    });
+    
+    // Update display and restriction_type
+    // restriction_type is a JSONField, so we need to send valid JSON
+    // The actual behavior values are stored in the behaviors field (from checkboxes with name attribute)
+    if (selectedValues.length === 0) {
         display.textContent = 'Select behaviors...';
-        hiddenInput.value = '';
+        if (hiddenInput) {
+            // Set to empty JSON array for JSONField
+            hiddenInput.value = '[]';
+        }
     } else {
-        const selectedValues = Array.from(checkboxes).map(cb => cb.value);
-        const selectedLabels = Array.from(checkboxes).map(cb => {
-            const label = cb.nextElementSibling.textContent;
-            return label;
-        });
-        
         display.textContent = selectedLabels.join(', ');
-        hiddenInput.value = JSON.stringify(selectedValues);
+        // Set restriction_type to valid JSON string "behaviors" for JSONField
+        if (hiddenInput) {
+            hiddenInput.value = '"behaviors"';
+        }
+        // Update Alpine.js restrictionType if available
+        if (typeof restrictionForm !== 'undefined' && window.Alpine) {
+            const formData = window.Alpine.$data(document.querySelector('[x-data="restrictionForm()"]'));
+            if (formData) {
+                formData.restrictionType = 'behaviors';
+            }
+        }
     }
 }
 
@@ -768,21 +834,64 @@ document.addEventListener('DOMContentLoaded', function() {
         dropdown.classList.add('hidden');
     }
     
-    const hiddenInput = document.getElementById('{{ form.restriction_type.id_for_label }}');
-    const existingValue = hiddenInput.value;
+    // Load values from behaviors field (primary source)
+    let behaviorsValue = [];
+    {% if form.behaviors.value %}
+    behaviorsValue = {{ form.behaviors.value|safe }};
+    if (behaviorsValue && Array.isArray(behaviorsValue) && behaviorsValue.length > 0) {
+        // Set restriction_type to valid JSON "behaviors" if behaviors exist
+        const hiddenInput = document.getElementById('{{ form.restriction_type.id_for_label }}');
+        if (hiddenInput) {
+            hiddenInput.value = '"behaviors"';
+        }
+        
+        // Check the dropdown checkboxes (they now have the name attribute)
+        behaviorsValue.forEach(value => {
+            const dropdownCheckbox = document.querySelector(`.behavior-dropdown-checkbox[value="${value}"]`);
+            if (dropdownCheckbox) {
+                dropdownCheckbox.checked = true;
+            }
+        });
+        updateBehaviorDisplay();
+    }
+    {% endif %}
     
-    if (existingValue) {
+    // Also try to load from restriction_type field if behaviors is empty (for backward compatibility)
+    const hiddenInput = document.getElementById('{{ form.restriction_type.id_for_label }}');
+    const existingValue = hiddenInput ? hiddenInput.value : '';
+    
+    if (existingValue && existingValue !== '"behaviors"' && existingValue !== '[]' && (!behaviorsValue || behaviorsValue.length === 0)) {
         try {
-            const selectedValues = JSON.parse(existingValue);
-            selectedValues.forEach(value => {
-                const checkbox = document.querySelector(`.behavior-checkbox[value="${value}"]`);
-                if (checkbox) {
-                    checkbox.checked = true;
+            const parsedValue = JSON.parse(existingValue);
+            if (Array.isArray(parsedValue)) {
+                // Old format: restriction_type was a JSON array of behavior values
+                parsedValue.forEach(value => {
+                    const dropdownCheckbox = document.querySelector(`.behavior-dropdown-checkbox[value="${value}"]`);
+                    if (dropdownCheckbox) {
+                        dropdownCheckbox.checked = true;
+                    }
+                });
+                // Set restriction_type to valid JSON "behaviors"
+                if (hiddenInput) {
+                    hiddenInput.value = '"behaviors"';
                 }
-            });
-            updateBehaviorDisplay();
+                updateBehaviorDisplay();
+            } else if (parsedValue === 'behaviors' || parsedValue === 'behaviors') {
+                // If it's already the string 'behaviors', ensure it's valid JSON
+                if (hiddenInput) {
+                    hiddenInput.value = '"behaviors"';
+                }
+            }
         } catch (e) {
-            // No existing behavior values to load
+            // Not valid JSON, try to set default
+            if (hiddenInput && !hiddenInput.value) {
+                hiddenInput.value = '[]';
+            }
+        }
+    } else if (!existingValue || existingValue === '') {
+        // Initialize with empty JSON array if no value
+        if (hiddenInput) {
+            hiddenInput.value = '[]';
         }
     }
 });

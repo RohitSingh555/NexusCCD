@@ -198,10 +198,10 @@ def jwt_required(view_func):
 
 
 def home(request):
-    """Home view that redirects authenticated users to dashboard"""
+    """Home view that redirects authenticated users to restrictions page"""
     # Check if user is authenticated (either JWT via middleware or Django session)
     if request.user.is_authenticated:
-        return redirect('dashboard')
+        return redirect('core:restrictions')
     
     return render(request, 'home.html')
 
@@ -312,11 +312,10 @@ def dashboard(request):
             is_archived=False
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
-        # Get restricted clients (Bill 168 and No Trespass) - Managers see ALL restrictions
+        # Get restricted clients (Organization-wide restrictions) - Managers see ALL organization-wide restrictions
         restricted_clients = ServiceRestriction.objects.filter(
-            is_archived=False
-        ).filter(
-            Q(is_bill_168=True) | Q(is_no_trespass=True)
+            is_archived=False,
+            scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     elif is_leader and assigned_programs:
         # Leader users see data for their assigned departments
@@ -346,11 +345,10 @@ def dashboard(request):
             is_archived=False
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
-        # Get restricted clients (Bill 168 and No Trespass) - Leaders see ALL restrictions
+        # Get restricted clients (Organization-wide restrictions) - Leaders see ALL organization-wide restrictions
         restricted_clients = ServiceRestriction.objects.filter(
-            is_archived=False
-        ).filter(
-            Q(is_bill_168=True) | Q(is_no_trespass=True)
+            is_archived=False,
+            scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     elif is_staff_only:
         # Staff users now see ALL data across all clients and programs (same as analysts)
@@ -376,11 +374,10 @@ def dashboard(request):
             is_archived=False
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
-        # Get restricted clients (Bill 168 and No Trespass) - Staff users see ALL restrictions
+        # Get restricted clients (Organization-wide restrictions) - Staff users see ALL organization-wide restrictions
         restricted_clients = ServiceRestriction.objects.filter(
-            is_archived=False
-        ).filter(
-            Q(is_bill_168=True) | Q(is_no_trespass=True)
+            is_archived=False,
+            scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     elif is_analyst:
         # Analysts see ALL data across all clients and programs
@@ -406,11 +403,10 @@ def dashboard(request):
             is_archived=False
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
-        # Get restricted clients (Bill 168 and No Trespass) - Analysts see ALL restrictions
+        # Get restricted clients (Organization-wide restrictions) - Analysts see ALL organization-wide restrictions
         restricted_clients = ServiceRestriction.objects.filter(
-            is_archived=False
-        ).filter(
-            Q(is_bill_168=True) | Q(is_no_trespass=True)
+            is_archived=False,
+            scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     else:
         # SuperAdmin and other roles see all data
@@ -436,11 +432,10 @@ def dashboard(request):
             is_archived=False
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
-        # Get restricted clients (Bill 168 and No Trespass)
+        # Get restricted clients (Organization-wide restrictions)
         restricted_clients = ServiceRestriction.objects.filter(
-            is_archived=False
-        ).filter(
-            Q(is_bill_168=True) | Q(is_no_trespass=True)
+            is_archived=False,
+            scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     
     # Get program status with enrollment counts and capacity information
@@ -2517,14 +2512,44 @@ class RestrictionCreateView(AnalystAccessMixin, ProgramManagerAccessMixin, Creat
                 pass
         return kwargs
     
+    def get_initial(self):
+        """Set initial values for the form"""
+        initial = super().get_initial()
+        if self.request.user.is_authenticated:
+            try:
+                if hasattr(self.request.user, 'staff_profile'):
+                    initial['entered_by'] = self.request.user.staff_profile
+            except Exception:
+                pass
+        return initial
+    
     def form_valid(self, form):
         try:
+            # Debug: Print POST data
+            print(f"RestrictionCreateView.form_valid - POST data: {dict(self.request.POST)}")
+            print(f"RestrictionCreateView.form_valid - behaviors in POST: {self.request.POST.getlist('behaviors')}")
+            # Debug: Print form data before saving
+            print(f"RestrictionCreateView.form_valid - form.cleaned_data: {form.cleaned_data}")
+            print(f"RestrictionCreateView.form_valid - behaviors in cleaned_data: {form.cleaned_data.get('behaviors')}")
+            
             # Set the created_by and updated_by fields before saving
             restriction = form.save(commit=False)
             user_name = self.request.user.get_full_name() or self.request.user.username
             restriction.created_by = user_name
             restriction.updated_by = user_name
+            
+            # Debug: Print instance data
+            print(f"RestrictionCreateView.form_valid - restriction.behaviors before save: {restriction.behaviors}")
+            print(f"RestrictionCreateView.form_valid - restriction.behaviors type: {type(restriction.behaviors)}")
+            
+            # Set entered_by to current user's staff profile if not provided
+            if not restriction.entered_by and hasattr(self.request.user, 'staff_profile'):
+                restriction.entered_by = self.request.user.staff_profile
+            
             restriction.save()
+            
+            # Debug: Print after save
+            print(f"RestrictionCreateView.form_valid - restriction.behaviors after save: {restriction.behaviors}")
             
             # Create audit log entry for restriction creation
             try:
@@ -2634,6 +2659,11 @@ class RestrictionUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, Updat
         restriction = form.save(commit=False)
         user_name = self.request.user.get_full_name() or self.request.user.username
         restriction.updated_by = user_name
+        
+        # Set entered_by to current user's staff profile if not already set (for backward compatibility)
+        if not restriction.entered_by and hasattr(self.request.user, 'staff_profile'):
+            restriction.entered_by = self.request.user.staff_profile
+        
         restriction.save()
         
         # Create audit log entry for restriction update

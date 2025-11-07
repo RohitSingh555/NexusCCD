@@ -31,44 +31,57 @@
             </div>
         </div>
     </div>
-    <div class="flex justify-between items-center mb-8">
-        <div>
-            <h1 class="text-3xl font-bold text-neutral-800 font-header">Service Restrictions</h1>
-            <p class="text-neutral-600 mt-2 font-body">Manage client service restrictions and limitations</p>
+    
+    <!-- Hero Section -->
+    <div class="relative mb-10 overflow-hidden bg-gradient-to-br from-brand-sky via-brand-sky to-brand-darkBlue rounded-2xl shadow-xl">
+        <div class="absolute inset-0 bg-black opacity-5"></div>
+        <div class="relative px-8 py-12 sm:px-12 sm:py-16">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+                <div class="mb-6 md:mb-0">
+                    <h1 class="text-4xl sm:text-5xl font-black text-white font-header mb-4 tracking-tight">
+                        Service Restrictions
+                    </h1>
+                    <p class="text-lg sm:text-xl text-blue-100 font-body max-w-2xl">
+                        Manage and monitor client service restrictions and limitations across your organization
+                    </p>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3 relative z-10">
+                    <a href="{% url 'core:restrictions_export' %}?{{ request.GET.urlencode }}" class="inline-flex items-center justify-center px-6 py-3 border-2 border-white/30 rounded-xl text-sm font-bold text-white bg-white/10 hover:bg-white/20 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white transition-all duration-200 shadow-lg">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Export
+                    </a>
+                    <a href="{% url 'core:restrictions_create' %}" class="inline-flex items-center justify-center px-6 py-3 border-2 border-transparent rounded-xl text-sm font-bold text-brand-sky bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white transition-all duration-200 shadow-lg relative z-10">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Add New Restriction
+                    </a>
+                </div>
+            </div>
         </div>
-        <div class="flex space-x-3">
-            <a href="{% url 'core:restrictions_export' %}?{{ request.GET.urlencode }}" class="inline-flex items-center px-4 py-2 border border-green-300 rounded-lg text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200">
-                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                </svg>
-                Export Restrictions
-            </a>
-            {% if not user_permissions.is_staff_only %}
-            <a href="{% url 'core:restrictions_create' %}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                </svg>
-                Add New Restriction
-            </a>
-            {% endif %}
-        </div>
+        <!-- Decorative elements -->
+        <div class="absolute top-0 right-0 -mt-4 -mr-4 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl"></div>
+        <div class="absolute bottom-0 left-0 -mb-4 -ml-4 w-48 h-48 bg-white opacity-5 rounded-full blur-3xl"></div>
     </div>
     
 
     <!-- Restriction Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 relative">
-            <div class="flex items-center">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-xl shadow-lg border border-neutral-200 p-6 relative overflow-hidden group hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-accent-400/10 to-accent-600/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
+            <div class="flex items-center relative z-10">
                 <div class="flex-shrink-0">
-                    <div class="w-12 h-12 bg-gradient-to-br from-accent-400 to-accent-600 rounded-xl flex items-center justify-center shadow-sm">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-14 h-14 bg-gradient-to-br from-accent-400 to-accent-600 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
                         </svg>
                     </div>
                 </div>
                 <div class="ml-4 flex-1">
-                    <p class="text-sm font-bold text-neutral-600 font-subheader">Total Restrictions</p>
-                    <p class="text-2xl font-black text-neutral-900 font-header">{{ total_restrictions }}</p>
+                    <p class="text-sm font-bold text-neutral-600 font-subheader mb-1">Total Restrictions</p>
+                    <p class="text-3xl font-black text-neutral-900 font-header">{{ total_restrictions }}</p>
                 </div>
             </div>
             <!-- Info Icon -->
@@ -89,18 +102,19 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 relative">
-            <div class="flex items-center">
+        <div class="bg-white rounded-xl shadow-lg border border-neutral-200 p-6 relative overflow-hidden group hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-brand-lime/10 to-brand-moss/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
+            <div class="flex items-center relative z-10">
                 <div class="flex-shrink-0">
-                    <div class="w-12 h-12 bg-gradient-to-br from-brand-lime to-brand-moss rounded-xl flex items-center justify-center shadow-sm">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-14 h-14 bg-gradient-to-br from-brand-lime to-brand-moss rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                     </div>
                 </div>
                 <div class="ml-4 flex-1">
-                    <p class="text-sm font-bold text-neutral-600 font-subheader">Active</p>
-                    <p class="text-2xl font-black text-neutral-900 font-header">{{ active_restrictions }}</p>
+                    <p class="text-sm font-bold text-neutral-600 font-subheader mb-1">Active</p>
+                    <p class="text-3xl font-black text-neutral-900 font-header">{{ active_restrictions }}</p>
                 </div>
             </div>
             <!-- Info Icon -->
@@ -122,18 +136,19 @@
         </div>
 
 
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 relative">
-            <div class="flex items-center">
+        <div class="bg-white rounded-xl shadow-lg border border-neutral-200 p-6 relative overflow-hidden group hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-brand-orange/10 to-brand-burntOrange/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
+            <div class="flex items-center relative z-10">
                 <div class="flex-shrink-0">
-                    <div class="w-12 h-12 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-xl flex items-center justify-center shadow-sm">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-14 h-14 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                         </svg>
                     </div>
                 </div>
                 <div class="ml-4 flex-1">
-                    <p class="text-sm font-bold text-neutral-600 font-subheader">Organization-wide</p>
-                    <p class="text-2xl font-black text-neutral-900 font-header">{{ org_restrictions }}</p>
+                    <p class="text-sm font-bold text-neutral-600 font-subheader mb-1">Organization-wide</p>
+                    <p class="text-3xl font-black text-neutral-900 font-header">{{ org_restrictions }}</p>
                 </div>
             </div>
             <!-- Info Icon -->
@@ -154,18 +169,19 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 relative">
-            <div class="flex items-center">
+        <div class="bg-white rounded-xl shadow-lg border border-neutral-200 p-6 relative overflow-hidden group hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-brand-sky/10 to-brand-darkBlue/10 rounded-full -mr-16 -mt-16 group-hover:scale-150 transition-transform duration-500"></div>
+            <div class="flex items-center relative z-10">
                 <div class="flex-shrink-0">
-                    <div class="w-12 h-12 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-sm">
-                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="w-14 h-14 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                         </svg>
                     </div>
                 </div>
                 <div class="ml-4 flex-1">
-                    <p class="text-sm font-bold text-neutral-600 font-subheader">Program-specific</p>
-                    <p class="text-2xl font-black text-neutral-900 font-header">{{ program_restrictions }}</p>
+                    <p class="text-sm font-bold text-neutral-600 font-subheader mb-1">Program-specific</p>
+                    <p class="text-3xl font-black text-neutral-900 font-header">{{ program_restrictions }}</p>
                 </div>
             </div>
             <!-- Info Icon -->
@@ -188,7 +204,7 @@
     </div>
     
     <!-- Search and Filters -->
-    <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
+    <div class="bg-white rounded-xl shadow-lg border border-neutral-200 p-6 mb-8">
         <form method="GET" class="space-y-4">
             <!-- Filters Header -->
             <div class="mb-4">
@@ -342,10 +358,10 @@
         {% endif %}
     </div>
     
-    <div class="bg-white rounded-xl shadow-sm border border-neutral-200">
+    <div class="bg-white rounded-xl shadow-lg border border-neutral-200 overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-neutral-200">
-                <thead class="bg-neutral-50">
+                <thead class="bg-gradient-to-r from-neutral-50 to-neutral-100">
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Client</th>
                         <th class="px-6 py-3 text-left text-xs font-bold text-neutral-500 uppercase tracking-wider font-subheader">Behavior</th>
@@ -359,8 +375,11 @@
                 </thead>
                 <tbody class="bg-white divide-y divide-neutral-200">
                     {% for restriction in restrictions %}
-                    <tr class="hover:bg-neutral-50 relative cursor-pointer" 
+                    <tr class="hover:bg-gradient-to-r hover:from-blue-50 hover:to-neutral-50 relative cursor-pointer transition-all duration-200 restriction-row" 
+                        data-restriction-id="{{ restriction.external_id }}"
+                        data-restriction-name="{{ restriction.client.first_name }} {{ restriction.client.last_name }}"
                         onclick="window.location.href='{% url 'core:restrictions_detail' restriction.external_id %}'"
+                        oncontextmenu="event.preventDefault(); showContextMenu(event, '{{ restriction.external_id }}', '{{ restriction.client.first_name }} {{ restriction.client.last_name }}'); return false;"
                         onmouseenter="showRestrictionTooltip(this, '{{ restriction.created_by|default:"System" }}', '{{ restriction.created_at|date:'M d, Y g:i A' }}', '{{ restriction.updated_by|default:"System" }}', '{{ restriction.updated_at|date:'M d, Y g:i A' }}', '{{ restriction.created_at|date:'U' }}', '{{ restriction.updated_at|date:'U' }}')"
                         onmouseleave="hideTooltip()">
                         <td class="px-6 py-4 whitespace-nowrap">
@@ -472,6 +491,48 @@
         
         <!-- Pagination -->
         {% include 'components/pagination.html' %}
+    </div>
+</div>
+
+<!-- Context Menu -->
+<div id="context-menu" class="fixed z-50 bg-white rounded-lg shadow-xl border border-neutral-200 py-2 min-w-[180px] hidden">
+    <button id="context-menu-delete" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center transition-colors duration-150">
+        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+        </svg>
+        Delete
+    </button>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="delete-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 transform transition-all">
+        <div class="p-6">
+            <div class="flex items-center mb-4">
+                <div class="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                    </svg>
+                </div>
+                <h3 class="ml-4 text-lg font-bold text-neutral-900 font-header">Delete Restriction</h3>
+            </div>
+            <div class="mb-6">
+                <p class="text-sm text-neutral-600 font-body mb-2">
+                    Are you sure you want to delete the restriction for <span id="delete-client-name" class="font-bold text-neutral-900"></span>?
+                </p>
+                <p class="text-sm text-red-600 font-body">
+                    This action cannot be undone. The restriction will be permanently deleted.
+                </p>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="delete-modal-cancel" class="px-4 py-2 text-sm font-bold rounded-xl text-neutral-700 bg-neutral-100 hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-300 transition-all duration-200">
+                    Cancel
+                </button>
+                <button id="delete-modal-confirm" class="px-4 py-2 text-sm font-bold rounded-xl text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200">
+                    Delete
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -633,6 +694,125 @@ function setDateRange(range) {
     startDateInput.value = startDate.toISOString().split('T')[0];
     endDateInput.value = endDate.toISOString().split('T')[0];
 }
+
+// Context menu functionality
+let currentRestrictionId = null;
+let currentRestrictionName = null;
+
+function showContextMenu(event, restrictionId, restrictionName) {
+    const contextMenu = document.getElementById('context-menu');
+    currentRestrictionId = restrictionId;
+    currentRestrictionName = restrictionName;
+    
+    // Position the context menu
+    contextMenu.style.left = event.pageX + 'px';
+    contextMenu.style.top = event.pageY + 'px';
+    contextMenu.classList.remove('hidden');
+    
+    // Close context menu when clicking elsewhere
+    const closeMenu = (e) => {
+        if (!contextMenu.contains(e.target)) {
+            contextMenu.classList.add('hidden');
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    
+    setTimeout(() => {
+        document.addEventListener('click', closeMenu);
+    }, 100);
+}
+
+// Delete modal functionality
+function showDeleteModal(restrictionId, restrictionName) {
+    const modal = document.getElementById('delete-modal');
+    const clientNameSpan = document.getElementById('delete-client-name');
+    
+    clientNameSpan.textContent = restrictionName;
+    currentRestrictionId = restrictionId;
+    currentRestrictionName = restrictionName;
+    
+    modal.classList.remove('hidden');
+}
+
+function hideDeleteModal() {
+    const modal = document.getElementById('delete-modal');
+    modal.classList.add('hidden');
+    currentRestrictionId = null;
+    currentRestrictionName = null;
+}
+
+function confirmDelete() {
+    if (!currentRestrictionId) return;
+    
+    // Get CSRF token
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                     document.cookie.match(/csrftoken=([^;]+)/)?.[1];
+    
+    // Create a form to submit the delete request
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/core/restrictions/${currentRestrictionId}/delete/`;
+    
+    // Add CSRF token
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrfmiddlewaretoken';
+    csrfInput.value = csrfToken;
+    form.appendChild(csrfInput);
+    
+    // Add confirmation text (required by the delete view)
+    const confirmInput = document.createElement('input');
+    confirmInput.type = 'hidden';
+    confirmInput.name = 'confirmation_text';
+    confirmInput.value = 'ARCHIVE';
+    form.appendChild(confirmInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Context menu delete button
+    const contextMenuDelete = document.getElementById('context-menu-delete');
+    if (contextMenuDelete) {
+        contextMenuDelete.addEventListener('click', function(e) {
+            e.stopPropagation();
+            document.getElementById('context-menu').classList.add('hidden');
+            showDeleteModal(currentRestrictionId, currentRestrictionName);
+        });
+    }
+    
+    // Delete modal buttons
+    const deleteModalCancel = document.getElementById('delete-modal-cancel');
+    const deleteModalConfirm = document.getElementById('delete-modal-confirm');
+    
+    if (deleteModalCancel) {
+        deleteModalCancel.addEventListener('click', hideDeleteModal);
+    }
+    
+    if (deleteModalConfirm) {
+        deleteModalConfirm.addEventListener('click', confirmDelete);
+    }
+    
+    // Close modal when clicking outside
+    const deleteModal = document.getElementById('delete-modal');
+    if (deleteModal) {
+        deleteModal.addEventListener('click', function(e) {
+            if (e.target === deleteModal) {
+                hideDeleteModal();
+            }
+        });
+    }
+    
+    // Close modal on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            hideDeleteModal();
+            document.getElementById('context-menu').classList.add('hidden');
+        }
+    });
+});
 </script>
 
 <!-- Date Range Summary -->
