@@ -575,6 +575,63 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         inactive_ids = base_queryset.filter(is_inactive=True).values('id').distinct()
         context['inactive_clients_count'] = inactive_ids.count()
         
+        # Duplicate: clients that have been marked as duplicates (duplicate_of with status='pending' or 'confirmed_duplicate')
+        duplicate_clients = Client.objects.filter(
+            is_archived=False,
+            duplicate_of__status__in=['pending', 'confirmed_duplicate']
+        ).distinct()
+        # Apply the same permission filters
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                if staff.is_program_manager():
+                    assigned_programs = staff.get_assigned_programs()
+                    relationship_filters = Q()
+                    relationship_filters |= Q(clientprogramenrollment__program__in=assigned_programs)
+                    staff_name = f"{staff.user.first_name} {staff.user.last_name}".strip() or staff.user.username
+                    relationship_filters |= Q(clientprogramenrollment__created_by=staff_name)
+                    relationship_filters |= Q(servicerestriction__created_by=staff_name)
+                    relationship_filters |= Q(updated_by=staff_name)
+                    duplicate_clients = duplicate_clients.filter(relationship_filters)
+                elif 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
+                    from staff.models import StaffProgramAssignment, StaffClientAssignment
+                    relationship_filters = Q()
+                    assigned_program_ids = StaffProgramAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('program_id', flat=True)
+                    if assigned_program_ids:
+                        relationship_filters |= Q(clientprogramenrollment__program_id__in=assigned_program_ids)
+                    assigned_client_ids = StaffClientAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('client_id', flat=True)
+                    if assigned_client_ids:
+                        relationship_filters |= Q(id__in=assigned_client_ids)
+                    if relationship_filters:
+                        duplicate_clients = duplicate_clients.filter(relationship_filters)
+                    else:
+                        duplicate_clients = duplicate_clients.none()
+                elif staff.is_leader():
+                    from core.models import Department
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    assigned_programs = Program.objects.filter(
+                        department__in=assigned_departments
+                    ).distinct()
+                    duplicate_clients = duplicate_clients.filter(
+                        clientprogramenrollment__program__in=assigned_programs
+                    )
+            except Exception:
+                pass
+        
+        context['duplicate_clients_count'] = duplicate_clients.values('id').distinct().count()
+        
         return context
 
 @csrf_protect
@@ -1069,6 +1126,10 @@ class ClientUpdateView(AnalystAccessMixin, UpdateView):
         context['programs'] = Program.objects.filter(status='active').prefetch_related('subprograms').order_by('name')
         context['existing_enrollments'] = ClientProgramEnrollment.objects.filter(client=self.object).select_related('program', 'sub_program')
         return context
+    
+    def get_success_url(self):
+        """Redirect to the client detail page after successful update"""
+        return reverse('clients:detail', kwargs={'external_id': self.object.external_id})
     
     def form_valid(self, form):
         try:
@@ -4475,6 +4536,7 @@ def bulk_restore_clients(request):
 class ClientDedupeView(TemplateView):
     """View for managing client duplicates"""
     template_name = 'clients/client_dedupe.html'
+    paginate_by = 20  # Number of duplicate groups per page
     
     def dispatch(self, request, *args, **kwargs):
         """Check if user has permission to access duplicate detection"""
@@ -4494,15 +4556,23 @@ class ClientDedupeView(TemplateView):
         return super().dispatch(request, *args, **kwargs)
     
     def get_context_data(self, **kwargs):
+        from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+        
         context = super().get_context_data(**kwargs)
         
         # Get filter parameters
         status_filter = self.request.GET.get('status', 'pending')
         confidence_filter = self.request.GET.get('confidence', '')
         
-        # Build query
+        # Build optimized query with select_related and only necessary fields
         duplicates_query = ClientDuplicate.objects.select_related(
             'primary_client', 'duplicate_client'
+        ).only(
+            'id', 'status', 'confidence_level', 'similarity_score', 'created_at',
+            'primary_client__id', 'primary_client__first_name', 'primary_client__last_name',
+            'primary_client__external_id', 'primary_client__client_id',
+            'duplicate_client__id', 'duplicate_client__first_name', 'duplicate_client__last_name',
+            'duplicate_client__external_id', 'duplicate_client__client_id'
         ).all()
         
         if status_filter:
@@ -4527,7 +4597,21 @@ class ClientDedupeView(TemplateView):
                 }
             grouped_duplicates[primary_id]['duplicates'].append(duplicate)
         
-        # Get statistics
+        # Convert to list for pagination
+        grouped_duplicates_list = list(grouped_duplicates.values())
+        
+        # Paginate the grouped duplicates
+        paginator = Paginator(grouped_duplicates_list, self.paginate_by)
+        page = self.request.GET.get('page', 1)
+        
+        try:
+            paginated_groups = paginator.page(page)
+        except PageNotAnInteger:
+            paginated_groups = paginator.page(1)
+        except EmptyPage:
+            paginated_groups = paginator.page(paginator.num_pages)
+        
+        # Get statistics (optimized with single queries)
         total_duplicates = ClientDuplicate.objects.count()
         pending_duplicates = ClientDuplicate.objects.filter(status='pending').count()
         high_confidence_duplicates = ClientDuplicate.objects.filter(
@@ -4535,7 +4619,8 @@ class ClientDedupeView(TemplateView):
         ).count()
         
         context.update({
-            'grouped_duplicates': grouped_duplicates,
+            'grouped_duplicates': {i: group for i, group in enumerate(paginated_groups)},
+            'paginated_groups': paginated_groups,
             'status_filter': status_filter,
             'confidence_filter': confidence_filter,
             'status_choices': ClientDuplicate.STATUS_CHOICES,

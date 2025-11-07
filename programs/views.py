@@ -3,6 +3,7 @@ from django.urls import reverse_lazy, reverse
 from django.shortcuts import redirect
 from django.utils import timezone
 from django.db import models
+from django.db.models import Q, Exists, OuterRef
 from django.http import HttpResponse
 from core.models import Program, Department, ClientProgramEnrollment, ProgramManagerAssignment, Staff
 from core.views import jwt_required, ProgramManagerAccessMixin, AnalystAccessMixin
@@ -13,6 +14,10 @@ import io
 
 from django.contrib import messages
 from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.http import require_http_methods
+from django.contrib.auth.decorators import login_required
+import json
 
 @method_decorator(jwt_required, name='dispatch')
 class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
@@ -166,6 +171,71 @@ class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
             # It's a list (from capacity filtering)
             total_filtered_count = len(queryset)
         
+        # Calculate status card counts (assigned/unassigned/total)
+        # Use base queryset with permission filters but without search/filter params
+        today = timezone.now().date()
+        base_queryset = Program.objects.filter(is_archived=False)
+        
+        # Apply the same permission filters as ProgramManagerAccessMixin and get_queryset
+        if not self.request.user.is_authenticated:
+            base_queryset = base_queryset.none()
+        elif not self.request.user.is_superuser:
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Manager: sees only their assigned programs
+                if staff.is_program_manager():
+                    assigned_programs = staff.get_assigned_programs()
+                    base_queryset = base_queryset.filter(id__in=assigned_programs)
+                
+                # Leader: sees programs in their assigned departments
+                elif staff.is_leader():
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    base_queryset = base_queryset.filter(department__in=assigned_departments)
+                
+                # Staff-only users: see ONLY programs where their assigned clients are enrolled
+                elif 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+                    from staff.models import StaffClientAssignment
+                    assigned_client_ids = StaffClientAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('client_id', flat=True)
+                    
+                    if assigned_client_ids:
+                        base_queryset = base_queryset.filter(
+                            clientprogramenrollment__client_id__in=assigned_client_ids
+                        ).distinct()
+                    else:
+                        base_queryset = base_queryset.none()
+                # Other roles (SuperAdmin, Admin, Analyst) see everything - no filtering needed
+            except Exception:
+                # If there's an exception and user is not superuser, show nothing
+                if not self.request.user.is_superuser:
+                    base_queryset = base_queryset.none()
+        
+        # Total programs count (non-archived, with permission filters)
+        context['total_programs_count'] = base_queryset.count()
+        
+        # Assigned programs: programs with at least one active client enrollment
+        # Active enrollment = is_archived=False, start_date <= today, and (end_date IS NULL OR end_date > today)
+        active_enrollments = ClientProgramEnrollment.objects.filter(
+            program=OuterRef('pk'),
+            is_archived=False,
+            start_date__lte=today
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gt=today)
+        )
+        assigned_queryset = base_queryset.annotate(has_active_enrollment=Exists(active_enrollments))
+        context['assigned_programs_count'] = assigned_queryset.filter(has_active_enrollment=True).count()
+        
+        # Unassigned programs: programs with no active enrollments
+        context['unassigned_programs_count'] = assigned_queryset.filter(has_active_enrollment=False).count()
+        
         # Add filter options to context
         context['programs_with_capacity'] = programs_with_capacity
         context['total_filtered_count'] = total_filtered_count
@@ -292,14 +362,23 @@ class ProgramDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, DetailVie
         context = super().get_context_data(**kwargs)
         program = context.get('program') or self.object
         
-        # Get current enrollments
+        # Get current enrollments - only fetch first 4 initially for performance
         from core.models import ClientProgramEnrollment
-        current_enrollments = ClientProgramEnrollment.objects.filter(
+        current_enrollments_queryset = ClientProgramEnrollment.objects.filter(
             program=program,
             start_date__lte=timezone.now().date()
         ).filter(
             models.Q(end_date__isnull=True) | models.Q(end_date__gt=timezone.now().date())
-        ).select_related('client')
+        ).select_related('client').order_by('-start_date')
+        
+        # Get total count for display
+        total_enrollments_count = current_enrollments_queryset.count()
+        
+        # Only fetch first 4 enrollments initially
+        initial_enrollments = list(current_enrollments_queryset[:4])
+        
+        # Keep full queryset for count and other uses
+        current_enrollments = current_enrollments_queryset
         
         # Get program staff
         from core.models import ProgramStaff
@@ -395,6 +474,8 @@ class ProgramDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, DetailVie
         
         context.update({
             'current_enrollments': current_enrollments,
+            'initial_enrollments': initial_enrollments,
+            'total_enrollments_count': total_enrollments_count,
             'current_enrollments_count': current_enrollments_count,
             'capacity_percentage': capacity_percentage,
             'available_capacity': available_capacity,
@@ -410,6 +491,84 @@ class ProgramDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, DetailVie
         })
         
         return context
+
+
+@csrf_protect
+@require_http_methods(["GET"])
+@login_required
+def fetch_enrollments_ajax(request, external_id):
+    """AJAX endpoint to fetch enrollments with pagination"""
+    try:
+        program = Program.objects.get(external_id=external_id, is_archived=False)
+        
+        # Check permissions
+        if not request.user.is_superuser:
+            try:
+                staff = request.user.staff_profile
+                if staff.is_program_manager():
+                    assigned_programs = staff.get_assigned_programs()
+                    if program not in assigned_programs:
+                        return JsonResponse({'error': 'Access denied'}, status=403)
+                elif staff.is_leader():
+                    from core.models import Department
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    assigned_programs = Program.objects.filter(
+                        department__in=assigned_departments
+                    ).distinct()
+                    if program not in assigned_programs:
+                        return JsonResponse({'error': 'Access denied'}, status=403)
+            except Exception:
+                return JsonResponse({'error': 'Access denied'}, status=403)
+        
+        # Get pagination parameters
+        offset = int(request.GET.get('offset', 0))
+        limit = int(request.GET.get('limit', 4))
+        
+        # Get enrollments with pagination
+        from core.models import ClientProgramEnrollment
+        enrollments_queryset = ClientProgramEnrollment.objects.filter(
+            program=program,
+            start_date__lte=timezone.now().date()
+        ).filter(
+            models.Q(end_date__isnull=True) | models.Q(end_date__gt=timezone.now().date())
+        ).select_related('client').order_by('-start_date')
+        
+        total_count = enrollments_queryset.count()
+        
+        # Get paginated enrollments
+        enrollments = enrollments_queryset[offset:offset + limit]
+        
+        # Format enrollments for JSON response
+        enrollments_data = []
+        for enrollment in enrollments:
+            enrollments_data.append({
+                'id': enrollment.id,
+                'client_id': enrollment.client.id,
+                'client_name': f"{enrollment.client.first_name} {enrollment.client.last_name}",
+                'client_initials': f"{enrollment.client.first_name[0] if enrollment.client.first_name else ''}{enrollment.client.last_name[0] if enrollment.client.last_name else ''}",
+                'start_date': enrollment.start_date.strftime('%b %d, %Y') if enrollment.start_date else '',
+                'status': enrollment.status,
+                'status_display': enrollment.get_status_display(),
+                'external_id': str(enrollment.client.external_id),
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'enrollments': enrollments_data,
+            'has_more': (offset + limit) < total_count,
+            'total_count': total_count,
+            'offset': offset,
+        })
+        
+    except Program.DoesNotExist:
+        return JsonResponse({'error': 'Program not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 @method_decorator(jwt_required, name='dispatch')
 class ProgramCSVUploadView(AnalystAccessMixin, ProgramManagerAccessMixin, View):
     """Upload programs via CSV. Avoid duplicates by case-insensitive program name match."""
@@ -1485,3 +1644,47 @@ class ProgramBulkRestoreView(ProgramManagerAccessMixin, View):
                 'success': False,
                 'error': f'An error occurred: {str(e)}'
             })
+@csrf_protect
+@require_http_methods(["POST"])
+@login_required
+def toggle_program_status(request, external_id):
+    """Toggle program status between active and inactive (only for SuperAdmin/Admin)"""
+    try:
+        program = Program.objects.get(external_id=external_id, is_archived=False)
+    except Program.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Program not found'}, status=404)
+    
+    # Check if user is SuperAdmin or Admin
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
+    
+    try:
+        staff = request.user.staff_profile
+        user_roles = staff.staffrole_set.select_related('role').all()
+        role_names = [staff_role.role.name for staff_role in user_roles]
+        
+        if 'SuperAdmin' not in role_names and 'Admin' not in role_names:
+            return JsonResponse({'success': False, 'error': 'Permission denied. Only SuperAdmin and Admin can change program status.'}, status=403)
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Permission denied'}, status=403)
+    
+    # Toggle status: active <-> inactive (if suggested, make it active first)
+    if program.status == 'active':
+        new_status = 'inactive'
+    elif program.status == 'inactive':
+        new_status = 'active'
+    else:  # suggested
+        new_status = 'active'
+    
+    # Update program status
+    program.status = new_status
+    user_name = request.user.get_full_name() or request.user.username
+    program.updated_by = user_name
+    program.save()
+    
+    return JsonResponse({
+        'success': True,
+        'message': f'Program status updated to {new_status}',
+        'status': program.status,
+        'status_display': program.get_status_display()
+    })

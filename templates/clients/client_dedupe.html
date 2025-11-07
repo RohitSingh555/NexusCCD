@@ -508,7 +508,7 @@
                     </div>
                     <div>
                         <h1 class="text-2xl font-bold text-gray-900">Duplicate Detection</h1>
-                        <p class="text-sm text-gray-600">Review and resolve potential client duplicates</p>
+                        <p class="text-base text-gray-600">Review and resolve potential client duplicates</p>
                     </div>
                 </div>
                 <div class="flex items-center space-x-2">
@@ -543,8 +543,8 @@
                                 </svg>
                             </div>
                             <div>
-                                <h4 class="text-sm font-semibold text-gray-900">Mark as Duplicate</h4>
-                                <p class="text-xs text-gray-600">Confirms these are the same person</p>
+                                <h4 class="text-base font-semibold text-gray-900">Mark as Duplicate</h4>
+                                <p class="text-sm text-gray-600">Confirms these are the same person</p>
                             </div>
                         </div>
                         <div class="flex items-start space-x-2">
@@ -554,8 +554,8 @@
                                 </svg>
                             </div>
                             <div>
-                                <h4 class="text-sm font-semibold text-gray-900">Not Duplicate</h4>
-                                <p class="text-xs text-gray-600">Confirms these are different people</p>
+                                <h4 class="text-base font-semibold text-gray-900">Not Duplicate</h4>
+                                <p class="text-sm text-gray-600">Confirms these are different people</p>
                             </div>
                         </div>
                         <div class="flex items-start space-x-2">
@@ -565,8 +565,8 @@
                                 </svg>
                             </div>
                             <div>
-                                <h4 class="text-sm font-semibold text-gray-900">Merge Clients</h4>
-                                <p class="text-xs text-gray-600">Combines information from both clients</p>
+                                <h4 class="text-base font-semibold text-gray-900">Merge Clients</h4>
+                                <p class="text-sm text-gray-600">Combines information from both clients</p>
                             </div>
                         </div>
                     </div>
@@ -581,10 +581,10 @@
                     <div class="flex-1">
                         <div class="flex items-center space-x-2 mb-1">
                             <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
-                            <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Total Duplicates</p>
+                            <p class="text-sm font-semibold text-gray-600 uppercase tracking-wide">Total Duplicates</p>
                         </div>
                         <p class="text-2xl font-bold text-gray-900">{{ total_duplicates }}</p>
-                        <p class="text-xs text-gray-500">All flagged relationships</p>
+                        <p class="text-sm text-gray-500">All flagged relationships</p>
                     </div>
                     <div class="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -615,10 +615,10 @@
                     <div class="flex-1">
                         <div class="flex items-center space-x-2 mb-1">
                             <div class="w-2 h-2 bg-amber-500 rounded-full"></div>
-                            <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide">Pending Review</p>
+                            <p class="text-sm font-semibold text-gray-600 uppercase tracking-wide">Pending Review</p>
                         </div>
                         <p class="text-2xl font-bold text-gray-900">{{ pending_duplicates }}</p>
-                        <p class="text-xs text-gray-500">Awaiting your decision</p>
+                        <p class="text-sm text-gray-500">Awaiting your decision</p>
                     </div>
                     <div class="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -649,10 +649,10 @@
                     <div class="flex-1">
                         <div class="flex items-center space-x-2 mb-1">
                             <div class="w-2 h-2 bg-red-500 rounded-full"></div>
-                            <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide">High Confidence</p>
+                            <p class="text-sm font-semibold text-gray-600 uppercase tracking-wide">High Confidence</p>
                         </div>
                         <p class="text-2xl font-bold text-gray-900">{{ high_confidence_duplicates }}</p>
-                        <p class="text-xs text-gray-500">Likely duplicates</p>
+                        <p class="text-sm text-gray-500">Likely duplicates</p>
                     </div>
                     <div class="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -693,8 +693,8 @@
             </div>
             <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                    <label for="status" class="block text-sm font-medium text-gray-700 mb-2">Status Filter</label>
-                    <select name="status" id="status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-sm">
+                    <label for="status" class="block text-base font-medium text-gray-700 mb-2">Status Filter</label>
+                    <select name="status" id="status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-base">
                         <option value="">All Statuses</option>
                         {% for value, label in status_choices %}
                         <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
@@ -702,8 +702,8 @@
                     </select>
                 </div>
                 <div>
-                    <label for="confidence" class="block text-sm font-medium text-gray-700 mb-2">Confidence Level</label>
-                    <select name="confidence" id="confidence" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-sm">
+                    <label for="confidence" class="block text-base font-medium text-gray-700 mb-2">Confidence Level</label>
+                    <select name="confidence" id="confidence" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-base">
                         <option value="">All Levels</option>
                         {% for value, label in confidence_choices %}
                         <option value="{{ value }}" {% if confidence_filter == value %}selected{% endif %}>{{ label }}</option>
@@ -711,7 +711,7 @@
                     </select>
                 </div>
                 <div class="flex items-end">
-                    <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 font-medium text-sm flex items-center justify-center">
+                    <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 font-medium text-base flex items-center justify-center">
                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
@@ -719,7 +719,7 @@
                     </button>
                 </div>
                 <div class="flex items-end">
-                    <a href="{% url 'clients:dedupe' %}" class="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 font-medium text-sm flex items-center justify-center">
+                    <a href="{% url 'clients:dedupe' %}" class="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 font-medium text-base flex items-center justify-center">
                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                         </svg>
@@ -739,10 +739,10 @@
                     </svg>
                 </div>
                 <div class="ml-3">
-                    <h3 class="text-sm font-medium text-green-800">
+                    <h3 class="text-base font-medium text-green-800">
                         Merge completed successfully!
                     </h3>
-                    <div class="mt-1 text-sm text-green-700">
+                    <div class="mt-1 text-base text-green-700">
                         <p>Clients have been merged into: <strong>{{ request.GET.client }}</strong></p>
                     </div>
                 </div>
@@ -761,13 +761,13 @@
                             </svg>
                         </div>
                         <div>
-                            <span class="text-sm font-semibold text-blue-800" id="selected-count">0 selected</span>
-                            <p class="text-xs text-blue-600">Choose an action to apply to selected duplicates</p>
+                            <span class="text-base font-semibold text-blue-800" id="selected-count">0 selected</span>
+                            <p class="text-sm text-blue-600">Choose an action to apply to selected duplicates</p>
                         </div>
                     </div>
                     <div class="flex space-x-2">
                         <div class="tooltip">
-                            <button onclick="bulkMarkDuplicate()" class="bulk-action-button px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-xs font-medium transition-all duration-200 border border-red-200 flex items-center" disabled>
+                            <button onclick="bulkMarkDuplicate()" class="bulk-action-button px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 text-sm font-medium transition-all duration-200 border border-red-200 flex items-center" disabled>
                                 <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                 </svg>
@@ -776,7 +776,7 @@
                             <span class="tooltiptext">Confirm these are the same person and open comparison view</span>
                         </div>
                         <div class="tooltip">
-                            <button onclick="bulkNotDuplicate()" class="bulk-action-button px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-xs font-medium transition-all duration-200 border border-green-200 flex items-center" disabled>
+                            <button onclick="bulkNotDuplicate()" class="bulk-action-button px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 text-sm font-medium transition-all duration-200 border border-green-200 flex items-center" disabled>
                                 <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                                 </svg>
@@ -785,7 +785,7 @@
                             <span class="tooltiptext">Confirm these are different people and keep both clients</span>
                         </div>
                         <div class="tooltip">
-                            <button onclick="bulkMerge()" class="bulk-action-button px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-xs font-medium transition-all duration-200 border border-blue-200 flex items-center" disabled>
+                            <button onclick="bulkMerge()" class="bulk-action-button px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm font-medium transition-all duration-200 border border-blue-200 flex items-center" disabled>
                                 <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
                                 </svg>
@@ -796,7 +796,7 @@
                     </div>
                 </div>
                 <div class="tooltip">
-                    <button onclick="clearSelection()" class="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200 flex items-center">
+                    <button onclick="clearSelection()" class="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors duration-200 flex items-center">
                         <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
                         </svg>
@@ -812,8 +812,8 @@
         
         <!-- Duplicates List -->
         <div class="space-y-6">
-            {% if grouped_duplicates %}
-                {% for group in grouped_duplicates.values %}
+            {% if paginated_groups %}
+                {% for group in paginated_groups %}
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-200">
                     <!-- Primary Client Header -->
                     <div class="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 border-b border-gray-200">
@@ -830,7 +830,7 @@
                                     <h3 class="text-lg font-bold text-gray-900">
                                         {{ group.primary_client.first_name }} {{ group.primary_client.last_name }}
                                     </h3>
-                                    <div class="flex items-center space-x-4 text-xs text-gray-600 mt-1">
+                                    <div class="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                                         {% if group.primary_client.email %}
                                         <span class="flex items-center">
                                             <svg class="w-3 h-3 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -852,11 +852,11 @@
                             </div>
                             <div class="flex items-center space-x-3">
                                 <div class="text-right">
-                                    <div class="text-xs font-semibold text-gray-700">{{ group.duplicates|length }} potential duplicate(s)</div>
-                                    <div class="text-xs text-gray-500">Requires review</div>
+                                    <div class="text-sm font-semibold text-gray-700">{{ group.duplicates|length }} potential duplicate(s)</div>
+                                    <div class="text-sm text-gray-500">Requires review</div>
                                 </div>
                                 <a href="{% url 'clients:detail' group.primary_client.external_id %}" 
-                                   class="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-xs font-medium transition-all duration-200">
+                                   class="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 text-sm font-medium transition-all duration-200">
                                     <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
@@ -909,18 +909,18 @@
                                             {% endif %}
                                             <div>
                                                 <div class="flex items-center space-x-2">
-                                                    <h4 class="text-sm font-bold text-gray-900">
+                                                    <h4 class="text-base font-bold text-gray-900">
                                                         {{ duplicate.duplicate_client.first_name }} {{ duplicate.duplicate_client.last_name }}
                                                     </h4>
                                                     {% if duplicate.created_at|timesince|slice:":1"|add:0 <= 7 %}
-                                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800">
+                                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800">
                                                         <svg class="w-2 h-2 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
                                                         </svg>
                                                         NEW
                                                     </span>
                                                     {% else %}
-                                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-800">
+                                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800">
                                                         <svg class="w-2 h-2 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-12a1 1 0 10 2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path>
                                                         </svg>
@@ -935,16 +935,16 @@
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
                                                         </svg>
                                                         <div>
-                                                            <span class="text-xs font-semibold text-amber-800">Flagged Reason:</span>
-                                                            <span class="text-sm font-bold text-amber-900 ml-1">{{ duplicate.get_duplicate_reason }}</span>
+                                                            <span class="text-sm font-semibold text-amber-800">Flagged Reason:</span>
+                                                            <span class="text-base font-bold text-amber-900 ml-1">{{ duplicate.get_duplicate_reason }}</span>
                                                         </div>
                                                     </div>
                                                 </div>
                                                 <div class="flex items-center space-x-2 mt-1">
-                                                    <span class="confidence-{{ duplicate.confidence_level }} px-2 py-1 text-xs font-bold rounded-full border">
+                                                    <span class="confidence-{{ duplicate.confidence_level }} px-2 py-1 text-sm font-bold rounded-full border">
                                                         {{ duplicate.get_confidence_level_display }}
                                                     </span>
-                                                    <span class="status-{{ duplicate.status }} px-2 py-1 text-xs font-bold rounded-full">
+                                                    <span class="status-{{ duplicate.status }} px-2 py-1 text-sm font-bold rounded-full">
                                                         {{ duplicate.get_status_display }}
                                                     </span>
                                                 </div>
@@ -953,7 +953,7 @@
 
                                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
                                             <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                                <h5 class="text-xs font-semibold text-gray-700 mb-2 flex items-center">
+                                                <h5 class="text-sm font-semibold text-gray-700 mb-2 flex items-center">
                                                     <svg class="w-3 h-3 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
                                                     </svg>
@@ -982,7 +982,7 @@
                                                 </div>
                                             </div>
                                             <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                                                <h5 class="text-xs font-semibold text-gray-700 mb-2 flex items-center">
+                                                <h5 class="text-sm font-semibold text-gray-700 mb-2 flex items-center">
                                                     <svg class="w-3 h-3 mr-1 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
                                                     </svg>
@@ -1078,8 +1078,8 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
                     </div>
-                    <h3 class="text-xl font-bold text-gray-900 mb-2">No Duplicates Found</h3>
-                    <p class="text-sm text-gray-600 mb-6">All clients appear to be unique. Great job maintaining clean data!</p>
+                    <h3 class="text-2xl font-bold text-gray-900 mb-2">No Duplicates Found</h3>
+                    <p class="text-base text-gray-600 mb-6">All clients appear to be unique. Great job maintaining clean data!</p>
                     <div class="flex justify-center space-x-3">
                         <a href="{% url 'clients:list' %}" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-lg text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
                             <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1097,6 +1097,97 @@
                 </div>
             {% endif %}
         </div>
+        
+        <!-- Pagination -->
+        {% if paginated_groups.has_other_pages %}
+        <div class="mt-8 flex items-center justify-between bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3">
+            <div class="flex-1 flex justify-between sm:hidden">
+                {% if paginated_groups.has_previous %}
+                    <a href="?page={{ paginated_groups.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}" 
+                       class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        Previous
+                    </a>
+                {% else %}
+                    <span class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-300 bg-white cursor-not-allowed">
+                        Previous
+                    </span>
+                {% endif %}
+                {% if paginated_groups.has_next %}
+                    <a href="?page={{ paginated_groups.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}" 
+                       class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        Next
+                    </a>
+                {% else %}
+                    <span class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-300 bg-white cursor-not-allowed">
+                        Next
+                    </span>
+                {% endif %}
+            </div>
+            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm text-gray-700">
+                        Showing
+                        <span class="font-medium">{{ paginated_groups.start_index }}</span>
+                        to
+                        <span class="font-medium">{{ paginated_groups.end_index }}</span>
+                        of
+                        <span class="font-medium">{{ paginated_groups.paginator.count }}</span>
+                        results
+                    </p>
+                </div>
+                <div>
+                    <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                        {% if paginated_groups.has_previous %}
+                            <a href="?page={{ paginated_groups.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}" 
+                               class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                <span class="sr-only">Previous</span>
+                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </a>
+                        {% else %}
+                            <span class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-300 cursor-not-allowed">
+                                <span class="sr-only">Previous</span>
+                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </span>
+                        {% endif %}
+                        
+                        {% for num in paginated_groups.paginator.page_range %}
+                            {% if paginated_groups.number == num %}
+                                <span class="relative inline-flex items-center px-4 py-2 border border-blue-500 bg-blue-50 text-sm font-medium text-blue-600">
+                                    {{ num }}
+                                </span>
+                            {% elif num > paginated_groups.number|add:'-3' and num < paginated_groups.number|add:'3' %}
+                                <a href="?page={{ num }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}" 
+                                   class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                                    {{ num }}
+                                </a>
+                            {% endif %}
+                        {% endfor %}
+                        
+                        {% if paginated_groups.has_next %}
+                            <a href="?page={{ paginated_groups.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}" 
+                               class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                <span class="sr-only">Next</span>
+                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </a>
+                        {% else %}
+                            <span class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-300 cursor-not-allowed">
+                                <span class="sr-only">Next</span>
+                                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
+                                </svg>
+                            </span>
+                        {% endif %}
+                    </nav>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 

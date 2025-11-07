@@ -138,7 +138,56 @@
                 
                 <div>
                     <label for="{{ form.entered_by.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Entered By</label>
-                    {{ form.entered_by }}
+                    
+                    <!-- Staff Search Input -->
+                    <div class="relative">
+                        <input type="text" 
+                               id="staff-search" 
+                               placeholder="Search staff by name or email..." 
+                               class="w-full pl-10 pr-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                        <button type="button" 
+                                id="clear-staff-search" 
+                                class="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-400 hover:text-neutral-600 hidden">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <!-- Staff Search Results -->
+                    <div id="staff-search-results" class="hidden mt-2 max-h-60 overflow-y-auto border border-neutral-200 rounded-lg bg-white shadow-lg z-50">
+                        <div id="staff-results-list" class="max-h-60 overflow-y-auto"></div>
+                        <div id="staff-no-results" class="hidden p-4 text-center text-neutral-500">
+                            <svg class="w-8 h-8 mx-auto mb-2 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                            <p class="text-sm">No staff members found</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Hidden input for selected staff -->
+                    <input type="hidden" name="{{ form.entered_by.name }}" id="{{ form.entered_by.id_for_label }}" value="{{ form.entered_by.value|default:'' }}">
+                    
+                    <!-- Selected Staff Display -->
+                    <div id="selected-staff" class="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg hidden">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="text-sm font-bold text-green-800" id="selected-staff-name"></span>
+                                <span class="text-xs text-green-600 ml-2" id="selected-staff-email"></span>
+                            </div>
+                            <button type="button" id="clear-selected-staff" class="text-green-600 hover:text-green-800">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                    
                     <p class="mt-1 text-sm text-neutral-500 font-body">{{ form.entered_by.help_text }}</p>
                     {% if form.entered_by.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.entered_by.errors.0 }}</div>
@@ -218,7 +267,6 @@
                         </div>
                         {{ form.end_date }}
                     </div>
-                    <p class="mt-1 text-sm text-neutral-500 font-body">Leave blank for indefinite restriction</p>
                     {% if form.end_date.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.end_date.errors.0 }}</div>
                     {% endif %}
@@ -651,8 +699,201 @@ function showSelectedClient(clientData) {
     }
 }
 
+// Staff Search Functionality
+function initializeStaffSearch() {
+    const staffSearchInput = document.getElementById('staff-search');
+    const clearStaffSearchBtn = document.getElementById('clear-staff-search');
+    const staffSearchResults = document.getElementById('staff-search-results');
+    const staffResultsList = document.getElementById('staff-results-list');
+    const staffNoResults = document.getElementById('staff-no-results');
+    const selectedStaffDiv = document.getElementById('selected-staff');
+    const selectedStaffName = document.getElementById('selected-staff-name');
+    const selectedStaffEmail = document.getElementById('selected-staff-email');
+    const clearSelectedStaffBtn = document.getElementById('clear-selected-staff');
+    const staffHiddenInput = document.getElementById('{{ form.entered_by.id_for_label }}');
+    
+    if (!staffSearchInput || !staffHiddenInput) return;
+    
+    let searchTimeout;
+    let selectedStaffIndex = -1;
+    
+    // Staff search input event
+    staffSearchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const searchTerm = this.value.trim();
+        
+        if (searchTerm.length === 0) {
+            searchStaff('');
+            return;
+        }
+        
+        searchTimeout = setTimeout(() => {
+            searchStaff(searchTerm);
+        }, 300);
+    });
+    
+    // Show results when input is focused
+    staffSearchInput.addEventListener('focus', function() {
+        if (this.value.trim().length === 0) {
+            searchStaff('');
+        }
+    });
+    
+    // Keyboard navigation for staff search
+    staffSearchInput.addEventListener('keydown', function(e) {
+        const items = staffResultsList.querySelectorAll('.search-result-item');
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedStaffIndex = Math.min(selectedStaffIndex + 1, items.length - 1);
+            updateStaffSelection(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedStaffIndex = Math.max(selectedStaffIndex - 1, -1);
+            updateStaffSelection(items);
+        } else if (e.key === 'Enter' && selectedStaffIndex >= 0 && items[selectedStaffIndex]) {
+            e.preventDefault();
+            items[selectedStaffIndex].click();
+        } else if (e.key === 'Escape') {
+            hideStaffResults();
+        }
+    });
+    
+    function updateStaffSelection(items) {
+        items.forEach((item, index) => {
+            if (index === selectedStaffIndex) {
+                item.classList.add('active');
+                item.scrollIntoView({ block: 'nearest' });
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    }
+    
+    // Clear search button
+    if (clearStaffSearchBtn) {
+        clearStaffSearchBtn.addEventListener('click', function() {
+            staffSearchInput.value = '';
+            hideStaffResults();
+            staffSearchInput.focus();
+        });
+    }
+    
+    // Clear selected staff
+    if (clearSelectedStaffBtn) {
+        clearSelectedStaffBtn.addEventListener('click', function() {
+            clearSelectedStaff();
+        });
+    }
+    
+    // Hide results when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!staffSearchInput.contains(e.target) && 
+            !staffSearchResults.contains(e.target) && 
+            !selectedStaffDiv.contains(e.target)) {
+            hideStaffResults();
+        }
+    });
+    
+    function searchStaff(term) {
+        fetch(`/core/search-staff/?q=${encodeURIComponent(term)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayStaffResults(data.staff);
+                } else {
+                    showStaffNoResults();
+                }
+            })
+            .catch(error => {
+                console.error('Error searching staff:', error);
+                showStaffNoResults();
+            });
+    }
+    
+    function displayStaffResults(staff) {
+        if (staff.length === 0) {
+            showStaffNoResults();
+            return;
+        }
+        
+        staffResultsList.innerHTML = '';
+        staff.forEach(member => {
+            const staffItem = document.createElement('div');
+            staffItem.className = 'search-result-item p-3 hover:bg-neutral-50 cursor-pointer border-b border-neutral-100 last:border-b-0';
+            staffItem.innerHTML = `
+                <div class="font-bold text-neutral-900">${highlightSearchTerm(member.name, staffSearchInput.value)}</div>
+                <div class="text-sm text-neutral-500">${member.email || ''}</div>
+            `;
+            staffItem.addEventListener('click', () => selectStaff(member));
+            staffResultsList.appendChild(staffItem);
+        });
+        
+        showStaffResults();
+        selectedStaffIndex = -1;
+    }
+    
+    function showStaffResults() {
+        staffSearchResults.classList.remove('hidden');
+        staffNoResults.classList.add('hidden');
+        if (clearStaffSearchBtn) clearStaffSearchBtn.classList.remove('hidden');
+    }
+    
+    function showStaffNoResults() {
+        staffSearchResults.classList.remove('hidden');
+        staffNoResults.classList.remove('hidden');
+        if (clearStaffSearchBtn) clearStaffSearchBtn.classList.remove('hidden');
+    }
+    
+    function hideStaffResults() {
+        staffSearchResults.classList.add('hidden');
+        if (clearStaffSearchBtn) clearStaffSearchBtn.classList.add('hidden');
+    }
+    
+    function selectStaff(staff) {
+        staffHiddenInput.value = staff.id;
+        showSelectedStaff(staff);
+        staffSearchInput.value = '';
+        hideStaffResults();
+    }
+    
+    function clearSelectedStaff() {
+        staffHiddenInput.value = '';
+        selectedStaffDiv.classList.add('hidden');
+        staffSearchInput.value = '';
+    }
+    
+    function showSelectedStaff(staffData) {
+        if (selectedStaffName && selectedStaffEmail && selectedStaffDiv) {
+            selectedStaffName.textContent = staffData.name;
+            selectedStaffEmail.textContent = staffData.email || '';
+            selectedStaffDiv.classList.remove('hidden');
+        }
+    }
+    
+    // Pre-populate selected staff for edit mode
+    const initialStaffId = staffHiddenInput.value;
+    if (initialStaffId) {
+        // Fetch staff data to display
+        fetch(`/core/search-staff/?q=`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const staff = data.staff.find(s => s.id == initialStaffId);
+                    if (staff) {
+                        showSelectedStaff(staff);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error loading staff:', error);
+            });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     initializeRestrictionClientSearch();
+    initializeStaffSearch();
     
     // Pre-populate form fields for edit mode
     prePopulateSelectedClient();
@@ -706,26 +947,31 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     /* Custom scrollbar for search results */
-    #client-results-list::-webkit-scrollbar {
+    #client-results-list::-webkit-scrollbar,
+    #staff-results-list::-webkit-scrollbar {
         width: 6px;
     }
     
-    #client-results-list::-webkit-scrollbar-track {
+    #client-results-list::-webkit-scrollbar-track,
+    #staff-results-list::-webkit-scrollbar-track {
         background: #f8fafc;
         border-radius: 3px;
     }
     
-    #client-results-list::-webkit-scrollbar-thumb {
+    #client-results-list::-webkit-scrollbar-thumb,
+    #staff-results-list::-webkit-scrollbar-thumb {
         background: #cbd5e1;
         border-radius: 3px;
     }
     
-    #client-results-list::-webkit-scrollbar-thumb:hover {
+    #client-results-list::-webkit-scrollbar-thumb:hover,
+    #staff-results-list::-webkit-scrollbar-thumb:hover {
         background: #94a3b8;
     }
     
     /* Smooth scrolling for search results */
-    #client-results-list {
+    #client-results-list,
+    #staff-results-list {
         scroll-behavior: smooth;
     }
     

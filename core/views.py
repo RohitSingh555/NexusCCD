@@ -2369,6 +2369,81 @@ def search_clients(request):
         }, status=500)
 
 
+@csrf_exempt
+@require_http_methods(["GET"])
+def search_staff(request):
+    """Search staff members by name via AJAX with priority ordering"""
+    try:
+        from .models import Staff
+        query = request.GET.get('q', '').strip()
+        
+        # Filter to only active staff members with user accounts
+        queryset = Staff.objects.filter(active=True, user__isnull=False).select_related('user')
+        
+        if not query:
+            # If no query, return all active staff (limit to 20 for performance)
+            staff_members = queryset.order_by('first_name', 'last_name')[:20]
+        else:
+            # First get staff that start with the query (highest priority)
+            starts_with_staff = queryset.filter(
+                Q(first_name__istartswith=query) |
+                Q(last_name__istartswith=query) |
+                Q(user__first_name__istartswith=query) |
+                Q(user__last_name__istartswith=query)
+            )
+            
+            # Then get staff that contain the query anywhere (lower priority)
+            contains_staff = queryset.filter(
+                Q(first_name__icontains=query) |
+                Q(last_name__icontains=query) |
+                Q(email__icontains=query) |
+                Q(user__first_name__icontains=query) |
+                Q(user__last_name__icontains=query) |
+                Q(user__email__icontains=query)
+            ).exclude(
+                Q(first_name__istartswith=query) |
+                Q(last_name__istartswith=query) |
+                Q(user__first_name__istartswith=query) |
+                Q(user__last_name__istartswith=query)
+            )
+            
+            # Combine and limit results
+            staff_members = list(starts_with_staff) + list(contains_staff)
+            staff_members = staff_members[:50]  # Limit to 50 results for performance
+        
+        # Format results for the frontend
+        results = []
+        for staff in staff_members:
+            # Use staff name if available, otherwise use user name
+            first_name = staff.first_name or staff.user.first_name or ''
+            last_name = staff.last_name or staff.user.last_name or ''
+            email = staff.email or staff.user.email or ''
+            name = f"{first_name} {last_name}".strip()
+            if not name:
+                name = staff.user.username or email
+            
+            results.append({
+                'id': staff.id,
+                'name': name,
+                'first_name': first_name,
+                'last_name': last_name,
+                'email': email,
+                'display_text': f"{name} ({email})" if email else name
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'staff': results,
+            'count': len(results)
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': f'Error searching staff: {str(e)}'
+        }, status=500)
+
+
 # Service Restriction CRUD Views
 # Note: RestrictionListView is defined earlier in the file (line 255) with full pagination support
 

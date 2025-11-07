@@ -25,6 +25,24 @@
             </div>
             <div class="flex items-center space-x-2">
                 {% if not user_permissions.is_staff_only %}
+                {% if user_permissions.can_manage_users|default:False %}
+                <button 
+                    id="toggle-status-btn"
+                    onclick="toggleProgramStatus()"
+                    class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 {% if program.status == 'active' %}bg-orange-100 text-orange-800 border border-orange-200 hover:bg-orange-200{% else %}bg-green-100 text-green-800 border border-green-200 hover:bg-green-200{% endif %}">
+                    {% if program.status == 'active' %}
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Mark as Inactive
+                    {% else %}
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Mark as Active
+                    {% endif %}
+                </button>
+                {% endif %}
                 <a href="{% url 'programs:edit' program.external_id %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
                     <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
@@ -172,48 +190,64 @@
                     </div>
                 </div>
                 
-                
-                <div class="max-h-96 overflow-y-auto">
-                    {% if current_enrollments %}
-                    <div class="space-y-2">
-                        {% for enrollment in current_enrollments %}
-                        <div class="flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
-                            <div class="flex items-center">
-                                <div class="w-8 h-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-3">
-                                    <span class="text-xs font-bold text-white">
-                                        {{ enrollment.client.first_name|default:""|first|upper }}{{ enrollment.client.last_name|default:""|first|upper }}
+                <!-- Enrollments Container with Infinite Scroll -->
+                <div class="h-64 overflow-y-auto border border-neutral-200 rounded-lg p-2" id="enrollments-scroll-container" style="height: 16rem; overflow-y: auto;">
+                    <div id="enrollments-container" class="space-y-2">
+                        {% if initial_enrollments %}
+                            {% for enrollment in initial_enrollments %}
+                            <div class="enrollment-item flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-3">
+                                        <span class="text-xs font-bold text-white">
+                                            {{ enrollment.client.first_name|default:""|first|upper }}{{ enrollment.client.last_name|default:""|first|upper }}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <div class="text-sm font-bold text-neutral-900 font-body">
+                                            {{ enrollment.client.first_name }} {{ enrollment.client.last_name }}
+                                        </div>
+                                        <div class="text-xs text-neutral-500 font-body">
+                                            Enrolled {{ enrollment.start_date|date:"M d, Y" }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold
+                                        {% if enrollment.status == 'active' %}bg-green-100 text-green-800
+                                        {% elif enrollment.status == 'pending' %}bg-yellow-100 text-yellow-800
+                                        {% elif enrollment.status == 'suspended' %}bg-red-100 text-red-800
+                                        {% else %}bg-neutral-100 text-neutral-800{% endif %}">
+                                        {{ enrollment.get_status_display }}
                                     </span>
                                 </div>
-                                <div>
-                                    <div class="text-sm font-bold text-neutral-900 font-body">
-                                        {{ enrollment.client.first_name }} {{ enrollment.client.last_name }}
-                                    </div>
-                                    <div class="text-xs text-neutral-500 font-body">
-                                        Enrolled {{ enrollment.start_date|date:"M d, Y" }}
-                                    </div>
-                                </div>
                             </div>
-                            <div class="text-right">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold
-                                    {% if enrollment.status == 'active' %}bg-green-100 text-green-800
-                                    {% elif enrollment.status == 'pending' %}bg-yellow-100 text-yellow-800
-                                    {% elif enrollment.status == 'suspended' %}bg-red-100 text-red-800
-                                    {% else %}bg-neutral-100 text-neutral-800{% endif %}">
-                                    {{ enrollment.get_status_display }}
-                                </span>
+                            {% endfor %}
+                        {% else %}
+                            <div class="text-center py-6">
+                                <svg class="mx-auto h-8 w-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                                </svg>
+                                <h3 class="mt-2 text-sm font-bold text-neutral-900 font-body">No current enrollments</h3>
+                                <p class="mt-1 text-xs text-neutral-500 font-body">This program has no active enrollments.</p>
                             </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Loading Indicator -->
+                    <div id="enrollments-loading" class="hidden text-center py-4">
+                        <div class="inline-flex items-center text-sm text-neutral-600">
+                            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-neutral-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Loading more enrollments...
                         </div>
-                        {% endfor %}
                     </div>
-                    {% else %}
-                    <div class="text-center py-6">
-                        <svg class="mx-auto h-8 w-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
-                        </svg>
-                        <h3 class="mt-2 text-sm font-bold text-neutral-900 font-body">No current enrollments</h3>
-                        <p class="mt-1 text-xs text-neutral-500 font-body">This program has no active enrollments.</p>
+                    
+                    <!-- End of List Indicator -->
+                    <div id="enrollments-end" class="hidden text-center py-2">
+                        <p class="text-xs text-neutral-500 font-body">All enrollments loaded</p>
                     </div>
-                    {% endif %}
                 </div>
             </div>
 
@@ -622,5 +656,233 @@ document.addEventListener('DOMContentLoaded', function() {
         window.history.replaceState({}, '', newUrl);
     }
 });
+
+// Toggle program status function
+async function toggleProgramStatus() {
+    const button = document.getElementById('toggle-status-btn');
+    if (!button) return;
+    
+    // Disable button and show loading state
+    const originalHTML = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<svg class="w-4 h-4 mr-1 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>Updating...';
+    
+    try {
+        // Get CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || 
+                         document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1];
+        
+        const programId = '{{ program.external_id }}';
+        const response = await fetch(`/programs/${programId}/toggle-status/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Show success message
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+            messageDiv.textContent = data.message || 'Program status updated successfully';
+            document.body.appendChild(messageDiv);
+            
+            // Remove message after 3 seconds
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 3000);
+            
+            // Reload page to show updated status
+            setTimeout(() => {
+                window.location.reload();
+            }, 500);
+        } else {
+            // Show error message
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+            messageDiv.textContent = data.error || 'Failed to update program status';
+            document.body.appendChild(messageDiv);
+            
+            // Remove message after 5 seconds
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 5000);
+            
+            // Re-enable button
+            button.disabled = false;
+            button.innerHTML = originalHTML;
+        }
+    } catch (error) {
+        console.error('Error updating program status:', error);
+        
+        // Show error message
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+        messageDiv.textContent = 'An error occurred while updating program status';
+        document.body.appendChild(messageDiv);
+        
+        // Remove message after 5 seconds
+        setTimeout(() => {
+            messageDiv.remove();
+        }, 5000);
+        
+        // Re-enable button
+        button.disabled = false;
+        button.innerHTML = originalHTML;
+    }
+}
+
+// Infinite Scroll for Enrollments
+(function() {
+    const enrollmentsContainer = document.getElementById('enrollments-container');
+    const scrollContainer = document.getElementById('enrollments-scroll-container');
+    const loadingIndicator = document.getElementById('enrollments-loading');
+    const endIndicator = document.getElementById('enrollments-end');
+    
+    if (!enrollmentsContainer || !scrollContainer) return;
+    
+    let isLoading = false;
+    let hasMore = true;
+    let currentOffset = {{ initial_enrollments|length|default:0 }};
+    const limit = 4;
+    const programExternalId = '{{ program.external_id }}';
+    
+    // Function to get status class
+    function getStatusClass(status) {
+        const statusClasses = {
+            'active': 'bg-green-100 text-green-800',
+            'pending': 'bg-yellow-100 text-yellow-800',
+            'suspended': 'bg-red-100 text-red-800',
+            'default': 'bg-neutral-100 text-neutral-800'
+        };
+        return statusClasses[status] || statusClasses['default'];
+    }
+    
+    // Function to create enrollment HTML
+    function createEnrollmentHTML(enrollment) {
+        const statusClass = getStatusClass(enrollment.status);
+        return `
+            <div class="enrollment-item flex items-center justify-between p-3 bg-neutral-50 rounded-lg">
+                <div class="flex items-center">
+                    <div class="w-8 h-8 bg-gradient-to-br from-brand-sky to-brand-darkBlue rounded-lg flex items-center justify-center shadow-sm mr-3">
+                        <span class="text-xs font-bold text-white">
+                            ${enrollment.client_initials.toUpperCase()}
+                        </span>
+                    </div>
+                    <div>
+                        <div class="text-sm font-bold text-neutral-900 font-body">
+                            ${enrollment.client_name}
+                        </div>
+                        <div class="text-xs text-neutral-500 font-body">
+                            Enrolled ${enrollment.start_date}
+                        </div>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ${statusClass}">
+                        ${enrollment.status_display}
+                    </span>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Function to load more enrollments
+    async function loadMoreEnrollments() {
+        if (isLoading || !hasMore) return;
+        
+        isLoading = true;
+        loadingIndicator.classList.remove('hidden');
+        
+        try {
+            const url = `/programs/${programExternalId}/enrollments/?offset=${currentOffset}&limit=${limit}`;
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                credentials: 'same-origin'
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch enrollments');
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.enrollments.length > 0) {
+                // Append new enrollments
+                data.enrollments.forEach(enrollment => {
+                    const enrollmentHTML = createEnrollmentHTML(enrollment);
+                    enrollmentsContainer.insertAdjacentHTML('beforeend', enrollmentHTML);
+                });
+                
+                currentOffset += data.enrollments.length;
+                hasMore = data.has_more;
+                
+                if (!hasMore) {
+                    endIndicator.classList.remove('hidden');
+                }
+            } else {
+                hasMore = false;
+                endIndicator.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error('Error loading enrollments:', error);
+            hasMore = false;
+        } finally {
+            isLoading = false;
+            loadingIndicator.classList.add('hidden');
+        }
+    }
+    
+    // Intersection Observer for infinite scroll
+    const observerOptions = {
+        root: null,
+        rootMargin: '100px',
+        threshold: 0.1
+    };
+    
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting && hasMore && !isLoading) {
+                loadMoreEnrollments();
+            }
+        });
+    }, observerOptions);
+    
+    // Observe the loading indicator
+    observer.observe(loadingIndicator);
+    
+    // Scroll event listener for infinite scroll
+    let scrollTimeout;
+    scrollContainer.addEventListener('scroll', () => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            const scrollTop = scrollContainer.scrollTop;
+            const scrollHeight = scrollContainer.scrollHeight;
+            const clientHeight = scrollContainer.clientHeight;
+            
+            // Check if user is near bottom (within 100px)
+            if (scrollTop + clientHeight >= scrollHeight - 100 && hasMore && !isLoading) {
+                loadMoreEnrollments();
+            }
+        }, 50);
+    });
+    
+    // Initial check if we need to load more
+    if (currentOffset < {{ total_enrollments_count|default:0 }}) {
+        hasMore = true;
+    } else {
+        hasMore = false;
+        if (currentOffset > 0) {
+            endIndicator.classList.remove('hidden');
+        }
+    }
+})();
 </script>
 {% endblock %}
