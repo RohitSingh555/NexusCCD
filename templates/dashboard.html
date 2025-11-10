@@ -197,6 +197,7 @@
                     </a>
                     {% endif %}
 
+                    {% if user_permissions.can_view_reports|default:False %}
                     <a href="{% url 'reports:list' %}" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                         <div class="flex-shrink-0">
                             <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -210,6 +211,7 @@
                             <p class="text-xs text-gray-500">Generate analytics</p>
                         </div>
                     </a>
+                    {% endif %}
 
                 </div>
             </div>
@@ -283,7 +285,7 @@
                         {% endfor %}
                     </div>
                     <div class="mt-4 pt-4 border-t border-red-200">
-                        <p class="text-xs text-gray-500 text-center">Showing organization-wide restrictions</p>
+                        <p class="text-xs text-gray-500 text-center">Showing agency-wide restrictions</p>
                     </div>
                 {% else %}
                     <div class="text-center py-8">
@@ -293,7 +295,7 @@
                             </svg>
                         </div>
                         <h3 class="mt-2 text-sm font-medium text-gray-900">No Restricted Clients</h3>
-                        <p class="mt-1 text-sm text-gray-500">No organization-wide restrictions currently exist.</p>
+                        <p class="mt-1 text-sm text-gray-500">No agency-wide restrictions currently exist.</p>
                     </div>
                 {% endif %}
             </div>

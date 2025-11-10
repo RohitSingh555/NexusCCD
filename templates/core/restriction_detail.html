@@ -96,15 +96,23 @@
                             {{ restriction.get_scope_display }}
                         </span>
                     </div>
-                    {% if restriction.program %}
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Program:</span>
-                        <span class="text-sm text-neutral-900 font-body">
-                            <a href="{% url 'programs:detail' restriction.program.external_id %}" class="text-brand-sky hover:text-brand-darkBlue">
-                                {{ restriction.program.name }}
-                            </a>
-                        </span>
+                        {% if restriction.program %}
+                            <span class="text-sm text-neutral-900 font-body">
+                                <a href="{% url 'programs:detail' restriction.program.external_id %}" class="text-brand-sky hover:text-brand-darkBlue">
+                                    {{ restriction.program.name }}
+                                </a>
+                            </span>
+                        {% elif restriction.scope == 'org' %}
+                            <span class="text-sm text-neutral-900 font-body">
+                                All Programs (Agency-wide)
+                            </span>
+                        {% else %}
+                            <span class="text-sm text-neutral-500 font-body">—</span>
+                        {% endif %}
                     </div>
+                    {% if restriction.program and restriction.program.department %}
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Department:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ restriction.program.department.name }}</span>

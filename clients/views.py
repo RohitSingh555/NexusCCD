@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.db.models import Q
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import IntegrityError, transaction
-from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate, ClientUploadLog
+from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate, ClientUploadLog, ServiceRestrictionNotificationSubscription
 from datetime import datetime, date, timedelta
 from core.views import ProgramManagerAccessMixin, AnalystAccessMixin, jwt_required
 from core.fuzzy_matching import fuzzy_matcher
@@ -23,6 +23,8 @@ import logging
 import csv
 import io
 from django.core.mail import EmailMultiAlternatives
+from django.core.validators import validate_email
+from django.core.exceptions import ValidationError
 from django.template.loader import render_to_string
 from django.conf import settings
 from functools import wraps
@@ -2207,7 +2209,7 @@ def upload_clients(request):
                 client_type = get_field_data('client_type')
                 discharge_date_value = get_field_data('discharge_date')
                 days_elapsed_value = get_field_data('days_elapsed')
-                program_status = get_field_data('program_status', 'pending')
+                program_status = get_field_data('program_status', 'active')
                 reason_discharge = get_field_data('reason_discharge')
                 receiving_services_value = get_field_data('receiving_services', 'false')
                 
@@ -2376,7 +2378,7 @@ def upload_clients(request):
                             notes_parts.append(discharge_note)
                         
                         # Determine status - if discharge_date is present, default to 'completed'
-                        final_status = program_status if program_status else ('completed' if discharge_date else 'pending')
+                        final_status = program_status if program_status else ('completed' if discharge_date else 'active')
                         
                         # Calculate proper start_date to ensure end_date >= start_date constraint
                         enrollment_start_date = current_intake_date
@@ -2439,7 +2441,7 @@ def upload_clients(request):
                             logger.info(f"Updated existing enrollment (found during get_or_create) for {client.first_name} {client.last_name} in {program.name}")
                     
                     if created:
-                        logger.info(f"Created pending enrollment for {client.first_name} {client.last_name} in {current_program_name}")
+                        logger.info(f"Created {final_status} enrollment for {client.first_name} {client.last_name} in {current_program_name}")
                         print(f"DEBUG: Successfully created enrollment for {client.first_name} {client.last_name} in {current_program_name}")
                         
                         # Skip audit log for bulk imports to improve performance
@@ -5601,6 +5603,98 @@ def export_clients(request):
     except Exception as e:
         print(f"Error in export_clients: {str(e)}")
         return HttpResponse(f"Error exporting clients: {str(e)}", status=500)
+
+
+@require_http_methods(["GET"])
+@login_required
+def get_service_restriction_notifications(request):
+    """Return the current user's service restriction notification preferences."""
+    staff = getattr(request.user, 'staff_profile', None)
+    if not staff:
+        return JsonResponse({'success': False, 'error': 'Staff profile not found'}, status=400)
+
+    default_email = staff.email or request.user.email or ''
+
+    subscription, _ = ServiceRestrictionNotificationSubscription.objects.get_or_create(
+        staff=staff,
+        defaults={
+            'email': default_email,
+            'notify_new': True,
+            'notify_expiring': True,
+        }
+    )
+
+    return JsonResponse({
+        'success': True,
+        'subscription': {
+            'email': subscription.email or '',
+            'default_email': default_email,
+            'notify_new': subscription.notify_new,
+            'notify_expiring': subscription.notify_expiring,
+        }
+    })
+
+
+@require_http_methods(["POST"])
+@csrf_protect
+@login_required
+def save_service_restriction_notifications(request):
+    """Persist the current user's notification preferences for service restriction alerts."""
+    staff = getattr(request.user, 'staff_profile', None)
+    if not staff:
+        return JsonResponse({'success': False, 'error': 'Staff profile not found'}, status=400)
+
+    try:
+        data = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid request payload'}, status=400)
+
+    notify_new = bool(data.get('notify_new', False))
+    notify_expiring = bool(data.get('notify_expiring', False))
+    email_input = (data.get('email') or '').strip()
+
+    default_email = staff.email or request.user.email or ''
+    effective_email = email_input or default_email
+
+    # Validate email when subscribing to notifications
+    if notify_new or notify_expiring:
+        if not effective_email:
+            return JsonResponse({
+                'success': False,
+                'error': 'Please provide an email address to receive alerts.'
+            }, status=400)
+        try:
+            validate_email(effective_email)
+        except ValidationError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Please provide a valid email address.'
+            }, status=400)
+    elif email_input:
+        # If they provide a custom email while unsubscribed, still validate it
+        try:
+            validate_email(email_input)
+        except ValidationError:
+            return JsonResponse({
+                'success': False,
+                'error': 'Please provide a valid email address.'
+            }, status=400)
+
+    subscription, _ = ServiceRestrictionNotificationSubscription.objects.get_or_create(staff=staff)
+    subscription.email = email_input or None
+    subscription.notify_new = notify_new
+    subscription.notify_expiring = notify_expiring
+    subscription.save()
+
+    return JsonResponse({
+        'success': True,
+        'subscription': {
+            'email': subscription.email or '',
+            'default_email': default_email,
+            'notify_new': subscription.notify_new,
+            'notify_expiring': subscription.notify_expiring,
+        }
+    })
 
 
 @require_http_methods(["GET"])

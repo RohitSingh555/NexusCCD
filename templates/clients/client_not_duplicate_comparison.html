@@ -302,8 +302,8 @@
                                             {{ enrollment.sub_program.name }} - 
                                         {% endif %}
                                         {{ enrollment.enrollment_date|date:"M d, Y"|default:"No date" }}
-                                        {% if enrollment.status %}
-                                            ({{ enrollment.status }})
+                                        {% if enrollment.calculated_status %}
+                                            ({{ enrollment.calculated_status_display }})
                                         {% endif %}
                                     </div>
                                 </div>
@@ -506,8 +506,8 @@
                                             {{ enrollment.sub_program.name }} - 
                                         {% endif %}
                                         {{ enrollment.enrollment_date|date:"M d, Y"|default:"No date" }}
-                                        {% if enrollment.status %}
-                                            ({{ enrollment.status }})
+                                        {% if enrollment.calculated_status %}
+                                            ({{ enrollment.calculated_status_display }})
                                         {% endif %}
                                     </div>
                                 </div>

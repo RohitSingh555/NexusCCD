@@ -1,8 +1,9 @@
 from django.shortcuts import render, redirect
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Case, When, Value, CharField, F
 from django.db import models
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import get_user_model
+from django.contrib.auth.decorators import login_required
 from functools import wraps
 import json
 import csv
@@ -15,11 +16,22 @@ from django.views.generic import ListView, DetailView, CreateView, UpdateView, D
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.utils.decorators import method_decorator
-from datetime import datetime
+from datetime import datetime, timedelta
 from django.utils import timezone
-from .models import Client, Program, Staff, ClientProgramEnrollment, Department, ServiceRestriction, AuditLog
+from django.core.paginator import Paginator
+from .models import (
+    Client,
+    Program,
+    Staff,
+    ClientProgramEnrollment,
+    Department,
+    ServiceRestriction,
+    AuditLog,
+    Notification,
+)
 from .forms import EnrollmentForm
 from .forms import UserProfileForm, StaffProfileForm, PasswordChangeForm, ServiceRestrictionForm
+from .notification_utils import create_service_restriction_notification
 
 
 User = get_user_model()
@@ -67,6 +79,23 @@ class AnalystAccessMixin:
             except Exception:
                 pass
         
+        return super().dispatch(request, *args, **kwargs)
+
+
+class StaffAccessControlMixin:
+    """Mixin to restrict staff-only users to approved views."""
+
+    allow_staff_access = False
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                if staff.is_staff_only() and not self.allow_staff_access:
+                    messages.error(request, 'You do not have permission to access this area.')
+                    return redirect('core:restrictions')
+            except Staff.DoesNotExist:
+                pass
         return super().dispatch(request, *args, **kwargs)
 
 
@@ -312,7 +341,7 @@ def dashboard(request):
             is_archived=False
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
-        # Get restricted clients (Organization-wide restrictions) - Managers see ALL organization-wide restrictions
+        # Get restricted clients (Agency-wide restrictions) - Managers see ALL agency-wide restrictions
         restricted_clients = ServiceRestriction.objects.filter(
             is_archived=False,
             scope='org'
@@ -345,7 +374,7 @@ def dashboard(request):
             is_archived=False
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
-        # Get restricted clients (Organization-wide restrictions) - Leaders see ALL organization-wide restrictions
+        # Get restricted clients (Agency-wide restrictions) - Leaders see ALL agency-wide restrictions
         restricted_clients = ServiceRestriction.objects.filter(
             is_archived=False,
             scope='org'
@@ -374,7 +403,7 @@ def dashboard(request):
             is_archived=False
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
-        # Get restricted clients (Organization-wide restrictions) - Staff users see ALL organization-wide restrictions
+        # Get restricted clients (Agency-wide restrictions) - Staff users see ALL agency-wide restrictions
         restricted_clients = ServiceRestriction.objects.filter(
             is_archived=False,
             scope='org'
@@ -403,7 +432,7 @@ def dashboard(request):
             is_archived=False
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
-        # Get restricted clients (Organization-wide restrictions) - Analysts see ALL organization-wide restrictions
+        # Get restricted clients (Agency-wide restrictions) - Analysts see ALL agency-wide restrictions
         restricted_clients = ServiceRestriction.objects.filter(
             is_archived=False,
             scope='org'
@@ -432,7 +461,7 @@ def dashboard(request):
             is_archived=False
         ).select_related('client', 'program').order_by('-created_at')[:5]
         
-        # Get restricted clients (Organization-wide restrictions)
+        # Get restricted clients (Agency-wide restrictions)
         restricted_clients = ServiceRestriction.objects.filter(
             is_archived=False,
             scope='org'
@@ -521,31 +550,34 @@ def departments(request):
                 # Manager can only see departments of their assigned programs
                 # Get assigned departments and add proper annotations
                 assigned_departments = staff.get_assigned_departments()
-                assigned_programs = staff.get_assigned_programs()
+                assigned_programs = staff.get_assigned_programs().filter(is_archived=False)
                 departments = Department.objects.filter(
-                    id__in=assigned_departments.values_list('id', flat=True)
+                    id__in=assigned_departments.values_list('id', flat=True),
+                    is_archived=False
                 ).annotate(
-                    program_count=Count('program', filter=Q(program__in=assigned_programs), distinct=True),
-                    staff_count=Count('program__programstaff__staff', distinct=True)
+                    program_count=Count('program', filter=Q(program__in=assigned_programs, program__is_archived=False), distinct=True),
+                    staff_count=Count('program__programstaff__staff', filter=Q(program__programstaff__program__is_archived=False), distinct=True)
                 ).order_by('name')
             elif staff.is_leader():
                 # Leader can only see their assigned departments
                 assigned_departments = Department.objects.filter(
                     leader_assignments__staff=staff,
-                    leader_assignments__is_active=True
+                    leader_assignments__is_active=True,
+                    is_archived=False
                 ).distinct()
                 assigned_programs = Program.objects.filter(
-                    department__in=assigned_departments
+                    department__in=assigned_departments,
+                    is_archived=False
                 ).distinct()
                 departments = assigned_departments.annotate(
-                    program_count=Count('program', filter=Q(program__in=assigned_programs), distinct=True),
-                    staff_count=Count('program__programstaff__staff', distinct=True)
+                    program_count=Count('program', filter=Q(program__in=assigned_programs, program__is_archived=False), distinct=True),
+                    staff_count=Count('program__programstaff__staff', filter=Q(program__programstaff__program__is_archived=False), distinct=True)
                 ).order_by('name')
             else:
                 # SuperAdmin and Staff can see all departments
-                departments = Department.objects.annotate(
-                    program_count=Count('program', distinct=True),
-                    staff_count=Count('program__programstaff__staff', distinct=True)
+                departments = Department.objects.filter(is_archived=False).annotate(
+                    program_count=Count('program', filter=Q(program__is_archived=False), distinct=True),
+                    staff_count=Count('program__programstaff__staff', filter=Q(program__programstaff__program__is_archived=False), distinct=True)
                 ).order_by('name')
         except Exception:
             departments = Department.objects.none()
@@ -561,7 +593,7 @@ def departments(request):
             staff = request.user.staff_profile
             if staff.is_program_manager():
                 # Manager sees only programs they are assigned to manage
-                total_programs = staff.get_assigned_programs().count()
+                total_programs = staff.get_assigned_programs().filter(is_archived=False).count()
             elif staff.is_leader():
                 # Leader sees only programs from their assigned departments
                 assigned_departments = Department.objects.filter(
@@ -569,15 +601,16 @@ def departments(request):
                     leader_assignments__is_active=True
                 ).distinct()
                 total_programs = Program.objects.filter(
-                    department__in=assigned_departments
+                    department__in=assigned_departments,
+                    is_archived=False
                 ).distinct().count()
             else:
                 # SuperAdmin and Staff see all programs
-                total_programs = Program.objects.count()
+                total_programs = Program.objects.filter(is_archived=False).count()
         except Exception:
-            total_programs = Program.objects.count()
+            total_programs = Program.objects.filter(is_archived=False).count()
     else:
-        total_programs = Program.objects.count()
+        total_programs = Program.objects.filter(is_archived=False).count()
     
     # Calculate total staff based on user role
     if request.user.is_authenticated:
@@ -884,8 +917,8 @@ class RestrictionListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListVie
         
         context['scope_choices'] = [
             ('', 'All Scopes'),
-            ('org', 'Organization'),
-            ('program', 'Program'),
+            ('org', 'Agency-wide'),
+            ('program', 'Program-Specific'),
         ]
         
         context['status_choices'] = [
@@ -1506,14 +1539,14 @@ class DepartmentListView(AnalystAccessMixin, ListView):
     def get_queryset(self):
         # Exclude archived departments by default
         return Department.objects.filter(is_archived=False).annotate(
-            program_count=Count('program', distinct=True),
-            staff_count=Count('program__programstaff__staff', distinct=True)
+            program_count=Count('program', filter=Q(program__is_archived=False), distinct=True),
+            staff_count=Count('program__programstaff__staff', filter=Q(program__programstaff__program__is_archived=False), distinct=True)
         ).order_by('name')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['total_departments'] = self.get_queryset().count()
-        context['total_programs'] = Program.objects.count()
+        context['total_programs'] = Program.objects.filter(is_archived=False).count()
         context['total_staff'] = Staff.objects.count()
         return context
 
@@ -1700,7 +1733,7 @@ class DepartmentDeleteView(AnalystAccessMixin, DeleteView):
 
 # Enrollment CRUD Views
 @method_decorator(jwt_required, name='dispatch')
-class EnrollmentListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
+class EnrollmentListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollments.html'
     context_object_name = 'enrollments'
@@ -1722,7 +1755,7 @@ class EnrollmentListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView
     
     def get_queryset(self):
         # First apply the ProgramManagerAccessMixin filtering
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related('client', 'program', 'program__department')
         
         # Apply date range filtering (start_date maps to intake_date, end_date maps to discharge_date)
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
@@ -1730,46 +1763,19 @@ class EnrollmentListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView
         if parsed_start_date:
             queryset = queryset.filter(start_date__gte=parsed_start_date)
         if parsed_end_date:
-            # Include enrollments that either:
-            # 1. Have a discharge date on or before the end date, OR
-            # 2. Don't have a discharge date (NULL) but their intake date is on or before the end date
-            from django.db.models import Q
             queryset = queryset.filter(
-                Q(end_date__lte=parsed_end_date) | 
+                Q(end_date__lte=parsed_end_date) |
                 Q(end_date__isnull=True, start_date__lte=parsed_end_date)
             )
         
-        # Apply additional filters
+        # Apply additional filters (excluding status for now)
         department_filter = self.request.GET.get('department', '')
         status_filter = self.request.GET.get('status', '')
         client_search = self.request.GET.get('client_search', '').strip()
         program_search = self.request.GET.get('program_search', '').strip()
         
-        # Handle department filter first
         if department_filter:
             queryset = queryset.filter(program__department__name=department_filter)
-        
-        # Handle status filtering
-        if status_filter:
-            if status_filter == 'active_only':
-                # Show only non-archived enrollments
-                queryset = queryset.filter(is_archived=False)
-            elif status_filter == 'pending':
-                # Show enrollments with status='pending' and not archived
-                queryset = queryset.filter(status='pending', is_archived=False)
-            elif status_filter == 'active':
-                # Show enrollments with status='active' and not archived
-                queryset = queryset.filter(status='active', is_archived=False)
-            elif status_filter == 'completed':
-                # Show enrollments with status='completed' and not archived
-                queryset = queryset.filter(status='completed', is_archived=False)
-            elif status_filter == 'future':
-                # Show future enrollments (start date in future and not archived)
-                from django.utils import timezone
-                queryset = queryset.filter(start_date__gt=timezone.now().date(), is_archived=False)
-            elif status_filter == 'archived':
-                # Show only archived enrollments
-                queryset = queryset.filter(is_archived=True)
         
         if client_search:
             queryset = queryset.filter(
@@ -1786,34 +1792,40 @@ class EnrollmentListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView
                 Q(program__location__icontains=program_search)
             ).distinct()
         
-        return queryset.order_by('-start_date')
+        today = timezone.now().date()
+        queryset = queryset.annotate(
+            computed_status=Case(
+                When(is_archived=True, then=Value('archived')),
+                When(status__in=['cancelled', 'suspended'], then=F('status')),
+                When(start_date__gt=today, then=Value('pending')),
+                When(Q(end_date__isnull=False) & Q(end_date__lt=today), then=Value('completed')),
+                default=Value('active'),
+                output_field=CharField()
+            )
+        )
+        
+        if status_filter:
+            if status_filter == 'active_only':
+                queryset = queryset.exclude(computed_status='archived')
+            else:
+                queryset = queryset.filter(computed_status=status_filter)
+        
+        queryset = queryset.order_by('-start_date')
+        self._filtered_enrollments = queryset
+        return queryset
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        enrollments = self.get_queryset()
+        filtered_queryset = getattr(self, '_filtered_enrollments', self.get_queryset())
         
-        # Get the total count of filtered enrollments (not just current page)
-        total_filtered_count = self.get_queryset().count()
+        total_filtered_count = filtered_queryset.count()
+        status_summary = filtered_queryset.values('computed_status').annotate(total=Count('id'))
+        status_counts = {row['computed_status']: row['total'] for row in status_summary}
         
-        # Calculate statistics using date-based logic
-        from django.utils import timezone
-        today = timezone.now().date()
-        
-        total_enrollments = enrollments.count()
-        active_count = 0
-        completed_count = 0
-        pending_count = 0
-        
-        for enrollment in enrollments:
-            if today < enrollment.start_date:
-                pending_count += 1
-            elif enrollment.end_date:
-                if today > enrollment.end_date:
-                    completed_count += 1
-                else:
-                    active_count += 1
-            else:
-                active_count += 1
+        total_enrollments = sum(status_counts.values())
+        active_count = status_counts.get('active', 0)
+        completed_count = status_counts.get('completed', 0)
+        pending_count = status_counts.get('pending', 0)
         
         context['total_enrollments'] = total_enrollments
         context['active_enrollments'] = active_count
@@ -1821,20 +1833,19 @@ class EnrollmentListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView
         context['pending_enrollments'] = pending_count
         context['total_filtered_count'] = total_filtered_count
         
-        # Calculate success rate
         success_rate = 0
         if total_enrollments > 0:
             success_rate = round((completed_count / total_enrollments) * 100, 1)
         context['success_rate'] = success_rate
         
-        # Add filter options to context
         context['departments'] = Department.objects.all().order_by('name')
         context['status_choices'] = [
             ('', 'All Statuses'),
             ('pending', 'Pending'),
             ('active', 'Active'),
             ('completed', 'Completed'),
-            ('future', 'Future Start'),
+            ('cancelled', 'Cancelled'),
+            ('suspended', 'Suspended'),
             ('archived', 'Archived'),
             ('active_only', 'All Non-Archived'),
         ]
@@ -1859,7 +1870,7 @@ class EnrollmentListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView
 
 
 @method_decorator(jwt_required, name='dispatch')
-class EnrollmentDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, DetailView):
+class EnrollmentDetailView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManagerAccessMixin, DetailView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollment_detail.html'
     context_object_name = 'enrollment'
@@ -1939,7 +1950,7 @@ class EnrollmentDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, Detail
 
 
 @method_decorator(jwt_required, name='dispatch')
-class EnrollmentCreateView(AnalystAccessMixin, ProgramManagerAccessMixin, CreateView):
+class EnrollmentCreateView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManagerAccessMixin, CreateView):
     model = ClientProgramEnrollment
     form_class = EnrollmentForm
     template_name = 'core/enrollment_form.html'
@@ -2071,7 +2082,7 @@ class EnrollmentCreateView(AnalystAccessMixin, ProgramManagerAccessMixin, Create
 
 
 @method_decorator(jwt_required, name='dispatch')
-class EnrollmentUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, UpdateView):
+class EnrollmentUpdateView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManagerAccessMixin, UpdateView):
     model = ClientProgramEnrollment
     form_class = EnrollmentForm
     template_name = 'core/enrollment_form.html'
@@ -2175,7 +2186,7 @@ class EnrollmentUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, Update
 
 
 @method_decorator(jwt_required, name='dispatch')
-class EnrollmentDeleteView(AnalystAccessMixin, ProgramManagerAccessMixin, DeleteView):
+class EnrollmentDeleteView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManagerAccessMixin, DeleteView):
     model = ClientProgramEnrollment
     template_name = 'core/enrollment_confirm_delete.html'
     slug_field = 'external_id'
@@ -2622,6 +2633,12 @@ class RestrictionCreateView(AnalystAccessMixin, ProgramManagerAccessMixin, Creat
                 restriction.entered_by = self.request.user.staff_profile
             
             restriction.save()
+            client_profile_image = form.cleaned_data.get('client_profile_image')
+            if client_profile_image:
+                client = restriction.client
+                client.profile_picture = client_profile_image
+                client.save(update_fields=['profile_picture'])
+            create_service_restriction_notification(restriction, event_type='new')
             
             # Debug: Print after save
             print(f"RestrictionCreateView.form_valid - restriction.behaviors after save: {restriction.behaviors}")
@@ -2740,6 +2757,24 @@ class RestrictionUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, Updat
             restriction.entered_by = self.request.user.staff_profile
         
         restriction.save()
+        client_profile_image = form.cleaned_data.get('client_profile_image')
+        if client_profile_image:
+            client = restriction.client
+            client.profile_picture = client_profile_image
+            client.save(update_fields=['profile_picture'])
+
+        if restriction.end_date and not restriction.is_indefinite:
+            today = timezone.now().date()
+            window_end = today + timedelta(days=7)
+            if today <= restriction.end_date <= window_end:
+                end_date_changed = original_restriction.end_date != restriction.end_date
+                if end_date_changed or not Notification.objects.filter(
+                    staff__isnull=False,
+                    category='service_restriction',
+                    metadata__restriction_external_id=str(restriction.external_id),
+                    metadata__event_type='expiring'
+                ).exists():
+                    create_service_restriction_notification(restriction, event_type='expiring')
         
         # Create audit log entry for restriction update
         try:
@@ -3614,7 +3649,7 @@ def search_programs(request):
 
 
 @method_decorator(jwt_required, name='dispatch')
-class EnrollmentCSVExportView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
+class EnrollmentCSVExportView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
     """Export enrollments to CSV with filtering support"""
     model = ClientProgramEnrollment
     template_name = 'core/enrollments.html'
@@ -3850,3 +3885,79 @@ def help_page(request):
     if not request.user.is_authenticated:
         return redirect('home')
     return render(request, 'core/help.html')
+
+
+@login_required
+@require_http_methods(["GET"])
+def notifications_list(request):
+    """Return notifications for the authenticated staff user."""
+    notifications_qs = Notification.objects.for_user(request.user).select_related('staff')
+    unread_count = notifications_qs.filter(is_read=False).count()
+
+    per_page_param = request.GET.get('per_page', 20)
+    try:
+        per_page = max(5, min(int(per_page_param), 50))
+    except (TypeError, ValueError):
+        per_page = 20
+
+    paginator = Paginator(notifications_qs, per_page)
+    page_number = request.GET.get('page', 1)
+    page_obj = paginator.get_page(page_number)
+
+    notifications = [
+        {
+            'id': str(notification.external_id),
+            'title': notification.title,
+            'message': notification.message,
+            'category': notification.category,
+            'created_at': notification.created_at.isoformat(),
+            'created_at_display': notification.created_at.strftime('%b %d, %Y %I:%M %p'),
+            'is_read': notification.is_read,
+            'read_at': notification.read_at.isoformat() if notification.read_at else None,
+            'metadata': notification.metadata or {},
+        }
+        for notification in page_obj.object_list
+    ]
+
+    return JsonResponse({
+        'success': True,
+        'notifications': notifications,
+        'unread_count': unread_count,
+        'page': page_obj.number,
+        'has_next': page_obj.has_next(),
+        'has_previous': page_obj.has_previous(),
+    })
+
+
+@login_required
+@require_http_methods(["POST"])
+def notification_mark_read(request, notification_id):
+    """Mark a single notification as read."""
+    notification = get_object_or_404(
+        Notification.objects.for_user(request.user),
+        external_id=notification_id
+    )
+    notification.mark_read()
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_http_methods(["POST"])
+def notification_mark_unread(request, notification_id):
+    """Mark a single notification as unread."""
+    notification = get_object_or_404(
+        Notification.objects.for_user(request.user),
+        external_id=notification_id
+    )
+    notification.mark_unread()
+    return JsonResponse({'success': True})
+
+
+@login_required
+@require_http_methods(["POST"])
+def notification_mark_all_read(request):
+    """Mark all notifications for the current user as read."""
+    notifications_qs = Notification.objects.for_user(request.user).filter(is_read=False)
+    now = timezone.now()
+    notifications_qs.update(is_read=True, read_at=now, updated_at=now)
+    return JsonResponse({'success': True})

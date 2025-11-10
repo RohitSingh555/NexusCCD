@@ -390,11 +390,14 @@
                                     {% if enrollment.end_date %}{{ enrollment.end_date|date:"M d, Y" }}{% else %}Active{% endif %}
                                 </div>
                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
-                                    {% if enrollment.status == 'active' %}bg-green-100 text-green-800
-                                    {% elif enrollment.status == 'pending' %}bg-yellow-100 text-yellow-800
-                                    {% elif enrollment.status == 'completed' %}bg-blue-100 text-blue-800
+                                    {% if enrollment.calculated_status == 'active' %}bg-green-100 text-green-800
+                                    {% elif enrollment.calculated_status == 'pending' %}bg-yellow-100 text-yellow-800
+                                    {% elif enrollment.calculated_status == 'completed' %}bg-blue-100 text-blue-800
+                                    {% elif enrollment.calculated_status == 'cancelled' %}bg-red-100 text-red-800
+                                    {% elif enrollment.calculated_status == 'suspended' %}bg-orange-100 text-orange-800
+                                    {% elif enrollment.calculated_status == 'archived' %}bg-gray-100 text-gray-800
                                     {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                    {{ enrollment.get_status_display }}
+                                    {{ enrollment.calculated_status_display }}
                                 </span>
                             </div>
                             {% endfor %}
@@ -686,12 +689,15 @@
                                     {{ enrollment.start_date|date:"M d, Y" }} - 
                                     {% if enrollment.end_date %}{{ enrollment.end_date|date:"M d, Y" }}{% else %}Active{% endif %}
                                 </div>
-                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
-                                    {% if enrollment.status == 'active' %}bg-green-100 text-green-800
-                                    {% elif enrollment.status == 'pending' %}bg-yellow-100 text-yellow-800
-                                    {% elif enrollment.status == 'completed' %}bg-blue-100 text-blue-800
-                                    {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                    {{ enrollment.get_status_display }}
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
+                                        {% if enrollment.calculated_status == 'active' %}bg-green-100 text-green-800
+                                        {% elif enrollment.calculated_status == 'pending' %}bg-yellow-100 text-yellow-800
+                                        {% elif enrollment.calculated_status == 'completed' %}bg-blue-100 text-blue-800
+                                        {% elif enrollment.calculated_status == 'cancelled' %}bg-red-100 text-red-800
+                                        {% elif enrollment.calculated_status == 'suspended' %}bg-orange-100 text-orange-800
+                                        {% elif enrollment.calculated_status == 'archived' %}bg-gray-100 text-gray-800
+                                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {{ enrollment.calculated_status_display }}
                                 </span>
                             </div>
                             {% endfor %}

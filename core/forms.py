@@ -118,12 +118,6 @@ class EnrollmentForm(forms.ModelForm):
                 # Client is already enrolled
                 raise ValidationError(f"⚠️ {message}")
     
-    def clean_start_date(self):
-        start_date = self.cleaned_data.get('start_date')
-        if start_date and start_date < date.today():
-            raise ValidationError("📅 INVALID START DATE\n\nStart date cannot be in the past. Please select today's date or a future date.")
-        return start_date
-    
     def clean_end_date(self):
         start_date = self.cleaned_data.get('start_date')
         end_date = self.cleaned_data.get('end_date')

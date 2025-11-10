@@ -96,8 +96,8 @@
                     </div>
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Status:</span>
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {% if enrollment.status == 'pending' %}bg-yellow-100 text-yellow-800{% elif enrollment.status == 'active' %}bg-brand-lime text-neutral-800{% elif enrollment.status == 'completed' %}bg-neutral-100 text-neutral-800{% elif enrollment.status == 'cancelled' %}bg-red-100 text-red-800{% elif enrollment.status == 'suspended' %}bg-orange-100 text-orange-800{% elif enrollment.status == 'archived' %}bg-gray-100 text-gray-800{% else %}bg-blue-100 text-blue-800{% endif %}">
-                            {{ enrollment.get_status_display }}
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold {% if enrollment.calculated_status == 'pending' %}bg-yellow-100 text-yellow-800{% elif enrollment.calculated_status == 'active' %}bg-brand-lime text-neutral-800{% elif enrollment.calculated_status == 'completed' %}bg-blue-100 text-blue-800{% elif enrollment.calculated_status == 'cancelled' %}bg-red-100 text-red-800{% elif enrollment.calculated_status == 'suspended' %}bg-orange-100 text-orange-800{% elif enrollment.calculated_status == 'archived' %}bg-gray-100 text-gray-800{% else %}bg-blue-100 text-blue-800{% endif %}">
+                            {{ enrollment.calculated_status_display }}
                         </span>
                     </div>
                     <div class="flex justify-between">

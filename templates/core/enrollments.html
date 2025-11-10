@@ -13,13 +13,13 @@
             <p class="text-neutral-600 mt-2 font-body">Track client program enrollments and status</p>
         </div>
         <div class="flex space-x-3">
+            {% if not user_permissions.is_staff_only|default:False %}
             <a href="{% url 'core:enrollments_export' %}?{{ request.GET.urlencode }}" class="inline-flex items-center px-4 py-2 border border-green-300 rounded-lg text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200">
                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                 </svg>
                 Export Enrollments
             </a>
-            {% if not user_permissions.is_staff_only %}
             <a href="{% url 'core:enrollments_create' %}" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-bold rounded-xl text-white bg-brand-sky hover:bg-brand-darkBlue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
@@ -391,26 +391,37 @@
                             {{ enrollment.end_date|date:"M d, Y"|default:"—" }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            {% now "Y-m-d" as today %}
-                            {% if today < enrollment.start_date|date:"Y-m-d" %}
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800">
-                                    Pending
-                                </span>
-                            {% elif enrollment.end_date %}
-                                {% if today > enrollment.end_date|date:"Y-m-d" %}
+                            {% with status=enrollment.calculated_status %}
+                                {% if status == 'pending' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800">
+                                        {{ enrollment.calculated_status_display }}
+                                    </span>
+                                {% elif status == 'active' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-sky text-white">
+                                        {{ enrollment.calculated_status_display }}
+                                    </span>
+                                {% elif status == 'completed' %}
                                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-lime text-white">
-                                        Completed
+                                        {{ enrollment.calculated_status_display }}
+                                    </span>
+                                {% elif status == 'cancelled' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800">
+                                        {{ enrollment.calculated_status_display }}
+                                    </span>
+                                {% elif status == 'suspended' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
+                                        {{ enrollment.calculated_status_display }}
+                                    </span>
+                                {% elif status == 'archived' %}
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral-200 text-neutral-700">
+                                        {{ enrollment.calculated_status_display }}
                                     </span>
                                 {% else %}
-                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-sky text-white">
-                                        Active
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-800">
+                                        {{ enrollment.calculated_status_display }}
                                     </span>
                                 {% endif %}
-                            {% else %}
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-sky text-white">
-                                    Active
-                                </span>
-                            {% endif %}
+                            {% endwith %}
                         </td>
                     </tr>
                     {% empty %}

@@ -4027,7 +4027,9 @@ try {
                     {% for enrollment in duplicate.primary_client.clientprogramenrollment_set.all %}
                     {
                         program: "{{ enrollment.program.name|escapejs }}",
-                        status: "{{ enrollment.status|escapejs }}",
+                        status: "{{ enrollment.calculated_status|escapejs }}",
+                        status_display: "{{ enrollment.calculated_status_display|escapejs }}",
+                        status_display: "{{ enrollment.calculated_status_display|escapejs }}",
                         start_date: "{{ enrollment.start_date|date:'Y-m-d' }}",
                         end_date: {% if enrollment.end_date %}"{{ enrollment.end_date|date:'Y-m-d' }}"{% else %}null{% endif %}
                     }{% if not forloop.last %},{% endif %}
@@ -4122,7 +4124,7 @@ try {
                     {% for enrollment in duplicate.duplicate_client.clientprogramenrollment_set.all %}
                     {
                         program: "{{ enrollment.program.name|escapejs }}",
-                        status: "{{ enrollment.status|escapejs }}",
+                        status: "{{ enrollment.calculated_status|escapejs }}",
                         start_date: "{{ enrollment.start_date|date:'Y-m-d' }}",
                         end_date: {% if enrollment.end_date %}"{{ enrollment.end_date|date:'Y-m-d' }}"{% else %}null{% endif %}
                     }{% if not forloop.last %},{% endif %}
@@ -4556,7 +4558,7 @@ function getFieldValue(record, fieldKey) {
     if (fieldKey === 'program_enrollments') {
         if (record.program_enrollments && record.program_enrollments.length > 0) {
             return record.program_enrollments.map(enrollment => 
-                `${enrollment.program} (${enrollment.status}) - ${enrollment.start_date}${enrollment.end_date ? ' to ' + enrollment.end_date : ''}`
+                `${enrollment.program} (${enrollment.status_display}) - ${enrollment.start_date}${enrollment.end_date ? ' to ' + enrollment.end_date : ''}`
             ).join('; ');
         }
         return '';

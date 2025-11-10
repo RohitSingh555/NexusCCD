@@ -119,7 +119,7 @@
                     <label for="{{ form.scope.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Scope *</label>
                     <select name="{{ form.scope.name }}" id="{{ form.scope.id_for_label }}" @change="updateProgramVisibility()" class="w-full px-4 py-3.5 border-2 border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-brand-sky transition-all duration-200 hover:border-brand-sky/50">
                         <option value="">Select Scope</option>
-                        <option value="org" {% if form.scope.value == 'org' %}selected{% endif %}>Organization-wide</option>
+                        <option value="org" {% if form.scope.value == 'org' %}selected{% endif %}>Agency-wide</option>
                         <option value="program" {% if form.scope.value == 'program' %}selected{% endif %}>Program-Specific</option>
                     </select>
                     {% if form.scope.errors %}
@@ -127,10 +127,10 @@
                     {% endif %}
                 </div>
                 
-                <div id="program-field" :class="{'hidden': scope !== 'program'}">
+                <div id="program-field" :class="{'hidden': !['program', 'org'].includes(scope)}">
                     <label for="{{ form.program.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Program</label>
                     {{ form.program }}
-                    <p class="mt-1 text-sm text-neutral-500 font-body">Required for program-specific restrictions</p>
+                    <p class="mt-1 text-sm text-neutral-500 font-body">Required for program-specific restrictions; optional for agency-wide restrictions</p>
                     {% if form.program.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.program.errors.0 }}</div>
                     {% endif %}
@@ -382,9 +382,13 @@
                 
                 this.scope = scopeSelect.value;
                 
-                if (this.scope === 'program') {
+                if (['program', 'org'].includes(this.scope)) {
                     programField.classList.remove('hidden');
-                    programSelect.required = true;
+                    if (this.scope === 'program') {
+                        programSelect.required = true;
+                    } else {
+                        programSelect.required = false;
+                    }
                 } else {
                     programField.classList.add('hidden');
                     programSelect.required = false;

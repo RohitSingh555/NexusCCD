@@ -2,7 +2,8 @@ from django.contrib import admin
 from .models import (
     Department, Role, Staff, StaffRole, Program, SubProgram, ProgramStaff,
     Client, ClientProgramEnrollment, Intake, Discharge, ServiceRestriction,
-    AuditLog, EmailRecipient, EmailLog
+    AuditLog, EmailRecipient, EmailLog, ServiceRestrictionNotificationSubscription,
+    Notification
 )
 
 
@@ -193,6 +194,23 @@ class EmailRecipientAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
+
+
+@admin.register(ServiceRestrictionNotificationSubscription)
+class ServiceRestrictionNotificationSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ['staff', 'email', 'notify_new', 'notify_expiring', 'created_at']
+    search_fields = ['staff__user__first_name', 'staff__user__last_name', 'staff__user__email', 'email']
+    list_filter = ['notify_new', 'notify_expiring', 'created_at']
+    readonly_fields = ['external_id', 'created_at', 'updated_at']
+
+
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ['title', 'staff', 'category', 'is_read', 'created_at']
+    list_filter = ['category', 'is_read', 'created_at']
+    search_fields = ['title', 'message', 'staff__user__first_name', 'staff__user__last_name', 'staff__user__email']
+    readonly_fields = ['external_id', 'created_at', 'updated_at', 'read_at']
+    ordering = ['-created_at']
 
 
 @admin.register(EmailLog)

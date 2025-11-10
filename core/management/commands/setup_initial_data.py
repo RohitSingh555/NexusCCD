@@ -40,19 +40,16 @@ class Command(BaseCommand):
 
         # Create default departments
         departments_data = [
-            {'name': 'Administration', 'owner': 'System Administrator'},
-            {'name': 'Social Services', 'owner': 'Department Head'},
-            {'name': 'Healthcare', 'owner': 'Medical Director'},
-            {'name': 'Housing', 'owner': 'Housing Coordinator'},
-            {'name': 'Employment', 'owner': 'Employment Specialist'},
-            {'name': 'NA', 'owner': 'System'},  # Add NA department
+            'Administration',
+            'Social Services',
+            'Healthcare',
+            'Housing',
+            'Employment',
+            'NA',  # Add NA department
         ]
 
         for dept_data in departments_data:
-            dept, created = Department.objects.get_or_create(
-                name=dept_data['name'],
-                defaults=dept_data
-            )
+            dept, created = Department.objects.get_or_create(name=dept_data, defaults={'owner': None})
             if created:
                 self.stdout.write(f'Created department: {dept.name}')
             else:

@@ -212,13 +212,18 @@
                                     </div>
                                 </div>
                                 <div class="text-right">
+                                    {% with status=enrollment.calculated_status %}
                                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold
-                                        {% if enrollment.status == 'active' %}bg-green-100 text-green-800
-                                        {% elif enrollment.status == 'pending' %}bg-yellow-100 text-yellow-800
-                                        {% elif enrollment.status == 'suspended' %}bg-red-100 text-red-800
+                                        {% if status == 'active' %}bg-green-100 text-green-800
+                                        {% elif status == 'pending' %}bg-yellow-100 text-yellow-800
+                                        {% elif status == 'completed' %}bg-blue-100 text-blue-800
+                                        {% elif status == 'cancelled' %}bg-red-100 text-red-800
+                                        {% elif status == 'suspended' %}bg-orange-100 text-orange-800
+                                        {% elif status == 'archived' %}bg-gray-200 text-gray-700
                                         {% else %}bg-neutral-100 text-neutral-800{% endif %}">
-                                        {{ enrollment.get_status_display }}
+                                        {{ enrollment.calculated_status_display }}
                                     </span>
+                                    {% endwith %}
                                 </div>
                             </div>
                             {% endfor %}
@@ -755,7 +760,10 @@ async function toggleProgramStatus() {
         const statusClasses = {
             'active': 'bg-green-100 text-green-800',
             'pending': 'bg-yellow-100 text-yellow-800',
-            'suspended': 'bg-red-100 text-red-800',
+            'completed': 'bg-blue-100 text-blue-800',
+            'cancelled': 'bg-red-100 text-red-800',
+            'suspended': 'bg-orange-100 text-orange-800',
+            'archived': 'bg-gray-200 text-gray-700',
             'default': 'bg-neutral-100 text-neutral-800'
         };
         return statusClasses[status] || statusClasses['default'];

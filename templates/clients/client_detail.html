@@ -113,12 +113,12 @@
                 
                 <div class="space-y-3">
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Client ID:</span>
-                        <span class="text-sm text-neutral-900 font-body break-all font-mono">{{ client.client_id|default:"—" }}</span>
+                        <span class="text-sm font-medium text-neutral-500">CCD ID:</span>
+                        <span class="text-sm text-neutral-900 font-body break-all font-mono">{{ client.id }}</span>
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">CCD UUID:</span>
-                        <span class="text-sm text-neutral-900 font-body break-all font-mono">{{ client.external_id|default:"—" }}</span>
+                        <span class="text-sm font-medium text-neutral-500">Legacy Client ID:</span>
+                        <span class="text-sm text-neutral-900 font-body break-all font-mono">{{ client.client_id|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">First Name:</span>
@@ -1004,13 +1004,14 @@
                                 <div class="flex items-center space-x-2 flex-wrap">
                                     <h4 class="text-sm font-bold text-neutral-800">{{ enrollment.program.name }}</h4>
                                     <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium
-                                        {% if enrollment.status == 'active' %}bg-green-100 text-green-800
-                                        {% elif enrollment.status == 'pending' %}bg-yellow-100 text-yellow-800
-                                        {% elif enrollment.status == 'completed' %}bg-blue-100 text-blue-800
-                                        {% elif enrollment.status == 'cancelled' %}bg-red-100 text-red-800
-                                        {% elif enrollment.status == 'suspended' %}bg-orange-100 text-orange-800
+                                        {% if enrollment.calculated_status == 'active' %}bg-green-100 text-green-800
+                                        {% elif enrollment.calculated_status == 'pending' %}bg-yellow-100 text-yellow-800
+                                        {% elif enrollment.calculated_status == 'completed' %}bg-blue-100 text-blue-800
+                                        {% elif enrollment.calculated_status == 'cancelled' %}bg-red-100 text-red-800
+                                        {% elif enrollment.calculated_status == 'suspended' %}bg-orange-100 text-orange-800
+                                        {% elif enrollment.calculated_status == 'archived' %}bg-gray-200 text-gray-700
                                         {% else %}bg-gray-100 text-gray-800{% endif %}">
-                                        {{ enrollment.get_status_display }}
+                                        {{ enrollment.calculated_status_display }}
                                     </span>
                                     {% if enrollment.end_date %}
                                     <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200">
@@ -1193,18 +1194,18 @@
                                             </div>
                                             
                                             <!-- Behaviors -->
-                                            {% if restriction.behaviors %}
-                                                <div class="mb-3">
-                                                    <span class="text-sm font-medium text-neutral-700 block mb-1">Behaviors:</span>
-                                                    <div class="flex flex-wrap gap-1">
-                                                        {% for behavior in restriction.behaviors %}
-                                                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-orange-100 text-orange-800">
-                                                                {{ behavior|title }}
-                                                            </span>
-                                                        {% endfor %}
-                                                    </div>
+                                            <div class="mb-3">
+                                                <span class="text-sm font-medium text-neutral-700 block mb-1">Behaviors:</span>
+                                                <div class="flex flex-wrap gap-1">
+                                                    {% for behavior_value, behavior_display in restriction.get_behavior_tags %}
+                                                        <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                                            {{ behavior_display }}
+                                                        </span>
+                                                    {% empty %}
+                                                        <span class="text-xs text-neutral-500">No behaviors specified</span>
+                                                    {% endfor %}
                                                 </div>
-                                            {% endif %}
+                                            </div>
                                             
                                             <!-- Notes -->
                                             {% if restriction.notes %}

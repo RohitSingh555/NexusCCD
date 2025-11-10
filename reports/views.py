@@ -7,6 +7,31 @@ from django.db.models import Q, Count, Sum
 from datetime import datetime, date
 import csv
 from core.models import Client, Program, ClientProgramEnrollment, Staff, Department
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
+class ReportsAccessMixin(LoginRequiredMixin):
+    """Shared mixin to prevent staff-only users from accessing reports."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+
+        try:
+            staff_profile = request.user.staff_profile
+            role_names = [
+                staff_role.role.name
+                for staff_role in staff_profile.staffrole_set.select_related('role').all()
+            ]
+
+            # Block staff-only users (no elevated roles) from reports
+            if 'Staff' in role_names and not any(
+                role in ['SuperAdmin', 'Admin', 'Manager', 'Leader', 'Analyst'] for role in role_names
+            ):
+                raise PermissionDenied("Staff users cannot access reports.")
+        except Staff.DoesNotExist:
+            pass
+
+        return super().dispatch(request, *args, **kwargs)
 
 def get_date_range_filter(request):
     """Helper function to get date range filter parameters from request"""
@@ -85,7 +110,7 @@ def get_program_manager_filtering(request):
     
     return is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients
 
-class ReportListView(ListView):
+class ReportListView(ReportsAccessMixin, ListView):
     template_name = 'reports/report_list.html'
     context_object_name = 'reports'
     
@@ -302,7 +327,7 @@ class ReportListView(ListView):
         context['is_program_manager'] = is_program_manager
         return context
 
-class OrganizationalSummaryView(TemplateView):
+class OrganizationalSummaryView(ReportsAccessMixin, TemplateView):
     template_name = 'reports/organizational_summary.html'
     
     def get_context_data(self, **kwargs):
@@ -493,7 +518,7 @@ class OrganizationalSummaryView(TemplateView):
         
         return context
 
-class VacancyTrackerView(TemplateView):
+class VacancyTrackerView(ReportsAccessMixin, TemplateView):
     template_name = 'reports/vacancy_tracker.html'
     
     def get_context_data(self, **kwargs):
@@ -559,7 +584,7 @@ class VacancyTrackerView(TemplateView):
         context['is_program_manager'] = is_program_manager
         return context
 
-class ReportExportView(TemplateView):
+class ReportExportView(ReportsAccessMixin, TemplateView):
     def get(self, request, report_type):
         if report_type == 'organizational-summary':
             return self.export_organizational_summary(request)
@@ -655,7 +680,7 @@ class ReportExportView(TemplateView):
 
 
 # Additional Report Views
-class ClientDemographicsView(TemplateView):
+class ClientDemographicsView(ReportsAccessMixin, TemplateView):
     template_name = 'reports/client_demographics.html'
     
     def get_context_data(self, **kwargs):
@@ -833,7 +858,7 @@ class ClientDemographicsView(TemplateView):
         return context
 
 
-class ClientEnrollmentHistoryView(ListView):
+class ClientEnrollmentHistoryView(ReportsAccessMixin, ListView):
     model = ClientProgramEnrollment
     template_name = 'reports/client_enrollment_history.html'
     context_object_name = 'enrollments'
@@ -999,7 +1024,7 @@ class ClientEnrollmentHistoryView(ListView):
         return context
 
 
-class ClientEnrollmentHistoryExportView(ListView):
+class ClientEnrollmentHistoryExportView(ReportsAccessMixin, ListView):
     """Export client enrollment history to CSV"""
     model = ClientProgramEnrollment
     template_name = 'reports/client_enrollment_history.html'
@@ -1101,7 +1126,7 @@ class ClientEnrollmentHistoryExportView(ListView):
         return response
 
 
-class ClientOutcomesView(TemplateView):
+class ClientOutcomesView(ReportsAccessMixin, TemplateView):
     template_name = 'reports/client_outcomes.html'
     
     def get_context_data(self, **kwargs):
@@ -1169,7 +1194,7 @@ class ClientOutcomesView(TemplateView):
         return context
 
 
-class ProgramCapacityView(ListView):
+class ProgramCapacityView(ReportsAccessMixin, ListView):
     template_name = 'reports/program_capacity.html'
     context_object_name = 'program_data'
     paginate_by = 10
@@ -1272,7 +1297,7 @@ class ProgramCapacityView(ListView):
         return program_data
 
 
-class ProgramCapacityExportView(ListView):
+class ProgramCapacityExportView(ReportsAccessMixin, ListView):
     """Export program capacity data to CSV"""
     model = Program
     template_name = 'reports/program_capacity.html'
@@ -1365,7 +1390,7 @@ class ProgramCapacityExportView(ListView):
         return response
 
 
-class ProgramPerformanceView(ListView):
+class ProgramPerformanceView(ReportsAccessMixin, ListView):
     template_name = 'reports/program_performance.html'
     context_object_name = 'program_metrics'
     paginate_by = 10
@@ -1449,7 +1474,7 @@ class ProgramPerformanceView(ListView):
         return context
 
 
-class ProgramPerformanceExportView(ListView):
+class ProgramPerformanceExportView(ReportsAccessMixin, ListView):
     """Export program performance data to CSV"""
     model = Program
     template_name = 'reports/program_performance.html'
@@ -1552,7 +1577,7 @@ class ProgramPerformanceExportView(ListView):
         return response
 
 
-class DepartmentSummaryView(TemplateView):
+class DepartmentSummaryView(ReportsAccessMixin, TemplateView):
     template_name = 'reports/department_summary.html'
     
     def get_context_data(self, **kwargs):
@@ -1606,7 +1631,7 @@ class DepartmentSummaryView(TemplateView):
 
 
 # Export Views for the three specific reports
-class ClientDemographicsExportView(TemplateView):
+class ClientDemographicsExportView(ReportsAccessMixin, TemplateView):
     """Export client demographics report to CSV"""
     
     def get(self, request, *args, **kwargs):
@@ -1779,7 +1804,7 @@ class ClientDemographicsExportView(TemplateView):
         return response
 
 
-class ClientOutcomesExportView(TemplateView):
+class ClientOutcomesExportView(ReportsAccessMixin, TemplateView):
     """Export client outcomes report to CSV"""
     
     def get(self, request, *args, **kwargs):
@@ -1884,7 +1909,7 @@ class ClientOutcomesExportView(TemplateView):
         return response
 
 
-class OrganizationalSummaryExportView(TemplateView):
+class OrganizationalSummaryExportView(ReportsAccessMixin, TemplateView):
     """Export organizational summary report to CSV"""
     
     def get(self, request, *args, **kwargs):

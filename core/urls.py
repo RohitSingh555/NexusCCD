@@ -48,6 +48,10 @@ urlpatterns = [
     path('search-clients/', views.search_clients, name='search_clients'),
     path('search-programs/', views.search_programs, name='search_programs'),
     path('search-staff/', views.search_staff, name='search_staff'),
+    path('notifications/', views.notifications_list, name='notifications_list'),
+    path('notifications/<uuid:notification_id>/read/', views.notification_mark_read, name='notification_mark_read'),
+    path('notifications/<uuid:notification_id>/unread/', views.notification_mark_unread, name='notification_mark_unread'),
+    path('notifications/read-all/', views.notification_mark_all_read, name='notification_mark_all_read'),
     
     # Department CRUD views
     path('departments/create/', views.DepartmentCreateView.as_view(), name='departments_create'),

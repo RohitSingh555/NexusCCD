@@ -765,6 +765,52 @@ class ClientProgramEnrollment(BaseModel):
     def __str__(self):
         return f"{self.client} - {self.program.name} ({self.status})"
     
+    def calculate_status(self, today=None):
+        """Determine the current status based on dates and archival state."""
+        if today is None:
+            today = timezone.now().date()
+        
+        if self.is_archived:
+            return 'archived'
+        
+        if self.status in ['cancelled', 'suspended']:
+            return self.status
+        
+        if self.start_date and self.start_date > today:
+            return 'pending'
+        
+        if self.end_date and self.end_date < today:
+            return 'completed'
+        
+        return 'active'
+    
+    @property
+    def calculated_status(self):
+        annotated = getattr(self, 'computed_status', None)
+        if annotated:
+            return annotated
+        return self.calculate_status()
+    
+    def get_calculated_status_display(self):
+        mapping = {
+            'pending': 'Pending',
+            'active': 'Active',
+            'completed': 'Completed',
+            'cancelled': 'Cancelled',
+            'suspended': 'Suspended',
+            'archived': 'Archived',
+        }
+        status = self.calculated_status
+        return mapping.get(status, status.title())
+    
+    @property
+    def calculated_status_display(self):
+        return self.get_calculated_status_display()
+
+    def get_status_display(self):
+        """Override Django's auto-generated display method to use calculated status."""
+        return self.get_calculated_status_display()
+    
     @property
     def discharge_reason(self):
         """Extract discharge reason from notes if present"""
@@ -842,31 +888,29 @@ class Discharge(BaseModel):
 
 class ServiceRestriction(BaseModel):
     SCOPE_CHOICES = [
-        ('org', 'Organization'),
-        ('program', 'Program'),
+        ('org', 'Agency-wide'),
+        ('program', 'Program-Specific'),
     ]
     
     BEHAVIOR_CHOICES = [
-        ('aggressive', 'Aggressive'),
-        ('harassment', 'Harassment'),
-        ('theft', 'Theft'),
-        ('threatening', 'Threatening'),
-        ('intoxicated', 'Intoxicated'),
-        ('property_damage', 'Property Damage'),
+        ('weapons', 'Weapons'),
+        ('physical_sexual_assault', 'Physical & Sexual Assault'),
+        ('serious_threat_of_violence', 'Serious Threat of Violence'),
+        ('domestic_violence', 'Domestic Violence'),
+        ('threatening_behaviour_destroying_property_throwing_objects', 'Threatening Behaviour/Destroying Property/Throwing Objects'),
+        ('abusive_or_oppressive_language', 'Abusive and/or Oppressive Language'),
+        ('minor_physical_violence', 'Minor Physical Violence'),
+        ('other', 'Other'),
     ]
     
     DETAILED_BEHAVIOR_CHOICES = [
-        ('aggressive_behavior', 'Aggressive Behavior'),
-        ('threats', 'Threats'),
-        ('violence', 'Violence'),
-        ('harassment', 'Harassment'),
-        ('disruptive_conduct', 'Disruptive Conduct'),
-        ('substance_abuse', 'Substance Abuse'),
-        ('theft', 'Theft'),
-        ('property_damage', 'Property Damage'),
-        ('inappropriate_sexual_behavior', 'Inappropriate Sexual Behavior'),
-        ('non_compliance', 'Non-compliance with Program Rules'),
-        ('safety_concerns', 'Safety Concerns'),
+        ('weapons', 'Weapons'),
+        ('physical_sexual_assault', 'Physical & Sexual Assault'),
+        ('serious_threat_of_violence', 'Serious Threat of Violence'),
+        ('domestic_violence', 'Domestic Violence'),
+        ('threatening_behaviour_destroying_property_throwing_objects', 'Threatening Behaviour/Destroying Property/Throwing Objects'),
+        ('abusive_or_oppressive_language', 'Abusive and/or Oppressive Language'),
+        ('minor_physical_violence', 'Minor Physical Violence'),
         ('other', 'Other'),
     ]
     
@@ -884,7 +928,7 @@ class ServiceRestriction(BaseModel):
     behaviors = models.JSONField(default=list, help_text="List of behaviors that led to this restriction")
     notes = models.TextField(null=True, blank=True, help_text="Additional notes about the restriction")
     
-    # Staff member who entered the restriction (organization/program agnostic)
+    # Staff member who entered the restriction (agency/program agnostic)
     entered_by = models.ForeignKey('Staff', on_delete=models.SET_NULL, null=True, blank=True, db_index=True, related_name='restrictions_entered', help_text="Staff member who entered this restriction")
     
     # Audit fields
@@ -896,8 +940,8 @@ class ServiceRestriction(BaseModel):
         constraints = [
             models.CheckConstraint(
                 check=(
-                    models.Q(scope='org', program__isnull=True) |
-                    models.Q(scope='program', program__isnull=False)
+                    models.Q(scope='program', program__isnull=False) |
+                    models.Q(scope='org')
                 ),
                 name='valid_scope_program_combination'
             ),
@@ -1333,6 +1377,100 @@ class EmailRecipient(BaseModel):
     
     def __str__(self):
         return f"{self.name} ({self.email})"
+
+
+class ServiceRestrictionNotificationSubscription(BaseModel):
+    """Store per-staff notification preferences for service restriction alerts."""
+    staff = models.OneToOneField(
+        'core.Staff',
+        on_delete=models.CASCADE,
+        related_name='service_restriction_notification',
+        help_text="Staff member who owns this subscription"
+    )
+    email = models.EmailField(
+        null=True,
+        blank=True,
+        help_text="Destination email for service restriction alerts (defaults to staff email if empty)"
+    )
+    notify_new = models.BooleanField(
+        default=True,
+        help_text="Receive notifications when new service restrictions are created"
+    )
+    notify_expiring = models.BooleanField(
+        default=True,
+        help_text="Receive notifications when service restrictions are nearing expiration"
+    )
+
+    class Meta:
+        db_table = 'service_restriction_notification_subscriptions'
+        verbose_name = "Service Restriction Notification Subscription"
+        verbose_name_plural = "Service Restriction Notification Subscriptions"
+
+    def __str__(self):
+        return f"Service Restriction Alerts for {self.staff}"
+
+
+class NotificationManager(models.Manager):
+    """Custom manager for filtering notifications by staff user."""
+
+    def for_user(self, user):
+        if not user.is_authenticated:
+            return self.none()
+
+        staff_profile = getattr(user, 'staff_profile', None)
+        if not staff_profile:
+            return self.none()
+
+        return self.filter(staff=staff_profile)
+
+
+class Notification(BaseModel):
+    """Generic notification for staff users with read/unread tracking."""
+
+    CATEGORY_CHOICES = [
+        ('service_restriction', 'Service Restriction'),
+    ]
+
+    staff = models.ForeignKey(
+        'core.Staff',
+        on_delete=models.CASCADE,
+        related_name='notifications'
+    )
+    category = models.CharField(
+        max_length=100,
+        choices=CATEGORY_CHOICES,
+        default='service_restriction'
+    )
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    metadata = models.JSONField(default=dict, blank=True)
+    is_read = models.BooleanField(default=False, db_index=True)
+    read_at = models.DateTimeField(null=True, blank=True)
+
+    objects = NotificationManager()
+
+    class Meta:
+        db_table = 'notifications'
+        indexes = [
+            models.Index(fields=['staff', 'is_read', 'created_at']),
+            models.Index(fields=['category', 'created_at']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.title} → {self.staff}"
+
+    def mark_read(self):
+        if not self.is_read:
+            self.is_read = True
+            self.read_at = timezone.now()
+            self.save(update_fields=['is_read', 'read_at', 'updated_at'])
+
+    def mark_unread(self):
+        if self.is_read:
+            self.is_read = False
+            self.read_at = None
+            self.save(update_fields=['is_read', 'read_at', 'updated_at'])
 
 
 class EmailLog(BaseModel):

@@ -258,6 +258,78 @@
                     </div>
                     
                     <div class="ml-4 flex items-center md:ml-6">
+                        <div class="relative mr-4" @keydown.escape.window="closeNotificationsMenu()">
+                            <button
+                                type="button"
+                                @click="toggleNotificationsMenu()"
+                                class="relative p-2 rounded-xl text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-colors duration-200"
+                                aria-label="Open notifications"
+                            >
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                          d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0H9" />
+                                </svg>
+                                <span
+                                    x-show="notifications.unreadCount > 0"
+                                    x-text="notifications.unreadCount"
+                                    class="absolute -top-1 -right-1 min-w-[1.5rem] h-6 px-1 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center shadow-sm"
+                                ></span>
+                            </button>
+
+                            <div
+                                x-show="notifications.menuOpen"
+                                @click.away="closeNotificationsMenu()"
+                                x-transition
+                                class="origin-top-right absolute right-0 mt-3 w-80 max-w-sm rounded-2xl shadow-xl border border-neutral-200 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-30"
+                            >
+                                <div class="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
+                                    <span class="text-sm font-bold text-neutral-700 font-subheader">Notifications</span>
+                                    <button
+                                        type="button"
+                                        class="text-xs font-bold text-brand-sky hover:text-brand-darkBlue disabled:text-neutral-400 transition-colors duration-150"
+                                        @click="markAllNotificationsRead()"
+                                        :disabled="notifications.unreadCount === 0"
+                                    >
+                                        Mark all read
+                                    </button>
+                                </div>
+
+                                <div class="max-h-80 overflow-y-auto">
+                                    <template x-if="notifications.loading">
+                                        <div class="px-4 py-6 flex items-center justify-center text-sm text-neutral-500">
+                                            Loading notifications...
+                                        </div>
+                                    </template>
+
+                                    <template x-if="!notifications.loading && notifications.items.length === 0">
+                                        <div class="px-4 py-6 text-center text-sm text-neutral-500">
+                                            You’re all caught up! No notifications right now.
+                                        </div>
+                                    </template>
+
+                                    <template x-for="notification in notifications.items" :key="notification.id">
+                                        <button
+                                            type="button"
+                                            class="w-full text-left px-4 py-3 hover:bg-neutral-50 transition-colors duration-150 border-b border-neutral-100 last:border-b-0"
+                                            @click="openNotification(notification)"
+                                        >
+                                            <div class="flex items-start space-x-3">
+                                                <span
+                                                    class="mt-1 h-2 w-2 rounded-full"
+                                                    :class="notification.is_read ? 'bg-neutral-300' : 'bg-brand-sky'"
+                                                ></span>
+                                                <div class="flex-1">
+                                                    <p class="text-sm font-bold text-neutral-800 font-subheader" x-text="notification.title"></p>
+                                                    <p class="text-xs text-neutral-500 mt-1" x-text="notification.message"></p>
+                                                    <p class="text-xs text-neutral-400 mt-2" x-text="formattedNotificationTime(notification)"></p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- User Dropdown -->
                         <div class="relative" x-data="{ userMenuOpen: false }">
                             <button @click="userMenuOpen = !userMenuOpen" class="max-w-xs bg-white flex items-center text-sm rounded-xl px-3 py-2 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200">
@@ -331,10 +403,28 @@
                 user: null,
                 userName: '',
                 userInitials: '',
+                notifications: {
+                    items: [],
+                    unreadCount: 0,
+                    menuOpen: false,
+                    loading: false,
+                    page: 1,
+                    hasNext: false,
+                    pollingTimer: null,
+                },
                 
                 // Methods
                 async init() {
                     await this.checkAuthStatus();
+                    await this.fetchNotifications(true);
+                    this.notifications.pollingTimer = setInterval(() => {
+                        this.fetchNotifications(true);
+                    }, 120000);
+                    window.addEventListener('beforeunload', () => {
+                        if (this.notifications.pollingTimer) {
+                            clearInterval(this.notifications.pollingTimer);
+                        }
+                    });
                 },
                 
                 async checkAuthStatus() {
@@ -417,6 +507,147 @@
                     this.selectedClients = [];
                 },
                 
+                toggleNotificationsMenu() {
+                    this.notifications.menuOpen = !this.notifications.menuOpen;
+                    if (this.notifications.menuOpen) {
+                        this.fetchNotifications(true);
+                    }
+                },
+
+                closeNotificationsMenu() {
+                    this.notifications.menuOpen = false;
+                },
+
+                async fetchNotifications(forceRefresh = false) {
+                    if (this.notifications.loading) {
+                        return;
+                    }
+
+                    this.notifications.loading = true;
+                    try {
+                        const response = await fetch(`/core/notifications/?page=1`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.success) {
+                                this.notifications.items = data.notifications || [];
+                                this.notifications.unreadCount = data.unread_count || 0;
+                                this.notifications.page = data.page || 1;
+                                this.notifications.hasNext = Boolean(data.has_next);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Failed to fetch notifications:', error);
+                    } finally {
+                        this.notifications.loading = false;
+                    }
+                },
+
+                formattedNotificationTime(notification) {
+                    try {
+                        const date = new Date(notification.created_at);
+                        return date.toLocaleString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: 'numeric',
+                            minute: '2-digit',
+                        });
+                    } catch (error) {
+                        return '';
+                    }
+                },
+
+                notificationDestination(notification) {
+                    const metadata = notification.metadata || {};
+                    if (metadata.restriction_detail_url) {
+                        return metadata.restriction_detail_url;
+                    }
+                    if (metadata.client_detail_url) {
+                        return metadata.client_detail_url;
+                    }
+                    return null;
+                },
+
+                async markNotificationRead(notificationId) {
+                    try {
+                        const response = await fetch(`/core/notifications/${notificationId}/read/`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': this.getCookie('csrftoken'),
+                            },
+                        });
+                        if (response.ok) {
+                            this.notifications.items = this.notifications.items.map((item) => {
+                                if (item.id === notificationId) {
+                                    return { ...item, is_read: true };
+                                }
+                                return item;
+                            });
+                            this.notifications.unreadCount = Math.max(
+                                0,
+                                this.notifications.items.filter((item) => !item.is_read).length
+                            );
+                        }
+                    } catch (error) {
+                        console.error('Failed to mark notification as read:', error);
+                    }
+                },
+
+                async markNotificationUnread(notificationId) {
+                    try {
+                        const response = await fetch(`/core/notifications/${notificationId}/unread/`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': this.getCookie('csrftoken'),
+                            },
+                        });
+                        if (response.ok) {
+                            this.notifications.items = this.notifications.items.map((item) => {
+                                if (item.id === notificationId) {
+                                    return { ...item, is_read: false };
+                                }
+                                return item;
+                            });
+                            this.notifications.unreadCount = this.notifications.items.filter((item) => !item.is_read).length;
+                        }
+                    } catch (error) {
+                        console.error('Failed to mark notification as unread:', error);
+                    }
+                },
+
+                async markAllNotificationsRead() {
+                    if (this.notifications.unreadCount === 0) {
+                        return;
+                    }
+                    try {
+                        const response = await fetch(`/core/notifications/read-all/`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': this.getCookie('csrftoken'),
+                            },
+                        });
+                        if (response.ok) {
+                            this.notifications.items = this.notifications.items.map((item) => ({
+                                ...item,
+                                is_read: true,
+                            }));
+                            this.notifications.unreadCount = 0;
+                        }
+                    } catch (error) {
+                        console.error('Failed to mark all notifications as read:', error);
+                    }
+                },
+
+                async openNotification(notification) {
+                    await this.markNotificationRead(notification.id);
+                    const destination = this.notificationDestination(notification);
+                    if (destination) {
+                        window.location.href = destination;
+                    }
+                },
+
                 showContextMenu(event, clientId, clientName) {
                     this.contextMenu = {
                         visible: true,

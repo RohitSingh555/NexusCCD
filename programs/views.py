@@ -6,7 +6,7 @@ from django.db import models
 from django.db.models import Q, Exists, OuterRef
 from django.http import HttpResponse
 from core.models import Program, Department, ClientProgramEnrollment, ProgramManagerAssignment, Staff
-from core.views import jwt_required, ProgramManagerAccessMixin, AnalystAccessMixin
+from core.views import jwt_required, ProgramManagerAccessMixin, AnalystAccessMixin, StaffAccessControlMixin
 from core.message_utils import success_message, error_message, warning_message, info_message, create_success, update_success, delete_success, validation_error, permission_error, not_found_error
 from django.utils.decorators import method_decorator
 import csv
@@ -20,7 +20,7 @@ from django.contrib.auth.decorators import login_required
 import json
 
 @method_decorator(jwt_required, name='dispatch')
-class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
+class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
     model = Program
     template_name = 'programs/program_list.html'
     context_object_name = 'programs'
@@ -218,8 +218,8 @@ class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
                 if not self.request.user.is_superuser:
                     base_queryset = base_queryset.none()
         
-        # Total programs count (non-archived, with permission filters)
-        context['total_programs_count'] = base_queryset.count()
+        # Active programs count (non-archived, status active, with permission filters)
+        context['active_programs_count'] = base_queryset.filter(status='active').count()
         
         # Assigned programs: programs with at least one active client enrollment
         # Active enrollment = is_archived=False, start_date <= today, and (end_date IS NULL OR end_date > today)
@@ -263,7 +263,7 @@ class ProgramListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         return context
 
 @method_decorator(jwt_required, name='dispatch')
-class ProgramDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, DetailView):
+class ProgramDetailView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManagerAccessMixin, DetailView):
     model = Program
     template_name = 'programs/program_detail.html'
     context_object_name = 'program'
@@ -550,7 +550,7 @@ def fetch_enrollments_ajax(request, external_id):
                 'client_name': f"{enrollment.client.first_name} {enrollment.client.last_name}",
                 'client_initials': f"{enrollment.client.first_name[0] if enrollment.client.first_name else ''}{enrollment.client.last_name[0] if enrollment.client.last_name else ''}",
                 'start_date': enrollment.start_date.strftime('%b %d, %Y') if enrollment.start_date else '',
-                'status': enrollment.status,
+                'status': enrollment.calculated_status,
                 'status_display': enrollment.get_status_display(),
                 'external_id': str(enrollment.client.external_id),
             })
@@ -570,7 +570,7 @@ def fetch_enrollments_ajax(request, external_id):
 
 
 @method_decorator(jwt_required, name='dispatch')
-class ProgramCSVUploadView(AnalystAccessMixin, ProgramManagerAccessMixin, View):
+class ProgramCSVUploadView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManagerAccessMixin, View):
     """Upload programs via CSV. Avoid duplicates by case-insensitive program name match."""
 
     def post(self, request):
