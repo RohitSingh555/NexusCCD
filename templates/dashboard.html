@@ -11,8 +11,9 @@
     </div>
 
     <!-- Statistics Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 {% if user_permissions.is_staff_only or user_permissions.is_program_manager or user_permissions.is_leader %}lg:grid-cols-3{% else %}lg:grid-cols-4{% endif %} gap-6 mb-8">
+    <div class="grid grid-cols-1 md:grid-cols-2 {% if user_permissions.is_staff_only %}lg:grid-cols-1{% elif user_permissions.is_program_manager or user_permissions.is_leader %}lg:grid-cols-3{% else %}lg:grid-cols-4{% endif %} gap-6 mb-8">
         <!-- Total Clients -->
+        {% if not user_permissions.is_staff_only %}
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 relative">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
@@ -48,8 +49,10 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
         <!-- Active Programs -->
+        {% if not user_permissions.is_staff_only %}
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 relative">
             <div class="flex items-center">
                 <div class="flex-shrink-0">
@@ -85,6 +88,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
         <!-- Staff Members -->
         {% if not user_permissions.is_staff_only and not user_permissions.is_program_manager and not user_permissions.is_leader %}
@@ -220,7 +224,7 @@
     {% endif %}
 
     <!-- Main Content Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    <div class="grid grid-cols-1 {% if user_permissions.is_staff_only %}lg:grid-cols-1{% else %}lg:grid-cols-3{% endif %} gap-8">
         <!-- Restricted Clients -->
         <div class="bg-white rounded-lg shadow-sm border border-red-200">
             <div class="px-6 py-4 border-b border-red-200 bg-red-50">
@@ -302,6 +306,7 @@
         </div>
 
         <!-- Recent Clients -->
+        {% if not user_permissions.is_staff_only %}
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b border-gray-200">
                 <div class="flex items-center justify-between">
@@ -365,8 +370,10 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
 
         <!-- Program Status -->
+        {% if not user_permissions.is_staff_only %}
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b border-gray-200">
                 <div class="flex items-center justify-between">
@@ -425,6 +432,7 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
 
     </div>
 </div>

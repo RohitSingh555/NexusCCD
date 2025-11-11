@@ -231,7 +231,7 @@
                         </svg>
                         Apply Filters
                     </button>
-                    {% if search_query or current_department or current_status or current_capacity %}
+                    {% if search_query or current_department or current_status or current_capacity or time_filter %}
                     <a href="{% url 'programs:list' %}" class="inline-flex items-center px-4 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-sky transition-all duration-200 shadow-sm">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -242,7 +242,7 @@
                 </div>
                 
                 <!-- Results Count -->
-                {% if search_query or current_department or current_status or current_capacity %}
+                {% if search_query or current_department or current_status or current_capacity or time_filter %}
                 <div class="text-sm text-neutral-600 font-body">
                     <span class="font-bold">{{ total_filtered_count }}</span> program(s) found
                 </div>
@@ -333,36 +333,48 @@
                             {{ program_data.program.location }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-900 font-body">
-                            {% if program_data.program.capacity_current > 0 %}
-                                {{ program_data.program.capacity_current }}
+                            {% if program_data.no_capacity_limit %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">No limit</span>
                             {% else %}
-                                <span class="text-neutral-400">No limit</span>
+                                {{ program_data.program.capacity_current }}
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap">
-                            {% if program_data.program.capacity_current > 0 %}
+                            {% if program_data.no_capacity_limit %}
+                                <div class="flex items-center">
+                                    <div class="w-16 bg-neutral-200 rounded-full h-2 mr-2">
+                                        <div class="h-2 rounded-full bg-brand-sky" style="width: {{ program_data.display_bar_percentage }}%"></div>
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <span class="text-sm text-neutral-600 font-body">
+                                            {{ program_data.current_enrollments }} enrolled
+                                        </span>
+                                        <span class="text-xs text-neutral-500">
+                                            Total enrollments
+                                        </span>
+                                    </div>
+                                </div>
+                            {% else %}
                                 <div class="flex items-center">
                                     <div class="w-16 bg-neutral-200 rounded-full h-2 mr-2">
                                         <div class="h-2 rounded-full {% if program_data.is_at_capacity %}bg-red-500{% elif program_data.capacity_percentage > 80 %}bg-yellow-500{% else %}bg-brand-sky{% endif %}" 
-                                             style="width: {{ program_data.capacity_percentage }}%"></div>
+                                             style="width: {{ program_data.display_bar_percentage }}%"></div>
                                     </div>
                                     <div class="flex flex-col">
                                         <span class="text-sm text-neutral-600 font-body">
                                             {{ program_data.current_enrollments }}/{{ program_data.program.capacity_current }}
                                         </span>
                                         <span class="text-xs text-neutral-500">
-                                            {% if program_data.available_capacity > 0 %}
+                                            {% if program_data.available_capacity is not None and program_data.available_capacity > 0 %}
                                                 {{ program_data.available_capacity }} spots left
-                                            {% else %}
+                                            {% elif program_data.available_capacity == 0 %}
                                                 Full
+                                            {% else %}
+                                                Unlimited
                                             {% endif %}
                                         </span>
                                     </div>
                                 </div>
-                            {% else %}
-                                <span class="text-sm text-neutral-500 font-body">
-                                    {{ program_data.current_enrollments }} enrolled
-                                </span>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 font-body">

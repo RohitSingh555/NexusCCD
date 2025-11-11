@@ -230,6 +230,7 @@ class Program(BaseModel):
     department = models.ForeignKey(Department, on_delete=models.CASCADE, db_index=True)
     location = models.CharField(max_length=255, db_index=True)
     capacity_current = models.PositiveIntegerField(default=100)
+    no_capacity_limit = models.BooleanField(default=False, help_text="Program does not enforce a fixed capacity limit")
     capacity_effective_date = models.DateField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active', db_index=True)
     description = models.TextField(null=True, blank=True)
@@ -277,7 +278,7 @@ class Program(BaseModel):
     
     def get_available_capacity(self, as_of_date=None):
         """Get the number of available spots in this program"""
-        if self.capacity_current <= 0:
+        if self.no_capacity_limit or self.capacity_current <= 0:
             return None  # No capacity limit
         
         if as_of_date:
@@ -288,7 +289,7 @@ class Program(BaseModel):
     
     def is_at_capacity(self, as_of_date=None):
         """Check if the program is at or over capacity"""
-        if self.capacity_current <= 0:
+        if self.no_capacity_limit or self.capacity_current <= 0:
             return False  # No capacity limit
         
         if as_of_date:
@@ -299,7 +300,7 @@ class Program(BaseModel):
     
     def get_capacity_percentage(self, as_of_date=None):
         """Get the capacity utilization percentage"""
-        if self.capacity_current <= 0:
+        if self.no_capacity_limit or self.capacity_current <= 0:
             return 0  # No capacity limit
         
         if as_of_date:
@@ -319,7 +320,7 @@ class Program(BaseModel):
             return restriction_check
         
         # Check if program is at capacity for the specific date
-        if self.is_at_capacity(start_date):
+        if not self.no_capacity_limit and self.is_at_capacity(start_date):
             enrollments_on_date = self.get_enrollments_count_for_date(start_date)
             return False, f"Program '{self.name}' is at full capacity on {start_date.strftime('%B %d, %Y')} ({enrollments_on_date}/{self.capacity_current} clients)."
         
@@ -646,7 +647,7 @@ class ClientExtended(BaseModel):
     num_bednights_current_stay = models.IntegerField(null=True, blank=True)
     length_homeless_3yrs = models.IntegerField(null=True, blank=True)
     income_source = models.CharField(max_length=200, null=True, blank=True)
-    taxation_year_filed = models.CharField(max_length=4, null=True, blank=True)
+    taxation_year_filed = models.CharField(max_length=20, null=True, blank=True)
     status_id = models.CharField(max_length=200, null=True, blank=True)
     picture_id = models.CharField(max_length=200, null=True, blank=True)
     other_id = models.CharField(max_length=200, null=True, blank=True)

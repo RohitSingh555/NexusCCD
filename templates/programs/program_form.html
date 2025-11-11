@@ -79,10 +79,11 @@
                 </div>
                 
                 <div>
-                    <label for="{{ form.capacity_current.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Current Capacity *</label>
-                    <input type="number" name="{{ form.capacity_current.name }}" id="{{ form.capacity_current.id_for_label }}" value="{{ form.capacity_current.value|default:100 }}" min="0" required class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
+                    <label for="{{ form.capacity_current.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Current Capacity</label>
+                    <input type="number" name="{{ form.capacity_current.name }}" id="{{ form.capacity_current.id_for_label }}" value="{{ form.capacity_current.value|default:100 }}" min="0" class="w-full px-3 py-2 border border-neutral-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent font-body">
                     <p class="mt-1 text-sm text-neutral-500 font-body">
                         {% if not object %}Default: 100 - can be changed as needed{% endif %}
+                        Required unless "No Capacity Limit" is selected.
                     </p>
                     {% if form.capacity_current.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.capacity_current.errors.0 }}</div>
@@ -96,6 +97,28 @@
                     {% if form.capacity_effective_date.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.capacity_effective_date.errors.0 }}</div>
                     {% endif %}
+                </div>
+                
+                <div class="md:col-span-2">
+                    <div class="flex items-start space-x-3">
+                        <input type="checkbox"
+                               name="{{ form.no_capacity_limit.name }}"
+                               id="{{ form.no_capacity_limit.id_for_label }}"
+                               value="true"
+                               {% if form.no_capacity_limit.value %}checked{% endif %}
+                               class="h-5 w-5 text-brand-sky border-neutral-300 rounded focus:ring-brand-sky mt-1">
+                        <div>
+                            <label for="{{ form.no_capacity_limit.id_for_label }}" class="text-sm font-bold text-neutral-700 font-subheader">
+                                No Capacity Limit
+                            </label>
+                            <p class="text-sm text-neutral-500 font-body mt-1">
+                                Check this option if the program does not track a fixed capacity. Total enrollments will be displayed instead of capacity usage.
+                            </p>
+                            {% if form.no_capacity_limit.errors %}
+                                <div class="mt-1 text-sm text-red-600">{{ form.no_capacity_limit.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
                 
                 <div>
@@ -129,6 +152,44 @@
         </div>
     </form>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const noCapacityCheckbox = document.getElementById('{{ form.no_capacity_limit.id_for_label }}');
+        const capacityInput = document.getElementById('{{ form.capacity_current.id_for_label }}');
+        const effectiveDateInput = document.getElementById('{{ form.capacity_effective_date.id_for_label }}');
+
+        function toggleCapacityFields() {
+            if (!capacityInput || !noCapacityCheckbox) {
+                return;
+            }
+
+            const isChecked = noCapacityCheckbox.checked;
+
+            capacityInput.readOnly = isChecked;
+            capacityInput.required = !isChecked;
+            capacityInput.classList.toggle('bg-neutral-100', isChecked);
+            capacityInput.classList.toggle('cursor-not-allowed', isChecked);
+
+            if (isChecked && (!capacityInput.value || parseInt(capacityInput.value, 10) !== 0)) {
+                capacityInput.value = 0;
+            }
+
+            if (effectiveDateInput) {
+                effectiveDateInput.readOnly = isChecked;
+                effectiveDateInput.classList.toggle('bg-neutral-100', isChecked);
+                effectiveDateInput.classList.toggle('cursor-not-allowed', isChecked);
+            }
+        }
+
+        if (noCapacityCheckbox) {
+            toggleCapacityFields();
+            noCapacityCheckbox.addEventListener('change', function () {
+                toggleCapacityFields();
+            });
+        }
+    });
+</script>
 
 <style>
     /* Custom form field styling */

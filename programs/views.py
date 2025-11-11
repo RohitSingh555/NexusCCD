@@ -11,6 +11,7 @@ from core.message_utils import success_message, error_message, warning_message, 
 from django.utils.decorators import method_decorator
 import csv
 import io
+from datetime import timedelta
 
 from django.contrib import messages
 from django.http import JsonResponse
@@ -91,10 +92,16 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
                 queryset = [p for p in queryset if p.is_at_capacity()]
             elif capacity_filter == 'available':
                 # Filter programs with available capacity (including programs with no capacity limit)
-                queryset = [p for p in queryset if not p.is_at_capacity() and (p.get_available_capacity() is None or p.get_available_capacity() > 0)]
+                queryset = [
+                    p for p in queryset
+                    if not p.is_at_capacity() and (p.get_available_capacity() is None or p.get_available_capacity() > 0)
+                ]
             elif capacity_filter == 'no_limit':
                 # Filter programs with no capacity limit
-                queryset = queryset.filter(capacity_current__lte=0)
+                if hasattr(queryset, 'filter'):
+                    queryset = queryset.filter(Q(no_capacity_limit=True) | Q(capacity_current__lte=0))
+                else:
+                    queryset = [p for p in queryset if getattr(p, 'no_capacity_limit', False) or p.capacity_current <= 0]
         
         if search_query:
             from django.db.models import Q
@@ -142,6 +149,7 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         programs = context['programs']
+        time_filter = self.request.GET.get('time_filter', '')
         
         # Create program data with capacity information
         programs_with_capacity = []
@@ -152,6 +160,10 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
             capacity_percentage = program.get_capacity_percentage()
             available_capacity = program.get_available_capacity()
             is_at_capacity = program.is_at_capacity()
+            if program.no_capacity_limit or program.capacity_current <= 0:
+                display_bar_percentage = 100 if total_enrollments > 0 else 0
+            else:
+                display_bar_percentage = capacity_percentage
             
             programs_with_capacity.append({
                 'program': program,
@@ -159,6 +171,8 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
                 'capacity_percentage': capacity_percentage,
                 'available_capacity': available_capacity,
                 'is_at_capacity': is_at_capacity,
+                'no_capacity_limit': program.no_capacity_limit or program.capacity_current <= 0,
+                'display_bar_percentage': display_bar_percentage,
             })
         
         # Get the total count of filtered programs (not just current page)
@@ -252,6 +266,7 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
         context['current_department'] = self.request.GET.get('department', '')
         context['current_status'] = self.request.GET.get('status', '')
         context['per_page'] = self.request.GET.get('per_page', '10')
+        context['time_filter'] = time_filter
         
         # Force pagination to be enabled if there are any results
         if context.get('paginator') and context['paginator'].count > 0:
@@ -913,7 +928,7 @@ class ProgramBulkAssignManagersView(ProgramManagerAccessMixin, View):
 class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
     model = Program
     template_name = 'programs/program_form.html'
-    fields = ['name', 'department', 'location', 'capacity_current', 'capacity_effective_date', 'status']
+    fields = ['name', 'department', 'location', 'capacity_current', 'capacity_effective_date', 'no_capacity_limit', 'status']
     success_url = reverse_lazy('programs:list')
     
     def dispatch(self, request, *args, **kwargs):
@@ -948,7 +963,24 @@ class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
     
     def form_valid(self, form):
         """Handle program creation with audit logging"""
+        no_capacity_limit = form.cleaned_data.get('no_capacity_limit')
+        capacity_value = form.cleaned_data.get('capacity_current')
+
+        if not no_capacity_limit:
+            try:
+                capacity_int = int(capacity_value)
+            except (TypeError, ValueError):
+                capacity_int = 0
+
+            if capacity_int <= 0:
+                form.add_error('capacity_current', 'Enter a capacity greater than 0 or select "No Capacity Limit".')
+                return self.form_invalid(form)
+        else:
+            form.cleaned_data['capacity_current'] = 0
+
         program = form.save(commit=False)
+        if program.no_capacity_limit:
+            program.capacity_current = 0
         
         # Set created_by and updated_by fields
         if self.request.user.is_authenticated:
@@ -979,6 +1011,7 @@ class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
                     'location': program.location or '',
                     'capacity_current': program.capacity_current,
                     'capacity_effective_date': str(program.capacity_effective_date) if program.capacity_effective_date else None,
+                    'no_capacity_limit': program.no_capacity_limit,
                     'created_by': self.request.user.get_full_name() or self.request.user.username
                 }
             )
@@ -992,7 +1025,7 @@ class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
 class ProgramUpdateView(ProgramManagerAccessMixin, UpdateView):
     model = Program
     template_name = 'programs/program_form.html'
-    fields = ['name', 'department', 'location', 'capacity_current', 'capacity_effective_date', 'status']
+    fields = ['name', 'department', 'location', 'capacity_current', 'capacity_effective_date', 'no_capacity_limit', 'status']
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('programs:list')
@@ -1039,9 +1072,25 @@ class ProgramUpdateView(ProgramManagerAccessMixin, UpdateView):
         """Handle program updates with audit logging"""
         # Get the original program data before saving
         original_program = self.get_object()
+        no_capacity_limit = form.cleaned_data.get('no_capacity_limit')
+        capacity_value = form.cleaned_data.get('capacity_current')
+
+        if not no_capacity_limit:
+            try:
+                capacity_int = int(capacity_value)
+            except (TypeError, ValueError):
+                capacity_int = 0
+
+            if capacity_int <= 0:
+                form.add_error('capacity_current', 'Enter a capacity greater than 0 or select "No Capacity Limit".')
+                return self.form_invalid(form)
+        else:
+            form.cleaned_data['capacity_current'] = 0
         
         # Set the updated_by field before saving
         program = form.save(commit=False)
+        if program.no_capacity_limit:
+            program.capacity_current = 0
         
         # Set updated_by field
         if self.request.user.is_authenticated:
@@ -1075,6 +1124,9 @@ class ProgramUpdateView(ProgramManagerAccessMixin, UpdateView):
             
             if original_program.capacity_current != program.capacity_current:
                 changes['capacity_current'] = f"{original_program.capacity_current} → {program.capacity_current}"
+            
+            if original_program.no_capacity_limit != program.no_capacity_limit:
+                changes['no_capacity_limit'] = f"{original_program.no_capacity_limit} → {program.no_capacity_limit}"
             
             if original_program.capacity_effective_date != program.capacity_effective_date:
                 changes['capacity_effective_date'] = f"{original_program.capacity_effective_date} → {program.capacity_effective_date}"
