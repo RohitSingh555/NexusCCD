@@ -1657,7 +1657,8 @@ def upload_clients(request):
                 logger.error(f"Error loading field mapping from JSON: {e}")
                 # Fallback to basic mapping if JSON file is not found or corrupted
                 field_mapping = {
-                    'client_id': ['client_no', 'ID', 'client_id', 'client id', 'clientno', 'id', 'client number', 'Client No.', 'Client ID', 'CLIENT ID'],
+                    'client_id': ['client_no', 'client no', 'ID', 'client_id', 'client id', 'clientno', 'id', 'client number', 'Client No.', 'Client No', 'Client ID', 'CLIENT ID'],
+                    'client_combined': ['client', 'Client', 'client_name', 'client name', 'full_name', 'full name', 'name', 'Name'],
                     'first_name': ['first_name', 'first name', 'firstname', 'fname', 'given name', 'First Name', 'FIRST NAME'],
                     'last_name': ['last_name', 'last name', 'lastname', 'lname', 'surname', 'family name', 'Last Name', 'LAST NAME'],
                     'email': ['email', 'e-mail', 'email address', 'e_mail'],
@@ -3510,9 +3511,10 @@ def upload_clients(request):
                         skipped_count += 1
                         continue
                     
-                    # For new client creation, validate required fields (including client_id)
-                    # Either phone OR dob is required (not both)
-                    required_fields = ['client_id', 'first_name', 'last_name']
+                    # For new client creation, validate required fields.
+                    # client_id is optional for new records (blank IDs should create fresh clients),
+                    # but first_name and last_name are still required.
+                    required_fields = ['first_name', 'last_name']
                     missing_required = []
                     
                     for field in required_fields:
