@@ -11,7 +11,11 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-dev-key-change-in-pro
 DEBUG = config('DEBUG', default=True, cast=bool)
 ENVIRONMENT = config('ENVIRONMENT', default='development')
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=lambda v: [s.strip() for s in v.split(',')])
+split_list = lambda v: [s.strip() for s in v.split(',') if s.strip()]
+
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,dev.fredvictor.org', cast=split_list)
+default_csrf_origins = ['https://dev.fredvictor.org', 'http://dev.fredvictor.org']
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default=','.join(default_csrf_origins), cast=split_list) or default_csrf_origins
 
 # Fuzzy matching settings
 NICKNAME_MAPPINGS_FILE = os.path.join(BASE_DIR, 'nickname_mappings.json')

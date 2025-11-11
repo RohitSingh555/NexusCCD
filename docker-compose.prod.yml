@@ -5,8 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.prod
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     volumes:
       - static_volume:/app/static
       - media_volume:/app/media
@@ -23,7 +23,7 @@ services:
     environment:
       POSTGRES_DB: ccd_prod
       POSTGRES_USER: ccd
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexusccd_prod_password}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -32,16 +32,34 @@ services:
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
       - "443:443"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/snippets:/etc/nginx/snippets
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/lib/letsencrypt
+      - certbot-www:/var/www/certbot
       - static_volume:/app/static
       - media_volume:/app/media
     depends_on:
       - web
 
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/lib/letsencrypt
+      - certbot-www:/var/www/certbot
+    ports:
+      - "80:80"
+    command: sleep infinity
+    profiles:
+      - certbot
+
 volumes:
   postgres_data:
   static_volume:
   media_volume:
+  certbot-etc:
+  certbot-var:
+  certbot-www:
