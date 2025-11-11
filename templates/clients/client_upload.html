@@ -864,6 +864,16 @@ function uploadManager() {
                                     ${result.duplicate_details.length >= 20 ? '<p class="text-xs text-blue-600 mt-2">Showing first 20 duplicates...</p>' : ''}
                                 </div>
                             ` : ''}
+                            ${result.stats.duplicates_flagged > 0 ? `
+                                <div class="flex justify-center">
+                                    <a href="/clients/dedupe/" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 text-sm font-medium transition-all duration-200">
+                                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13l-3 3m0 0l-3-3m3 3V8m8 8a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                        Review Probable Duplicates
+                                    </a>
+                                </div>
+                            ` : ''}
                             ${result.errors && result.errors.length > 0 ? `
                                 <div class="bg-red-50 border border-red-200 rounded-lg p-4">
                                     <h4 class="font-bold text-red-800 mb-2">Errors Found:</h4>

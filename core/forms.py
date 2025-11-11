@@ -29,7 +29,7 @@ class EnrollmentForm(forms.ModelForm):
         if client_queryset is not None:
             self.fields['client'].queryset = client_queryset
         
-        # Set up field styling and help text
+        
         pass
     
     def clean(self):
@@ -40,10 +40,10 @@ class EnrollmentForm(forms.ModelForm):
         start_date = cleaned_data.get('start_date')
         
         if client and program and start_date:
-            # Check for service restrictions
+            
             self.check_service_restrictions(client, program, start_date)
             
-            # Check program capacity
+            
             self.check_program_capacity(client, program, start_date)
         
         return cleaned_data
@@ -52,16 +52,16 @@ class EnrollmentForm(forms.ModelForm):
     def check_service_restrictions(self, client, program, start_date):
         """Check if client has service restrictions that would prevent enrollment"""
         
-        # Check for active restrictions that are not archived
+        
         active_restrictions = ServiceRestriction.objects.filter(
             client=client,
-            is_archived=False,  # Only check non-archived restrictions
+            is_archived=False,  
             start_date__lte=start_date
         ).filter(
             models.Q(end_date__isnull=True) | models.Q(end_date__gte=start_date)
         )
         
-        # Check for global restrictions (scope='org') - these block ALL programs
+        
         global_restrictions = active_restrictions.filter(scope='org')
         if global_restrictions.exists():
             restriction = global_restrictions.first()
@@ -77,7 +77,7 @@ class EnrollmentForm(forms.ModelForm):
                 f"ACTION REQUIRED: This client cannot be enrolled in ANY program due to a global restriction. Please remove or modify the restriction before enrolling this client."
             )
         
-        # Check for program-specific restrictions (scope='program') - these only block the specific program
+        
         program_restrictions = active_restrictions.filter(scope='program', program=program)
         if program_restrictions.exists():
             restriction = program_restrictions.first()
@@ -95,14 +95,14 @@ class EnrollmentForm(forms.ModelForm):
     
     def check_program_capacity(self, client, program, start_date):
         """Check if the program has available capacity for enrollment"""
-        # When editing an existing enrollment, exclude it from duplicate checks
+        
         exclude_instance = self.instance if self.instance.pk else None
         
         can_enroll, message = program.can_enroll_client(client, start_date, exclude_instance)
         
         if not can_enroll:
             if "capacity" in message.lower():
-                # Program is at capacity
+                
                 current_enrollments = program.get_current_enrollments_count(start_date)
                 available_capacity = program.get_available_capacity(start_date)
                 capacity_percentage = program.get_capacity_percentage(start_date)
@@ -115,7 +115,7 @@ class EnrollmentForm(forms.ModelForm):
                     f"ACTION REQUIRED: Please try enrolling in a different program or wait for a spot to become available."
                 )
             else:
-                # Client is already enrolled
+                
                 raise ValidationError(f"⚠️ {message}")
     
     def clean_end_date(self):
@@ -170,7 +170,7 @@ class UserProfileForm(forms.ModelForm):
         user = super().save(commit=False)
         if self.cleaned_data.get('remove_profile_photo'):
             if user.profile_photo:
-                user.profile_photo.delete(save=False)  # Delete the file
+                user.profile_photo.delete(save=False)  
             user.profile_photo = None
         if commit:
             user.save()
@@ -179,9 +179,9 @@ class UserProfileForm(forms.ModelForm):
     def clean_email(self):
         email = self.cleaned_data.get('email')
         if not email:
-            # If no email provided, use the existing email
+            
             return self.instance.email
-        # Check if email is already taken by another user
+        
         existing_user = User.objects.filter(email=email).exclude(pk=self.instance.pk).first()
         if existing_user:
             raise ValidationError("This email address is already in use by another user.")
@@ -190,7 +190,7 @@ class UserProfileForm(forms.ModelForm):
     def clean_username(self):
         username = self.cleaned_data.get('username')
         if not username:
-            # If no username provided, use the existing username
+            
             return self.instance.username
         existing_user = User.objects.filter(username=username).exclude(pk=self.instance.pk).first()
         if existing_user:
@@ -200,18 +200,18 @@ class UserProfileForm(forms.ModelForm):
     def clean_profile_photo(self):
         profile_photo = self.cleaned_data.get('profile_photo')
         if profile_photo:
-            # Check if it's a new uploaded file (has content_type) or existing file
+            
             if hasattr(profile_photo, 'content_type'):
-                # It's a new uploaded file
+                
 
                 if profile_photo.size > 5 * 1024 * 1024:
                     raise ValidationError("Profile photo must be smaller than 5MB.")
                 
-                # Check file type
+                
                 allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
                 if profile_photo.content_type not in allowed_types:
                     raise ValidationError("Please upload a valid image file (JPEG, PNG, GIF, or WebP).")
-            # If it's an existing file (ImageFieldFile), we don't need to validate it again
+            
         return profile_photo
 
 class StaffProfileForm(forms.ModelForm):
@@ -239,7 +239,7 @@ class StaffProfileForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Make fields optional
+        
         self.fields['first_name'].required = False
         self.fields['last_name'].required = False
         self.fields['email'].required = False
@@ -248,7 +248,7 @@ class StaffProfileForm(forms.ModelForm):
     def clean_email(self):
         email = self.cleaned_data.get('email')
         if email:
-            # Check if email is already taken by another staff member
+            
             existing_staff = Staff.objects.filter(email=email).exclude(pk=self.instance.pk).first()
             if existing_staff:
                 raise ValidationError("This email address is already in use by another staff member.")
@@ -314,11 +314,11 @@ class ServiceRestrictionForm(forms.ModelForm):
         })
     )
     
-    # Explicitly define behaviors as MultipleChoiceField to ensure proper handling
+    
     behaviors = forms.MultipleChoiceField(
         required=False,
         widget=forms.CheckboxSelectMultiple(attrs={'class': 'space-y-2'}),
-        choices=[]  # Will be set in __init__
+        choices=[]  
     )
     
     class Meta:
@@ -336,13 +336,13 @@ class ServiceRestrictionForm(forms.ModelForm):
         program_queryset = kwargs.pop('program_queryset', None)
         super().__init__(*args, **kwargs)
         
-        # Debug: Print initial data if available
+        
         if args and len(args) > 0:
             print(f"ServiceRestrictionForm.__init__ - data keys: {args[0].keys() if hasattr(args[0], 'keys') else 'No data'}")
             if hasattr(args[0], 'getlist'):
                 print(f"ServiceRestrictionForm.__init__ - behaviors from POST: {args[0].getlist('behaviors', [])}")
         
-        # Set up field styling
+        
         self.fields['client'].widget.attrs.update({
             'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent'
         })
@@ -362,33 +362,33 @@ class ServiceRestrictionForm(forms.ModelForm):
             'class': 'w-4 h-4 text-brand-sky bg-neutral-100 border-neutral-300 rounded focus:ring-brand-sky focus:ring-2'
         })
         
-        # Set up entered_by field styling and queryset
+        
         self.fields['entered_by'].widget.attrs.update({
             'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent'
         })
-        # Filter staff to only show active staff members with user accounts
+        
         from .models import Staff
         self.fields['entered_by'].queryset = Staff.objects.filter(active=True, user__isnull=False).select_related('user').order_by('first_name', 'last_name')
         self.fields['entered_by'].help_text = "Select the staff member who entered this restriction"
         self.fields['entered_by'].required = False
         
-        # Filter programs if provided
+        
         if program_queryset is not None:
             self.fields['program'].queryset = program_queryset
         
-        # Add help text
+        
         self.fields['is_indefinite'].help_text = "Check this box if the restriction has no end date"
         self.fields['behaviors'].help_text = "Select all behaviors that apply to this restriction (only shown for Behavioral Issues type)"
         self.fields['notes'].help_text = "Additional notes about the restriction (required for Behavioral Issues type)"
         
-        # Set choices for behaviors field using DETAILED_BEHAVIOR_CHOICES
+        
         if 'behaviors' in self.fields:
             from .models import ServiceRestriction
             self.fields['behaviors'].choices = ServiceRestriction.DETAILED_BEHAVIOR_CHOICES
             self.fields['behaviors'].initial = []
             self.fields['behaviors'].required = False
         
-        # Set initial value for restriction_type field
+        
         if 'restriction_type' in self.fields:
             self.fields['restriction_type'].initial = []
     
@@ -396,14 +396,14 @@ class ServiceRestrictionForm(forms.ModelForm):
         restriction_type = self.cleaned_data.get('restriction_type')
         if restriction_type:
             try:
-                # If it's a JSON string, parse it
+                
                 if isinstance(restriction_type, str):
                     return json.loads(restriction_type)
-                # If it's already a list, return as is
+                
                 elif isinstance(restriction_type, list):
                     return restriction_type
             except json.JSONDecodeError:
-                # If it's a single value, convert to list
+                
                 return [restriction_type]
         return []
     
@@ -419,7 +419,7 @@ class ServiceRestrictionForm(forms.ModelForm):
         behaviors = cleaned_data.get('behaviors')
         notes = cleaned_data.get('notes')
         
-        # Debug: Print form data
+        
         print(f"Form data: {cleaned_data}")
         print(f"Restriction type: {restriction_type}")
         print(f"Behaviors: {behaviors}")
@@ -428,23 +428,23 @@ class ServiceRestrictionForm(forms.ModelForm):
         print(f"Start date: {start_date}")
         print(f"End date: {end_date}")
         
-        # If indefinite is checked, clear end_date
+        
         if is_indefinite and end_date:
             cleaned_data['end_date'] = None
         
-        # Validate date logic
+        
         if start_date and end_date and not is_indefinite:
             if end_date <= start_date:
                 raise ValidationError("End date must be after start date.")
         
-        # Validate behavioral issues type
-        # restriction_type is a JSONField, so it might be stored as a string or parsed JSON
-        # Handle both cases: 'behaviors' string or ["behaviors"] array
+        
+        
+        
         restriction_type_value = restriction_type
         if isinstance(restriction_type, list) and len(restriction_type) > 0:
             restriction_type_value = restriction_type[0] if isinstance(restriction_type[0], str) else str(restriction_type[0])
         elif isinstance(restriction_type, str):
-            # Try to parse if it's a JSON string
+            
             try:
                 parsed = json.loads(restriction_type) if restriction_type.startswith('"') or restriction_type.startswith('[') else restriction_type
                 if isinstance(parsed, list) and len(parsed) > 0:
@@ -457,9 +457,9 @@ class ServiceRestrictionForm(forms.ModelForm):
         if restriction_type_value == 'behaviors':
             if not behaviors or len(behaviors) == 0:
                 raise ValidationError("At least one behavior must be selected for Behavioral Issues restrictions.")
-            # Notes are optional, not required
+            
         
-        # Ensure behaviors is always a list (but only required for behavioral issues type)
+        
         if behaviors is None:
             cleaned_data['behaviors'] = []
         
@@ -467,22 +467,22 @@ class ServiceRestrictionForm(forms.ModelForm):
     
     def clean_start_date(self):
         start_date = self.cleaned_data.get('start_date')
-        # Allow past dates to permit accurate entry of historical restrictions
-        # No validation needed - any valid date is acceptable
+        
+        
         return start_date
     
     def clean_behaviors(self):
         print("ServiceRestrictionForm.clean_behaviors called")
-        # Get the value from cleaned_data (it's already been cleaned by the field)
+        
         behaviors = self.cleaned_data.get('behaviors', [])
         print(f"Raw behaviors value: {behaviors}, type: {type(behaviors)}")
         
-        # If it's None or empty, return empty list
+        
         if behaviors is None:
             print("Behaviors is None, returning empty list")
             return []
         
-        # Ensure it's a list
+        
         if not isinstance(behaviors, list):
             print(f"Behaviors is not a list, converting: {behaviors}")
             behaviors = [behaviors] if behaviors else []
@@ -493,11 +493,11 @@ class ServiceRestrictionForm(forms.ModelForm):
     def clean_client_profile_image(self):
         client_profile_image = self.cleaned_data.get('client_profile_image')
         if client_profile_image:
-            # Check file size (max 5MB)
+            
             if client_profile_image.size > 5 * 1024 * 1024:
                 raise ValidationError("Profile image must be smaller than 5MB.")
             
-            # Check file type
+            
             allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
             if client_profile_image.content_type not in allowed_types:
                 raise ValidationError("Please upload a valid image file (JPEG, PNG, GIF, or WebP).")
@@ -514,7 +514,7 @@ class ServiceRestrictionForm(forms.ModelForm):
         print(f"Instance behaviors: {instance.behaviors}")
         print(f"Behaviors type: {type(instance.behaviors)}")
         
-        # Ensure behaviors is a list (MultipleChoiceField returns a list, but let's be safe)
+        
         if instance.behaviors is None:
             instance.behaviors = []
         elif not isinstance(instance.behaviors, list):
@@ -525,11 +525,11 @@ class ServiceRestrictionForm(forms.ModelForm):
             instance.save()
             print(f"Instance saved with ID: {instance.id}")
             
-            # Handle client profile image upload after restriction is saved
+            
             client_profile_image = self.cleaned_data.get('client_profile_image')
             if client_profile_image:
                 print("Updating client profile picture...")
-                # Update the client's profile picture
+                
                 client = instance.client
                 client.profile_picture = client_profile_image
                 client.save()

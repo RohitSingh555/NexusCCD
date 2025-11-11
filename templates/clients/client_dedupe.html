@@ -478,6 +478,9 @@
 {% block content %}
 <div class="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <form id="dedupeCsrfForm" class="hidden">
+            {% csrf_token %}
+        </form>
         <!-- Success Message -->
         {% if request.GET.success == 'resolved' %}
         <div class="mb-8 bg-white border border-green-200 rounded-2xl p-6 shadow-sm">
@@ -512,6 +515,13 @@
                     </div>
                 </div>
                 <div class="flex items-center space-x-2">
+                    <button type="button" onclick="openScanModal()"
+                            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13l-3 3m0 0l-3-3m3 3V8m8 8a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Scan Existing Data
+                    </button>
                     <a href="{% url 'clients:list' %}" 
                        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -654,10 +664,23 @@
                         <p class="text-2xl font-bold text-gray-900">{{ high_confidence_duplicates }}</p>
                         <p class="text-sm text-gray-500">Likely duplicates</p>
                     </div>
-                    <div class="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
-                        <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
-                        </svg>
+                    <div class="flex flex-col items-end space-y-2">
+                        <div class="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+                            <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                            </svg>
+                        </div>
+                        {% if high_confidence_duplicates > 0 %}
+                        <button type="button"
+                                id="deleteHighConfidenceButton"
+                                onclick="openDeleteHighConfidenceModal()"
+                                class="inline-flex items-center px-3 py-1.5 bg-red-600 text-white rounded-md text-xs font-medium shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200">
+                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
+                            </svg>
+                            Delete All New Duplicates
+                        </button>
+                        {% endif %}
                     </div>
                 </div>
                 <!-- Info Icon -->
@@ -691,7 +714,7 @@
                     <h3 class="text-lg font-semibold text-gray-900">Filter & Search</h3>
                 </div>
             </div>
-            <form method="GET" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <form method="GET" class="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div>
                     <label for="status" class="block text-base font-medium text-gray-700 mb-2">Status Filter</label>
                     <select name="status" id="status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-base">
@@ -707,6 +730,15 @@
                         <option value="">All Levels</option>
                         {% for value, label in confidence_choices %}
                         <option value="{{ value }}" {% if confidence_filter == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="time_filter" class="block text-base font-medium text-gray-700 mb-2">Created At</label>
+                    <select name="time_filter" id="time_filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-base">
+                        <option value="">All Time</option>
+                        {% for value, label in time_filter_choices %}
+                        <option value="{{ value }}" {% if time_filter == value %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -1103,7 +1135,7 @@
         <div class="mt-8 flex items-center justify-between bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3">
             <div class="flex-1 flex justify-between sm:hidden">
                 {% if paginated_groups.has_previous %}
-                    <a href="?page={{ paginated_groups.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}" 
+                    <a href="?page={{ paginated_groups.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}" 
                        class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                         Previous
                     </a>
@@ -1113,7 +1145,7 @@
                     </span>
                 {% endif %}
                 {% if paginated_groups.has_next %}
-                    <a href="?page={{ paginated_groups.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}" 
+                    <a href="?page={{ paginated_groups.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}" 
                        class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
                         Next
                     </a>
@@ -1138,7 +1170,7 @@
                 <div>
                     <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
                         {% if paginated_groups.has_previous %}
-                            <a href="?page={{ paginated_groups.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}" 
+                            <a href="?page={{ paginated_groups.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}" 
                                class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
                                 <span class="sr-only">Previous</span>
                                 <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
@@ -1160,7 +1192,7 @@
                                     {{ num }}
                                 </span>
                             {% elif num > paginated_groups.number|add:'-3' and num < paginated_groups.number|add:'3' %}
-                                <a href="?page={{ num }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}" 
+                                <a href="?page={{ num }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}" 
                                    class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
                                     {{ num }}
                                 </a>
@@ -1168,7 +1200,7 @@
                         {% endfor %}
                         
                         {% if paginated_groups.has_next %}
-                            <a href="?page={{ paginated_groups.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}" 
+                            <a href="?page={{ paginated_groups.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}"
                                class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
                                 <span class="sr-only">Next</span>
                                 <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
@@ -1188,6 +1220,116 @@
             </div>
         </div>
         {% endif %}
+    </div>
+</div>
+
+<!-- Duplicate Scan Modal -->
+<div id="duplicateScanModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm hidden z-50">
+    <div class="relative top-16 mx-auto w-11/12 max-w-4xl bg-white border border-gray-200 rounded-2xl shadow-2xl p-6">
+        <div class="flex items-start justify-between mb-4">
+            <div>
+                <h3 class="text-xl font-semibold text-gray-900">Scan Existing Clients</h3>
+                <p class="mt-1 text-sm text-gray-600">
+                    Quickly surface the top potential duplicates across the current dataset. No client records are changed until you decide to act on the results.
+                </p>
+            </div>
+            <button type="button" onclick="closeScanModal()" class="text-gray-400 hover:text-gray-600 transition-colors duration-150">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <div class="space-y-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="scanLimitInput" class="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
+                        Maximum suggestions
+                    </label>
+                    <input id="scanLimitInput" type="number" min="1" max="50" value="10"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                </div>
+                <div>
+                    <label for="scanSourceFilter" class="block text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1">
+                        Source filter (optional)
+                    </label>
+                    <select id="scanSourceFilter"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
+                        <option value="">All sources</option>
+                        <option value="SMIMS">SMIMS</option>
+                        <option value="EMHware">EMHware</option>
+                    </select>
+                </div>
+                <div class="flex items-center mt-2 md:mt-6">
+                    <input id="scanIncludeArchived" type="checkbox"
+                           class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                    <label for="scanIncludeArchived" class="ml-2 text-sm text-gray-700">
+                        Include archived clients
+                    </label>
+                </div>
+            </div>
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div id="scanStatusMessage" class="text-sm text-gray-500 hidden"></div>
+                <div class="flex items-center space-x-2 md:justify-end">
+                    <button type="button" onclick="runDuplicateScan()" id="scanRunButton"
+                            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13l-3 3m0 0l-3-3m3 3V8m8 8a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Run Scan
+                    </button>
+                    <button type="button" onclick="closeScanModal()"
+                            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+            <div id="scanLoading" class="hidden">
+                <div class="flex items-center justify-center py-8">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <span class="ml-3 text-sm text-gray-600">Scanning for probable duplicates...</span>
+                </div>
+            </div>
+            <div id="scanError" class="hidden bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm"></div>
+            <div id="scanResultsContainer" class="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
+                <div class="bg-slate-50 border border-dashed border-slate-300 rounded-lg p-6 text-sm text-slate-600">
+                    Select <span class="font-semibold text-slate-700">Run Scan</span> to analyze existing clients and review the top potential duplicate pairs.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete High Confidence Duplicates Modal -->
+<div id="deleteHighConfidenceModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 backdrop-blur-sm hidden z-50">
+    <div class="relative top-24 mx-auto w-96 bg-white border border-gray-200 rounded-xl shadow-2xl">
+        <div class="px-6 py-5">
+            <div class="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 text-center">Delete High Confidence Duplicates</h3>
+            <p class="mt-3 text-sm text-gray-600 text-center">
+                This will remove every pending high-confidence duplicate and keep the original record they are matched with. This action cannot be undone.
+            </p>
+            <div id="deleteHighConfidenceError" class="hidden mt-4 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm"></div>
+        </div>
+        <div class="px-6 py-4 bg-gray-50 rounded-b-xl flex items-center justify-end space-x-3">
+            <button type="button"
+                    onclick="closeDeleteHighConfidenceModal()"
+                    class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition-all duration-200">
+                Cancel
+            </button>
+            <button type="button"
+                    id="deleteHighConfidenceConfirmButton"
+                    onclick="confirmDeleteHighConfidenceDuplicates()"
+                    class="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
+                </svg>
+                Delete Duplicates
+            </button>
+        </div>
     </div>
 </div>
 
@@ -1343,6 +1485,385 @@
 
 <!-- Simple, reliable modal functions -->
 <script>
+const scanConfidenceClasses = {
+    high: 'bg-red-100 text-red-700 border border-red-200',
+    medium: 'bg-amber-100 text-amber-700 border border-amber-200',
+    low: 'bg-blue-100 text-blue-700 border border-blue-200',
+    very_low: 'bg-gray-100 text-gray-700 border border-gray-200'
+};
+
+function openDeleteHighConfidenceModal() {
+    const modal = document.getElementById('deleteHighConfidenceModal');
+    if (!modal) {
+        console.error('deleteHighConfidenceModal element not found');
+        return;
+    }
+    
+    const errorBox = document.getElementById('deleteHighConfidenceError');
+    if (errorBox) {
+        errorBox.classList.add('hidden');
+        errorBox.textContent = '';
+    }
+    
+    const confirmButton = document.getElementById('deleteHighConfidenceConfirmButton');
+    if (confirmButton) {
+        if (!confirmButton.dataset.defaultHtml) {
+            confirmButton.dataset.defaultHtml = confirmButton.innerHTML;
+        }
+        confirmButton.disabled = false;
+        confirmButton.classList.remove('opacity-60', 'cursor-not-allowed');
+        confirmButton.innerHTML = confirmButton.dataset.defaultHtml;
+    }
+    
+    const triggerButton = document.getElementById('deleteHighConfidenceButton');
+    if (triggerButton) {
+        if (!triggerButton.dataset.defaultHtml) {
+            triggerButton.dataset.defaultHtml = triggerButton.innerHTML;
+        }
+        triggerButton.disabled = false;
+        triggerButton.classList.remove('opacity-60', 'cursor-not-allowed');
+        triggerButton.innerHTML = triggerButton.dataset.defaultHtml;
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+function closeDeleteHighConfidenceModal() {
+    const modal = document.getElementById('deleteHighConfidenceModal');
+    if (!modal) {
+        return;
+    }
+    modal.classList.add('hidden');
+    
+    const confirmButton = document.getElementById('deleteHighConfidenceConfirmButton');
+    if (confirmButton && confirmButton.dataset.defaultHtml) {
+        confirmButton.disabled = false;
+        confirmButton.classList.remove('opacity-60', 'cursor-not-allowed');
+        confirmButton.innerHTML = confirmButton.dataset.defaultHtml;
+    }
+}
+
+function confirmDeleteHighConfidenceDuplicates() {
+    const confirmButton = document.getElementById('deleteHighConfidenceConfirmButton');
+    const triggerButton = document.getElementById('deleteHighConfidenceButton');
+    const errorBox = document.getElementById('deleteHighConfidenceError');
+    const csrfElement = document.querySelector('[name=csrfmiddlewaretoken]');
+    
+    if (!csrfElement) {
+        console.error('CSRF token input not found on the page.');
+        if (errorBox) {
+            errorBox.textContent = 'Unable to locate a CSRF token. Please refresh the page and try again.';
+            errorBox.classList.remove('hidden');
+        }
+        return;
+    }
+    
+    if (errorBox) {
+        errorBox.classList.add('hidden');
+        errorBox.textContent = '';
+    }
+    
+    if (confirmButton) {
+        if (!confirmButton.dataset.defaultHtml) {
+            confirmButton.dataset.defaultHtml = confirmButton.innerHTML;
+        }
+        confirmButton.disabled = true;
+        confirmButton.classList.add('opacity-60', 'cursor-not-allowed');
+        confirmButton.innerHTML = `
+            <svg class="w-4 h-4 mr-2 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            Deleting...
+        `;
+    }
+    
+    if (triggerButton) {
+        if (!triggerButton.dataset.defaultHtml) {
+            triggerButton.dataset.defaultHtml = triggerButton.innerHTML;
+        }
+        triggerButton.disabled = true;
+        triggerButton.classList.add('opacity-60', 'cursor-not-allowed');
+    }
+    
+    fetch("{% url 'clients:dedupe_delete_high_confidence' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfElement.value
+        },
+        body: JSON.stringify({})
+    })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().catch(() => ({})).then(data => {
+                    const errorMessage = data && data.error ? data.error : `Unexpected error (${response.status})`;
+                    throw new Error(errorMessage);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data && data.success) {
+                closeDeleteHighConfidenceModal();
+                showSuccessMessage(data.message || 'Deleted high confidence duplicates.');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                const errorText = (data && data.error) ? data.error : 'Unable to delete duplicates.';
+                throw new Error(errorText);
+            }
+        })
+        .catch(error => {
+            console.error('Failed to delete high confidence duplicates:', error);
+            if (errorBox) {
+                errorBox.textContent = error.message || 'Unable to delete duplicates. Please try again.';
+                errorBox.classList.remove('hidden');
+            }
+            if (confirmButton && confirmButton.dataset.defaultHtml) {
+                confirmButton.disabled = false;
+                confirmButton.classList.remove('opacity-60', 'cursor-not-allowed');
+                confirmButton.innerHTML = confirmButton.dataset.defaultHtml;
+            }
+            if (triggerButton && triggerButton.dataset.defaultHtml) {
+                triggerButton.disabled = false;
+                triggerButton.classList.remove('opacity-60', 'cursor-not-allowed');
+                triggerButton.innerHTML = triggerButton.dataset.defaultHtml;
+            }
+        });
+}
+
+function openScanModal() {
+    const modal = document.getElementById('duplicateScanModal');
+    if (!modal) {
+        console.error('duplicateScanModal element not found');
+        return;
+    }
+    modal.classList.remove('hidden');
+    const statusMessage = document.getElementById('scanStatusMessage');
+    if (statusMessage) {
+        statusMessage.classList.add('hidden');
+        statusMessage.textContent = '';
+    }
+    const errorBox = document.getElementById('scanError');
+    if (errorBox) {
+        errorBox.classList.add('hidden');
+        errorBox.textContent = '';
+    }
+}
+
+function closeScanModal() {
+    const modal = document.getElementById('duplicateScanModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+function runDuplicateScan() {
+    const limitInput = document.getElementById('scanLimitInput');
+    const includeArchivedInput = document.getElementById('scanIncludeArchived');
+    const sourceSelect = document.getElementById('scanSourceFilter');
+    const runButton = document.getElementById('scanRunButton');
+    const loadingState = document.getElementById('scanLoading');
+    const resultsContainer = document.getElementById('scanResultsContainer');
+    const statusMessage = document.getElementById('scanStatusMessage');
+    const errorBox = document.getElementById('scanError');
+    
+    if (!limitInput || !includeArchivedInput || !sourceSelect || !runButton || !loadingState || !resultsContainer) {
+        console.error('Duplicate scan controls are missing from the DOM.');
+        return;
+    }
+    
+    const csrfElement = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!csrfElement) {
+        console.error('CSRF token input not found on the page.');
+        if (errorBox) {
+            errorBox.textContent = 'Unable to locate a CSRF token. Please refresh the page and try again.';
+            errorBox.classList.remove('hidden');
+        }
+        return;
+    }
+    
+    const limit = Math.min(Math.max(parseInt(limitInput.value || '10', 10) || 10, 1), 50);
+    const includeArchived = includeArchivedInput.checked;
+    const source = sourceSelect.value || null;
+    
+    resultsContainer.innerHTML = '';
+    if (statusMessage) {
+        statusMessage.classList.add('hidden');
+        statusMessage.textContent = '';
+    }
+    if (errorBox) {
+        errorBox.classList.add('hidden');
+        errorBox.textContent = '';
+    }
+    
+    runButton.disabled = true;
+    runButton.classList.add('opacity-60', 'cursor-not-allowed');
+    loadingState.classList.remove('hidden');
+    
+    fetch("{% url 'clients:dedupe_run_scan' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfElement.value
+        },
+        body: JSON.stringify({
+            limit: limit,
+            include_archived: includeArchived,
+            source: source
+        })
+    })
+        .then(response => {
+            if (!response.ok) {
+                return response.json().catch(() => ({})).then(data => {
+                    const errorMessage = data && data.error ? data.error : `Unexpected error (${response.status})`;
+                    throw new Error(errorMessage);
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            renderScanResults(data && data.results ? data.results : []);
+            if (statusMessage) {
+                statusMessage.textContent = data && typeof data.count === 'number'
+                    ? `Showing ${data.count} of the top ${limit} matches${source ? ` for source "${source}"` : ''}.`
+                    : 'Scan completed.';
+                statusMessage.classList.remove('hidden');
+            }
+        })
+        .catch(error => {
+            console.error('Duplicate scan failed:', error);
+            if (errorBox) {
+                errorBox.textContent = error.message || 'Unable to run the scan. Please try again.';
+                errorBox.classList.remove('hidden');
+            }
+            renderScanResults([]);
+        })
+        .finally(() => {
+            loadingState.classList.add('hidden');
+            runButton.disabled = false;
+            runButton.classList.remove('opacity-60', 'cursor-not-allowed');
+        });
+}
+
+function renderScanResults(results) {
+    const container = document.getElementById('scanResultsContainer');
+    if (!container) {
+        console.error('scanResultsContainer element not found');
+        return;
+    }
+    
+    container.innerHTML = '';
+    
+    if (!results || !results.length) {
+        container.innerHTML = `
+            <div class="bg-white border border-gray-200 rounded-lg p-6 text-sm text-gray-600 shadow-sm">
+                No additional probable duplicates were found with the current filters.
+            </div>
+        `;
+        return;
+    }
+    
+    results.forEach((result, index) => {
+        const card = document.createElement('div');
+        card.className = 'bg-white border border-gray-200 rounded-xl shadow-sm p-5 space-y-4';
+        
+        const confidenceLevel = result.confidence_level || 'low';
+        const badgeClass = scanConfidenceClasses[confidenceLevel] || scanConfidenceClasses.low;
+        const similarityPercent = result.similarity_score
+            ? Math.round(parseFloat(result.similarity_score) * 100)
+            : null;
+        
+        card.innerHTML = `
+            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                <div>
+                    <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Reason</div>
+                    <div class="text-sm text-gray-700">${escapeHtml(result.reason || 'Potential duplicate')}</div>
+                </div>
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${badgeClass}">
+                    ${escapeHtml((confidenceLevel || '').replace('_', ' ') || 'Unknown')} confidence
+                </span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                ${formatClientBlock(result.primary_client, 'Primary candidate')}
+                ${formatClientBlock(result.duplicate_client, 'Possible duplicate')}
+            </div>
+            <div class="flex items-center text-sm text-gray-600">
+                <span class="font-semibold text-gray-700 mr-2">Similarity score:</span>
+                <span>${similarityPercent !== null ? similarityPercent + '%' : 'n/a'}</span>
+            </div>
+        `;
+        
+        container.appendChild(card);
+    });
+}
+
+function formatClientBlock(client, label) {
+    if (!client) {
+        return `
+            <div class="border border-dashed border-gray-300 rounded-lg p-4 text-sm text-gray-500">
+                Client details unavailable.
+            </div>
+        `;
+    }
+    
+    const name = `${escapeHtml(client.first_name || '')} ${escapeHtml(client.last_name || '')}`.trim() || 'Unknown';
+    const clientId = client.client_id ? escapeHtml(client.client_id) : '—';
+    const source = client.source ? escapeHtml(client.source) : 'Not set';
+    const email = client.email ? escapeHtml(client.email) : '—';
+    const phone = client.phone ? escapeHtml(client.phone) : '—';
+    const dob = client.dob ? escapeHtml(client.dob) : '—';
+    const detailUrl = client.detail_url ? escapeHtml(client.detail_url) : null;
+    const statusBadges = [];
+    
+    if (client.is_archived) {
+        statusBadges.push('<span class="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-600 border border-gray-200 rounded-full text-xs font-medium mr-1">Archived</span>');
+    }
+    if (client.is_inactive) {
+        statusBadges.push('<span class="inline-flex items-center px-2 py-0.5 bg-yellow-100 text-yellow-700 border border-yellow-200 rounded-full text-xs font-medium mr-1">Inactive</span>');
+    }
+    
+    return `
+        <div class="border border-gray-200 rounded-lg p-4 bg-slate-50">
+            <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">${escapeHtml(label)}</div>
+            <div class="text-base font-semibold text-gray-900">${name}</div>
+            <div class="mt-2 space-y-1 text-sm text-gray-600">
+                <div><span class="font-medium text-gray-700">Client ID:</span> ${clientId}</div>
+                <div><span class="font-medium text-gray-700">Source:</span> ${source}</div>
+                <div><span class="font-medium text-gray-700">Email:</span> ${email}</div>
+                <div><span class="font-medium text-gray-700">Phone:</span> ${phone}</div>
+                <div><span class="font-medium text-gray-700">Date of birth:</span> ${dob}</div>
+            </div>
+            ${statusBadges.length ? `<div class="mt-2">${statusBadges.join('')}</div>` : ''}
+            ${detailUrl ? `
+                <div class="mt-3">
+                    <a href="${detailUrl}" target="_blank" rel="noopener"
+                       class="inline-flex items-center text-sm text-blue-600 hover:text-blue-700 font-medium">
+                        View client profile
+                        <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h6m0 0v6m0-6L10 16"></path>
+                        </svg>
+                    </a>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+function escapeHtml(value) {
+    if (value === null || value === undefined) {
+        return '';
+    }
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // Merge Modal Functions
 function openMergeModal(duplicateId) {
     console.log('Opening merge modal for duplicate:', duplicateId);

@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import IntegrityError, transaction
 from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate, ClientUploadLog, ServiceRestrictionNotificationSubscription
@@ -4567,6 +4567,13 @@ class ClientDedupeView(TemplateView):
         # Get filter parameters
         status_filter = self.request.GET.get('status', 'pending')
         confidence_filter = self.request.GET.get('confidence', '')
+        time_filter = self.request.GET.get('time_filter', '')
+        time_filter_choices = [
+            ('last_hour', 'Last Hour'),
+            ('today', 'Today'),
+            ('yesterday', 'Yesterday'),
+            ('last_week', 'Last 7 Days'),
+        ]
         
         # Build optimized query with select_related and only necessary fields
         duplicates_query = ClientDuplicate.objects.select_related(
@@ -4584,6 +4591,26 @@ class ClientDedupeView(TemplateView):
         
         if confidence_filter:
             duplicates_query = duplicates_query.filter(confidence_level=confidence_filter)
+        
+        if time_filter:
+            now = timezone.now()
+            local_now = timezone.localtime(now)
+            if time_filter == 'last_hour':
+                start = now - timedelta(hours=1)
+                duplicates_query = duplicates_query.filter(created_at__gte=start)
+            elif time_filter == 'today':
+                start_today = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+                duplicates_query = duplicates_query.filter(created_at__gte=start_today)
+            elif time_filter == 'yesterday':
+                start_today = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+                start_yesterday = start_today - timedelta(days=1)
+                duplicates_query = duplicates_query.filter(
+                    created_at__gte=start_yesterday,
+                    created_at__lt=start_today
+                )
+            elif time_filter == 'last_week':
+                start_week = local_now - timedelta(days=7)
+                duplicates_query = duplicates_query.filter(created_at__gte=start_week)
         
         # Order by confidence level and similarity score
         duplicates_query = duplicates_query.order_by(
@@ -4627,14 +4654,428 @@ class ClientDedupeView(TemplateView):
             'paginated_groups': paginated_groups,
             'status_filter': status_filter,
             'confidence_filter': confidence_filter,
+            'time_filter': time_filter,
             'status_choices': ClientDuplicate.STATUS_CHOICES,
             'confidence_choices': ClientDuplicate.CONFIDENCE_LEVELS,
+            'time_filter_choices': time_filter_choices,
             'total_duplicates': total_duplicates,
             'pending_duplicates': pending_duplicates,
             'high_confidence_duplicates': high_confidence_duplicates,
         })
         
         return context
+
+
+@csrf_protect
+@require_http_methods(["POST"])
+@jwt_required
+def run_duplicate_scan(request):
+    """Scan existing client data and return the top probable duplicates."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
+    
+    # Reuse the same permission check as the dedupe view
+    try:
+        staff = request.user.staff_profile
+        user_roles = staff.staffrole_set.select_related('role').all()
+        role_names = [staff_role.role.name for staff_role in user_roles]
+        if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
+            return JsonResponse({
+                'success': False,
+                'error': 'You do not have permission to run duplicate scans.'
+            }, status=403)
+    except Exception:
+        # If no staff profile is available we allow the request to continue
+        pass
+    
+    try:
+        payload = json.loads(request.body.decode('utf-8')) if request.body else {}
+    except (ValueError, json.JSONDecodeError):
+        payload = {}
+    
+    limit = payload.get('limit', 10)
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 10
+    limit = max(1, min(limit, 50))
+    
+    include_archived = bool(payload.get('include_archived', False))
+    source_filter = payload.get('source')
+    if isinstance(source_filter, str):
+        source_filter = source_filter.strip() or None
+    else:
+        source_filter = None
+    
+    try:
+        clients_qs = Client.objects.all()
+        if not include_archived:
+            clients_qs = clients_qs.filter(is_archived=False)
+        if source_filter:
+            clients_qs = clients_qs.filter(source=source_filter)
+        
+        clients_qs = clients_qs.only(
+            'id', 'external_id', 'first_name', 'last_name', 'client_id', 'source',
+            'email', 'phone', 'dob', 'is_archived', 'is_inactive', 'created_at'
+        )
+        
+        # Track already flagged duplicates to avoid returning them again
+        existing_pairs = {
+            tuple(sorted(pair))
+            for pair in ClientDuplicate.objects.values_list('primary_client_id', 'duplicate_client_id')
+        }
+        
+        results = []
+        seen_pairs = set()
+        
+        def serialize_client(client):
+            return {
+                'id': client.id,
+                'external_id': str(client.external_id),
+                'detail_url': request.build_absolute_uri(
+                    reverse('clients:detail', kwargs={'external_id': client.external_id})
+                ),
+                'first_name': client.first_name or '',
+                'last_name': client.last_name or '',
+                'client_id': client.client_id or '',
+                'source': client.source or '',
+                'email': client.email or '',
+                'phone': client.phone or '',
+                'dob': client.dob.isoformat() if client.dob else None,
+                'is_archived': bool(client.is_archived),
+                'is_inactive': bool(client.is_inactive),
+            }
+        
+        def add_candidate(client_a, client_b, match_type, reason, score):
+            if not client_a or not client_b or client_a.id == client_b.id:
+                return
+            
+            pair_key = tuple(sorted([client_a.id, client_b.id]))
+            if pair_key in seen_pairs or pair_key in existing_pairs:
+                return
+            
+            # Determine which client should be treated as the primary candidate (oldest record wins)
+            primary, duplicate = client_a, client_b
+            if client_a.created_at and client_b.created_at:
+                if client_b.created_at < client_a.created_at:
+                    primary, duplicate = client_b, client_a
+            elif client_b.id < client_a.id:
+                primary, duplicate = client_b, client_a
+            
+            seen_pairs.add(pair_key)
+            confidence = fuzzy_matcher.get_duplicate_confidence_level(score)
+            
+            results.append({
+                'primary_client': serialize_client(primary),
+                'duplicate_client': serialize_client(duplicate),
+                'match_type': match_type,
+                'reason': reason,
+                'similarity_score': round(float(score), 3),
+                'confidence_level': confidence,
+            })
+        
+        # 1. Exact Client ID + Source matches
+        if len(results) < limit:
+            id_groups = (
+                clients_qs
+                .filter(client_id__isnull=False)
+                .exclude(client_id__exact='')
+                .values('source', 'client_id')
+                .annotate(count=Count('id'))
+                .filter(count__gt=1)
+                .order_by('-count', 'client_id')[:limit * 5]
+            )
+            
+            for group in id_groups:
+                group_clients = list(
+                    clients_qs.filter(
+                        source=group['source'],
+                        client_id=group['client_id']
+                    ).order_by('created_at', 'id')
+                )
+                
+                if len(group_clients) < 2:
+                    continue
+                
+                primary_candidate = group_clients[0]
+                for duplicate_candidate in group_clients[1:]:
+                    reason = f"Matching {group['source'] or 'source'} client ID {group['client_id']}"
+                    add_candidate(primary_candidate, duplicate_candidate, 'matching_client_id', reason, 1.0)
+                    if len(results) >= limit:
+                        break
+                if len(results) >= limit:
+                    break
+        
+        # 2. Exact Email matches
+        if len(results) < limit:
+            email_groups = (
+                clients_qs
+                .filter(email__isnull=False)
+                .exclude(email__exact='')
+                .values('email')
+                .annotate(count=Count('id'))
+                .filter(count__gt=1)
+                .order_by('-count', 'email')[:limit * 5]
+            )
+            
+            for group in email_groups:
+                group_clients = list(
+                    clients_qs.filter(email=group['email']).order_by('created_at', 'id')
+                )
+                
+                if len(group_clients) < 2:
+                    continue
+                
+                primary_candidate = group_clients[0]
+                for duplicate_candidate in group_clients[1:]:
+                    reason = f"Matching email address {group['email']}"
+                    add_candidate(primary_candidate, duplicate_candidate, 'matching_email', reason, 0.99)
+                    if len(results) >= limit:
+                        break
+                if len(results) >= limit:
+                    break
+        
+        # 3. Exact Phone matches
+        if len(results) < limit:
+            phone_groups = (
+                clients_qs
+                .filter(phone__isnull=False)
+                .exclude(phone__exact='')
+                .values('phone')
+                .annotate(count=Count('id'))
+                .filter(count__gt=1)
+                .order_by('-count', 'phone')[:limit * 5]
+            )
+            
+            for group in phone_groups:
+                group_clients = list(
+                    clients_qs.filter(phone=group['phone']).order_by('created_at', 'id')
+                )
+                
+                if len(group_clients) < 2:
+                    continue
+                
+                primary_candidate = group_clients[0]
+                for duplicate_candidate in group_clients[1:]:
+                    reason = f"Matching phone number {group['phone']}"
+                    add_candidate(primary_candidate, duplicate_candidate, 'matching_phone', reason, 0.96)
+                    if len(results) >= limit:
+                        break
+                if len(results) >= limit:
+                    break
+        
+        # 4. Exact Name + DOB matches
+        if len(results) < limit:
+            name_dob_groups = (
+                clients_qs
+                .filter(dob__isnull=False)
+                .exclude(first_name__isnull=True)
+                .exclude(last_name__isnull=True)
+                .exclude(first_name__exact='')
+                .exclude(last_name__exact='')
+                .values('first_name', 'last_name', 'dob')
+                .annotate(count=Count('id'))
+                .filter(count__gt=1)
+                .order_by('-count', 'first_name', 'last_name')[:limit * 5]
+            )
+            
+            for group in name_dob_groups:
+                group_clients = list(
+                    clients_qs.filter(
+                        first_name=group['first_name'],
+                        last_name=group['last_name'],
+                        dob=group['dob']
+                    ).order_by('created_at', 'id')
+                )
+                
+                if len(group_clients) < 2:
+                    continue
+                
+                primary_candidate = group_clients[0]
+                for duplicate_candidate in group_clients[1:]:
+                    reason = (
+                        f"Matching name and date of birth "
+                        f"({group['first_name']} {group['last_name']}, {group['dob']})"
+                    )
+                    add_candidate(primary_candidate, duplicate_candidate, 'matching_name_dob', reason, 0.92)
+                    if len(results) >= limit:
+                        break
+                if len(results) >= limit:
+                    break
+        
+        # 5. Fuzzy name matches (sampled set for performance)
+        if len(results) < limit:
+            fuzzy_candidates = list(
+                clients_qs
+                .filter(first_name__isnull=False, last_name__isnull=False)
+                .exclude(first_name__exact='')
+                .exclude(last_name__exact='')
+                .order_by('last_name', 'first_name')[:400]
+            )
+            
+            if fuzzy_candidates:
+                buckets = {}
+                for client in fuzzy_candidates:
+                    key = (client.last_name[:1] or '').lower()
+                    buckets.setdefault(key, []).append(client)
+                
+                for bucket_clients in buckets.values():
+                    bucket_clients.sort(key=lambda c: (c.last_name.lower(), c.first_name.lower(), c.id))
+                    bucket_size = len(bucket_clients)
+                    if bucket_size < 2:
+                        continue
+                    
+                    for i in range(bucket_size):
+                        if len(results) >= limit:
+                            break
+                        for j in range(i + 1, bucket_size):
+                            c1 = bucket_clients[i]
+                            c2 = bucket_clients[j]
+                            
+                            similarity = fuzzy_matcher.calculate_similarity(
+                                f"{c1.first_name} {c1.last_name}",
+                                f"{c2.first_name} {c2.last_name}"
+                            )
+                            
+                            if c1.dob and c2.dob and c1.dob == c2.dob:
+                                similarity = max(similarity, 0.9)
+                                match_type = 'name_dob_similarity'
+                                reason = 'Similar names with matching date of birth'
+                            else:
+                                match_type = 'fuzzy_name'
+                                reason = 'Similar client names'
+                            
+                            if similarity < 0.88:
+                                continue
+                            
+                            add_candidate(c1, c2, match_type, reason, similarity)
+                            if len(results) >= limit:
+                                break
+                        if len(results) >= limit:
+                            break
+                    if len(results) >= limit:
+                        break
+        
+        results.sort(key=lambda item: item['similarity_score'], reverse=True)
+        limited_results = results[:limit]
+        
+        return JsonResponse({
+            'success': True,
+            'results': limited_results,
+            'count': len(limited_results),
+            'limit': limit,
+            'include_archived': include_archived,
+            'source': source_filter,
+        })
+    
+    except Exception as exc:
+        logger.error(f"Error running duplicate scan: {exc}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': f'Error scanning for duplicates: {str(exc)}'
+        }, status=500)
+
+
+@csrf_protect
+@require_http_methods(["POST"])
+@jwt_required
+def delete_high_confidence_duplicates(request):
+    """Delete high-confidence duplicate clients while keeping their matched primary records."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
+    
+    # Reuse the same permission rules as the dedupe dashboard
+    try:
+        staff = request.user.staff_profile
+        user_roles = staff.staffrole_set.select_related('role').all()
+        role_names = [staff_role.role.name for staff_role in user_roles]
+        if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
+            return JsonResponse({
+                'success': False,
+                'error': 'You do not have permission to delete duplicates.'
+            }, status=403)
+    except Exception:
+        # Allow the request to proceed if no staff profile is associated
+        pass
+    
+    duplicates = (
+        ClientDuplicate.objects
+        .filter(status='pending', confidence_level='high')
+        .select_related('primary_client', 'duplicate_client')
+        .order_by('-created_at')
+    )
+    
+    if not duplicates.exists():
+        return JsonResponse({
+            'success': True,
+            'message': 'No high confidence duplicates to delete.',
+            'deleted_count': 0,
+            'details': []
+        })
+    
+    deleted_records = []
+    errors = []
+    
+    for duplicate in duplicates:
+        primary_client = duplicate.primary_client
+        duplicate_client = duplicate.duplicate_client
+        
+        if not primary_client or not duplicate_client:
+            errors.append({
+                'duplicate_id': duplicate.id,
+                'error': 'Missing primary or duplicate client reference.'
+            })
+            continue
+        
+        if primary_client.id == duplicate_client.id:
+            errors.append({
+                'duplicate_id': duplicate.id,
+                'error': 'Primary and duplicate reference the same client.'
+            })
+            continue
+        
+        kept_name = f"{(primary_client.first_name or '').strip()} {(primary_client.last_name or '').strip()}".strip() or f"Client {primary_client.id}"
+        deleted_name = f"{(duplicate_client.first_name or '').strip()} {(duplicate_client.last_name or '').strip()}".strip() or f"Client {duplicate_client.id}"
+        
+        try:
+            with transaction.atomic():
+                duplicate_client.delete()
+                duplicate.delete()
+                deleted_records.append({
+                    'kept': kept_name,
+                    'deleted': deleted_name
+                })
+        except Exception as exc:
+            logger.error(
+                "Failed to delete duplicate client %s (keeping %s): %s",
+                duplicate_client.id,
+                primary_client.id,
+                exc
+            )
+            errors.append({
+                'duplicate_id': duplicate.id,
+                'error': str(exc)
+            })
+    
+    if not deleted_records:
+        return JsonResponse({
+            'success': False,
+            'error': 'Unable to delete high confidence duplicates.',
+            'deleted_count': 0,
+            'details': [],
+            'failures': errors
+        }, status=500)
+    
+    message = f"Deleted {len(deleted_records)} high confidence duplicate(s)."
+    
+    return JsonResponse({
+        'success': True,
+        'message': message,
+        'deleted_count': len(deleted_records),
+        'details': deleted_records,
+        'failures': errors,
+        'redirect_url': reverse('clients:dedupe')
+    })
 
 
 @require_http_methods(["GET", "POST"])
