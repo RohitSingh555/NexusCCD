@@ -17,4 +17,4 @@ python manage.py collectstatic --noinput
 
 # Start Gunicorn
 echo "Starting Gunicorn server..."
-exec gunicorn ccd.wsgi:application --bind 0.0.0.0:8000
+exec gunicorn ccd.wsgi:application --bind 0.0.0.0:8000 --timeout 0

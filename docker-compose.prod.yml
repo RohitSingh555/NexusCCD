@@ -16,7 +16,7 @@ services:
       - .env.prod
     depends_on:
       - db
-    command: gunicorn ccd.wsgi:application --bind 0.0.0.0:8000 --workers 3
+    command: gunicorn ccd.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 0
 
   db:
     image: postgres:15
