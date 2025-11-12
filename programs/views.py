@@ -949,6 +949,17 @@ class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
         
         return super().dispatch(request, *args, **kwargs)
     
+    def get_form(self, form_class=None):
+        """Filter out HASS from department dropdown"""
+        form = super().get_form(form_class)
+        if 'department' in form.fields:
+            form.fields['department'].queryset = Department.objects.filter(
+                is_archived=False
+            ).exclude(
+                name__iexact='HASS'
+            ).order_by('name')
+        return form
+    
     def get_initial(self):
         """Set default values for the form"""
         initial = super().get_initial()
@@ -1067,6 +1078,17 @@ class ProgramUpdateView(ProgramManagerAccessMixin, UpdateView):
                 raise Http404("Program not found or access denied")
         
         return obj
+    
+    def get_form(self, form_class=None):
+        """Filter out HASS from department dropdown"""
+        form = super().get_form(form_class)
+        if 'department' in form.fields:
+            form.fields['department'].queryset = Department.objects.filter(
+                is_archived=False
+            ).exclude(
+                name__iexact='HASS'
+            ).order_by('name')
+        return form
     
     def form_valid(self, form):
         """Handle program updates with audit logging"""

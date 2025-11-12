@@ -127,7 +127,7 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         return result
     
     def get_queryset(self):
-        from django.db.models import Q
+        from django.db.models import Q, Count
         from datetime import date
         
         # Start with base queryset - exclude archived clients by default
@@ -256,7 +256,7 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         
         if search_query:
             # Search across multiple fields using Q objects
-            queryset = queryset.filter(
+            search_filters = Q(
                 Q(first_name__icontains=search_query) |
                 Q(last_name__icontains=search_query) |
                 Q(preferred_name__icontains=search_query) |
@@ -264,8 +264,51 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
                 Q(contact_information__email__icontains=search_query) |
                 Q(contact_information__phone__icontains=search_query) |
                 Q(client_id__icontains=search_query) |
-                Q(uid_external__icontains=search_query)
-            ).distinct()
+                Q(uid_external__icontains=search_query) |
+                Q(postal_code__icontains=search_query) |
+                Q(chart_number__icontains=search_query)
+            )
+            
+            # Also search by primary key ID if search_query is numeric (CCD ID)
+            try:
+                search_id = int(search_query)
+                search_filters |= Q(id=search_id)
+            except (ValueError, TypeError):
+                pass
+            
+            # Search by DOB (Date of Birth) - try multiple date formats
+            from datetime import datetime
+            dob_found = False
+            date_formats = [
+                '%Y-%m-%d',      # 1990-01-15
+                '%m/%d/%Y',      # 01/15/1990
+                '%d/%m/%Y',      # 15/01/1990
+                '%m-%d-%Y',      # 01-15-1990
+                '%d-%m-%Y',      # 15-01-1990
+                '%Y/%m/%d',      # 1990/01/15
+                '%m.%d.%Y',      # 01.15.1990
+                '%d.%m.%Y',      # 15.01.1990
+            ]
+            
+            for date_format in date_formats:
+                try:
+                    parsed_date = datetime.strptime(search_query.strip(), date_format).date()
+                    search_filters |= Q(dob=parsed_date)
+                    dob_found = True
+                    break
+                except (ValueError, TypeError):
+                    continue
+            
+            # Also try searching by year only (e.g., "1990" to find all clients born in 1990)
+            if not dob_found and len(search_query.strip()) == 4:
+                try:
+                    year = int(search_query.strip())
+                    if 1900 <= year <= 2100:  # Reasonable year range
+                        search_filters |= Q(dob__year=year)
+                except (ValueError, TypeError):
+                    pass
+            
+            queryset = queryset.filter(search_filters).distinct()
         
         if program_filter:
             # Filter clients enrolled in the selected program
@@ -300,6 +343,35 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         # Gender filtering
         if gender_filter:
             queryset = queryset.filter(gender=gender_filter)
+        
+        # Enrollment count filtering
+        enrollment_count_filter = self.request.GET.get('enrollment_count', '').strip()
+        if enrollment_count_filter:
+            if enrollment_count_filter == '0':
+                # Clients with no enrollments
+                queryset = queryset.annotate(
+                    enrollment_count_temp=Count('clientprogramenrollment', filter=Q(clientprogramenrollment__is_archived=False), distinct=True)
+                ).filter(enrollment_count_temp=0)
+            elif enrollment_count_filter == '1':
+                # Clients with exactly 1 enrollment
+                queryset = queryset.annotate(
+                    enrollment_count_temp=Count('clientprogramenrollment', filter=Q(clientprogramenrollment__is_archived=False), distinct=True)
+                ).filter(enrollment_count_temp=1)
+            elif enrollment_count_filter == '2-5':
+                # Clients with 2-5 enrollments
+                queryset = queryset.annotate(
+                    enrollment_count_temp=Count('clientprogramenrollment', filter=Q(clientprogramenrollment__is_archived=False), distinct=True)
+                ).filter(enrollment_count_temp__gte=2, enrollment_count_temp__lte=5)
+            elif enrollment_count_filter == '6-10':
+                # Clients with 6-10 enrollments
+                queryset = queryset.annotate(
+                    enrollment_count_temp=Count('clientprogramenrollment', filter=Q(clientprogramenrollment__is_archived=False), distinct=True)
+                ).filter(enrollment_count_temp__gte=6, enrollment_count_temp__lte=10)
+            elif enrollment_count_filter == '11+':
+                # Clients with 11+ enrollments
+                queryset = queryset.annotate(
+                    enrollment_count_temp=Count('clientprogramenrollment', filter=Q(clientprogramenrollment__is_archived=False), distinct=True)
+                ).filter(enrollment_count_temp__gte=11)
         
         # Program manager filtering - only apply if user has permission and manager is selected
         manager_filter = self.request.GET.get('manager', '')
@@ -466,6 +538,17 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         context['current_program'] = self.request.GET.get('program', '')
         context['current_manager'] = self.request.GET.get('manager', '')
         context['current_status'] = self.request.GET.get('status', '')
+        context['enrollment_count_filter'] = self.request.GET.get('enrollment_count', '')
+        
+        # Check if user is a Leader
+        is_leader = False
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                is_leader = staff.is_leader()
+            except Exception:
+                pass
+        context['is_leader'] = is_leader
         
         # Calculate age for each client
         from datetime import date
@@ -812,18 +895,18 @@ class ClientDetailView(AnalystAccessMixin, DetailView):
         context = super().get_context_data(**kwargs)
         client = context['client']
         
-        # Get enrollments with optimized queries, ordered by start_date descending
+        # Get enrollments with optimized queries, ordered by start_date ascending (chronologically)
         # Exclude archived (soft-deleted) enrollments from the main view
         enrollments = client.clientprogramenrollment_set.select_related(
             'program__department',
             'sub_program'
-        ).filter(is_archived=False).order_by('-start_date', 'program__name')
+        ).filter(is_archived=False).order_by('start_date', 'program__name')
         
         # Also get archived enrollments for restore functionality
         archived_enrollments = client.clientprogramenrollment_set.select_related(
             'program__department',
             'sub_program'
-        ).filter(is_archived=True).order_by('-start_date', 'program__name')
+        ).filter(is_archived=True).order_by('start_date', 'program__name')
         
         context['enrollments'] = enrollments
         context['archived_enrollments'] = archived_enrollments
@@ -846,6 +929,11 @@ class ClientCreateView(AnalystAccessMixin, CreateView):
                 
                 # Staff role users cannot create clients
                 if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
+                    messages.error(request, 'You do not have permission to create clients. Contact your administrator.')
+                    return redirect('clients:list')
+                
+                # Leader role users cannot create clients
+                if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
                     messages.error(request, 'You do not have permission to create clients. Contact your administrator.')
                     return redirect('clients:list')
             except Exception:
@@ -1507,6 +1595,11 @@ class ClientUploadView(TemplateView):
                 if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager','Admin'] for role in role_names):
                     messages.error(request, 'You do not have permission to upload clients. Contact your administrator.')
                     return redirect('clients:list')
+                
+                # Leader role users cannot upload clients
+                if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+                    messages.error(request, 'You do not have permission to upload clients. Contact your administrator.')
+                    return redirect('clients:list')
             except Exception:
                 pass
         
@@ -1535,6 +1628,10 @@ def upload_clients(request):
             # Staff role users cannot upload clients
             if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
                 return JsonResponse({'success': False, 'error': 'You do not have permission to upload clients. Contact your administrator.'}, status=403)
+            
+            # Leader role users cannot upload clients
+            if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+                return JsonResponse({'success': False, 'error': 'You do not have permission to upload clients. Contact your administrator.'}, status=403)
         except Exception:
             pass
     
@@ -1544,11 +1641,11 @@ def upload_clients(request):
             return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
         
         # Get the source parameter
-        source = request.POST.get('source', 'SMIMS')  # Default to SMIMS if not provided
+        source = request.POST.get('source', 'SMIS')  # Default to SMIS if not provided
         logger.info(f"Upload request - source: {source}, file: {request.FILES.get('file', {}).name if 'file' in request.FILES else 'None'}")
-        if source not in ['SMIMS', 'EMHware']:
+        if source not in ['SMIS', 'EMHware']:
             logger.error(f"Upload failed: Invalid source '{source}'")
-            return JsonResponse({'success': False, 'error': 'Invalid source. Must be SMIMS or EMHware.'}, status=400)
+            return JsonResponse({'success': False, 'error': 'Invalid source. Must be SMIS or EMHware.'}, status=400)
         
         file = request.FILES['file']
         file_extension = file.name.split('.')[-1].lower()
@@ -2662,7 +2759,7 @@ def upload_clients(request):
                         return client, f"name_similarity_{similarity:.2f}"
             
             # Priority 5: Name + Date of Birth combination (limited query)
-            # Only check against clients from different sources when source is SMIMS or EMHware
+            # Only check against clients from different sources when source is SMIS or EMHware
             if full_name and dob and dob != datetime(1900, 1, 1).date():
                 first_name_val = client_data.get('first_name') or ''
                 last_name_val = client_data.get('last_name') or ''
@@ -2673,20 +2770,20 @@ def upload_clients(request):
                     last_name__iexact=last_name_clean,
                     dob=dob
                 )
-                # Exclude same source for SMIMS/EMHware cross-source duplicate detection
-                if source in ['SMIMS', 'EMHware']:
+                # Exclude same source for SMIS/EMHware cross-source duplicate detection
+                if source in ['SMIS', 'EMHware']:
                     name_dob_query = name_dob_query.exclude(source=source)
                 name_dob_match = name_dob_query.first()
                 if name_dob_match:
                     return name_dob_match, "name_dob_match"
             
             # Priority 6: Date of Birth + Name similarity (limited query)
-            # Only check against clients from different sources when source is SMIMS or EMHware
+            # Only check against clients from different sources when source is SMIS or EMHware
             if dob and dob != datetime(1900, 1, 1).date():
                 # Build query with exclude before slicing
                 dob_query = Client.objects.filter(dob=dob).only('id', 'first_name', 'last_name')
-                # Exclude same source for SMIMS/EMHware cross-source duplicate detection
-                if source in ['SMIMS', 'EMHware']:
+                # Exclude same source for SMIS/EMHware cross-source duplicate detection
+                if source in ['SMIS', 'EMHware']:
                     dob_query = dob_query.exclude(source=source)
                 # Apply limit after all filters
                 dob_query = dob_query[:100]  # Limit to 100
@@ -3530,12 +3627,12 @@ def upload_clients(request):
                         skipped_count += 1
                         continue
                     
-                    # For SMIMS and EMHware sources: Check for name-based duplicates if no ID match found
+                    # For SMIS and EMHware sources: Check for name-based duplicates if no ID match found
                     duplicate_client = None
                     match_type = None
                     name_duplicate_similarity = None
                     
-                    if source in ['SMIMS', 'EMHware']:
+                    if source in ['SMIS', 'EMHware']:
                         # Check for name-based duplicates using fuzzy matching
                         first_name_str = str(client_data.get('first_name') or '')
                         last_name_str = str(client_data.get('last_name') or '')
@@ -3991,12 +4088,24 @@ def upload_clients(request):
     except Exception as e:
         logger.error(f"Upload error: {str(e)}")
         
+        # Log the full error with traceback for debugging
+        import traceback
+        error_traceback = traceback.format_exc()
+        logger.error(f"Upload failed with exception: {str(e)}\nTraceback:\n{error_traceback}")
+        
         # Update upload log with error
         if upload_log:
             try:
                 upload_log.completed_at = timezone.now()
                 upload_log.status = 'failed'
                 upload_log.error_message = str(e)
+                # Store error details in error_details JSON field
+                # error_details is a JSONField that can store dict or list
+                upload_log.error_details = {
+                    'error': str(e),
+                    'error_type': type(e).__name__,
+                    'traceback': error_traceback
+                }
                 if 'file' in locals():
                     upload_log.file_name = file.name if hasattr(file, 'name') else 'Unknown'
                     upload_log.file_size = file.size if hasattr(file, 'size') else 0
@@ -4004,10 +4113,30 @@ def upload_clients(request):
             except Exception as log_error:
                 logger.error(f"Failed to update upload log with error: {log_error}")
         
-        # Provide user-friendly error message
+        # Provide more detailed error message based on error type
+        error_message = 'Upload failed. Please check your file format and try again. If the problem persists, contact your system administrator.'
+        
+        # Provide more specific error messages for common issues
+        error_str = str(e).lower()
+        if 'database' in error_str or 'connection' in error_str:
+            error_message = 'Database connection error. Please try again in a moment. If the problem persists, contact your system administrator.'
+        elif 'memory' in error_str or 'out of memory' in error_str:
+            error_message = 'File is too large to process. Please try uploading a smaller file or split it into multiple files.'
+        elif 'permission' in error_str or 'access' in error_str:
+            error_message = 'Permission denied. You do not have access to upload clients.'
+        elif 'validation' in error_str or 'invalid' in error_str:
+            error_message = f'Validation error: {str(e)}. Please check your file format and data.'
+        elif 'timeout' in error_str:
+            error_message = 'Upload timed out. The file may be too large. Please try a smaller file.'
+        else:
+            # Include the actual error in development mode for debugging
+            if settings.DEBUG:
+                error_message = f'Upload failed: {str(e)}. Check server logs for details.'
+        
         return JsonResponse({
             'success': False, 
-            'error': 'Upload failed. Please check your file format and try again. If the problem persists, contact your system administrator.'
+            'error': error_message,
+            'error_type': type(e).__name__ if settings.DEBUG else None
         }, status=500)
 
 @require_http_methods(["GET"])
@@ -4554,6 +4683,11 @@ class ClientDedupeView(TemplateView):
                 if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
                     messages.error(request, 'You do not have permission to access duplicate detection. Contact your administrator.')
                     return redirect('clients:list')
+                
+                # Leader role users cannot access duplicate detection
+                if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+                    messages.error(request, 'You do not have permission to access duplicate detection. Contact your administrator.')
+                    return redirect('clients:list')
             except Exception:
                 pass
         
@@ -4568,23 +4702,30 @@ class ClientDedupeView(TemplateView):
         status_filter = self.request.GET.get('status', 'pending')
         confidence_filter = self.request.GET.get('confidence', '')
         time_filter = self.request.GET.get('time_filter', '')
+        tab_filter = self.request.GET.get('tab', 'all')  # 'all' or 'scanned'
         time_filter_choices = [
+            ('', 'All Time'),
             ('last_hour', 'Last Hour'),
             ('today', 'Today'),
             ('yesterday', 'Yesterday'),
             ('last_week', 'Last 7 Days'),
+            ('last_month', 'Last 30 Days'),
         ]
         
         # Build optimized query with select_related and only necessary fields
         duplicates_query = ClientDuplicate.objects.select_related(
             'primary_client', 'duplicate_client'
         ).only(
-            'id', 'status', 'confidence_level', 'similarity_score', 'created_at',
+            'id', 'status', 'confidence_level', 'similarity_score', 'created_at', 'detection_source',
             'primary_client__id', 'primary_client__first_name', 'primary_client__last_name',
             'primary_client__external_id', 'primary_client__client_id',
             'duplicate_client__id', 'duplicate_client__first_name', 'duplicate_client__last_name',
             'duplicate_client__external_id', 'duplicate_client__client_id'
         ).all()
+        
+        # Filter by tab (all duplicates vs scanned duplicates)
+        if tab_filter == 'scanned':
+            duplicates_query = duplicates_query.filter(detection_source='scan')
         
         if status_filter:
             duplicates_query = duplicates_query.filter(status=status_filter)
@@ -4611,6 +4752,9 @@ class ClientDedupeView(TemplateView):
             elif time_filter == 'last_week':
                 start_week = local_now - timedelta(days=7)
                 duplicates_query = duplicates_query.filter(created_at__gte=start_week)
+            elif time_filter == 'last_month':
+                start_month = local_now - timedelta(days=30)
+                duplicates_query = duplicates_query.filter(created_at__gte=start_month)
         
         # Order by confidence level and similarity score
         duplicates_query = duplicates_query.order_by(
@@ -4648,6 +4792,10 @@ class ClientDedupeView(TemplateView):
         high_confidence_duplicates = ClientDuplicate.objects.filter(
             confidence_level='high', status='pending'
         ).count()
+        scanned_duplicates = ClientDuplicate.objects.filter(detection_source='scan').count()
+        scanned_pending_duplicates = ClientDuplicate.objects.filter(
+            detection_source='scan', status='pending'
+        ).count()
         
         context.update({
             'grouped_duplicates': {i: group for i, group in enumerate(paginated_groups)},
@@ -4655,12 +4803,15 @@ class ClientDedupeView(TemplateView):
             'status_filter': status_filter,
             'confidence_filter': confidence_filter,
             'time_filter': time_filter,
+            'tab_filter': tab_filter,
             'status_choices': ClientDuplicate.STATUS_CHOICES,
             'confidence_choices': ClientDuplicate.CONFIDENCE_LEVELS,
             'time_filter_choices': time_filter_choices,
             'total_duplicates': total_duplicates,
             'pending_duplicates': pending_duplicates,
             'high_confidence_duplicates': high_confidence_duplicates,
+            'scanned_duplicates': scanned_duplicates,
+            'scanned_pending_duplicates': scanned_pending_duplicates,
         })
         
         return context
@@ -4959,13 +5110,67 @@ def run_duplicate_scan(request):
         results.sort(key=lambda item: item['similarity_score'], reverse=True)
         limited_results = results[:limit]
         
+        # Automatically mark duplicates by creating ClientDuplicate records
+        created_count = 0
+        skipped_count = 0
+        errors = []
+        
+        # Use transaction to ensure all duplicates are marked atomically
+        from django.db import transaction
+        with transaction.atomic():
+            for result in limited_results:
+                try:
+                    primary_client_id = result['primary_client']['id']
+                    duplicate_client_id = result['duplicate_client']['id']
+                    
+                    # Get the actual client objects
+                    primary_client = Client.objects.get(id=primary_client_id)
+                    duplicate_client = Client.objects.get(id=duplicate_client_id)
+                    
+                    # Check if duplicate record already exists
+                    existing_duplicate = ClientDuplicate.objects.filter(
+                        primary_client=primary_client,
+                        duplicate_client=duplicate_client
+                    ).first()
+                    
+                    if existing_duplicate:
+                        skipped_count += 1
+                        continue
+                    
+                    # Create the ClientDuplicate record with status='pending'
+                    ClientDuplicate.objects.create(
+                        primary_client=primary_client,
+                        duplicate_client=duplicate_client,
+                        similarity_score=result['similarity_score'],
+                        match_type=result['match_type'],
+                        confidence_level=result['confidence_level'],
+                        status='pending',
+                        detection_source='scan',
+                        match_details={
+                            'reason': result['reason'],
+                            'source': 'scan_existing_data',
+                            'scanned_at': timezone.now().isoformat()
+                        }
+                    )
+                    created_count += 1
+                    
+                except Client.DoesNotExist as e:
+                    errors.append(f"Client not found: {str(e)}")
+                except Exception as e:
+                    errors.append(f"Error creating duplicate record: {str(e)}")
+                    logger.error(f"Error creating ClientDuplicate record: {e}", exc_info=True)
+        
         return JsonResponse({
             'success': True,
             'results': limited_results,
             'count': len(limited_results),
+            'created_count': created_count,
+            'skipped_count': skipped_count,
+            'errors': errors if errors else None,
             'limit': limit,
             'include_archived': include_archived,
             'source': source_filter,
+            'message': f'Scan completed. Marked {created_count} duplicates, skipped {skipped_count} existing records.'
         })
     
     except Exception as exc:
@@ -5691,6 +5896,7 @@ def client_merge_view(request, duplicate_id):
             # Always include the field if either client has a value
             # Also always include important fields even if empty
             important_fields = [
+                'dob',  # Always show DOB for merge selection
                 'level_of_support', 'client_type', 'referral_source', 'receiving_services',
                 'receiving_services_date', 'days_elapsed', 'reason_discharge', 'support_workers'
             ]
@@ -5769,6 +5975,12 @@ def merge_clients(request, duplicate_id):
         print(f"Primary client: {primary_client.first_name} {primary_client.last_name}")
         print(f"Duplicate client: {duplicate_client.first_name} {duplicate_client.last_name}")
         
+        # Store original client IDs and sources before merge (for legacy_client_ids tracking)
+        primary_client_id = primary_client.client_id
+        primary_source = primary_client.source
+        duplicate_client_id = duplicate_client.client_id
+        duplicate_source = duplicate_client.source
+        
         # Use the primary client as the base and update it with selected fields
         merged_client = primary_client
         
@@ -5813,9 +6025,52 @@ def merge_clients(request, duplicate_id):
                 # Update regular fields (including email, phone, phone_work, phone_alt)
                 setattr(merged_client, field_name, value)
         
+        # Handle legacy client IDs - save multiple IDs if present from different sources
+        # Use original values before merge to capture both IDs
+        legacy_ids = []
+        
+        # Get existing legacy IDs from primary client
+        if merged_client.legacy_client_ids:
+            legacy_ids = list(merged_client.legacy_client_ids)
+        
+        # Add primary client's original ID if it exists and has a source
+        if primary_client_id and primary_source:
+            # Check if this ID already exists in legacy_ids
+            existing_entry = next(
+                (entry for entry in legacy_ids if entry.get('client_id') == primary_client_id and entry.get('source') == primary_source),
+                None
+            )
+            if not existing_entry:
+                legacy_ids.append({
+                    'source': primary_source,
+                    'client_id': primary_client_id
+                })
+        
+        # Add duplicate client's ID if it exists and has a source
+        if duplicate_client_id and duplicate_source:
+            # Check if this ID already exists in legacy_ids
+            existing_entry = next(
+                (entry for entry in legacy_ids if entry.get('client_id') == duplicate_client_id and entry.get('source') == duplicate_source),
+                None
+            )
+            if not existing_entry:
+                legacy_ids.append({
+                    'source': duplicate_source,
+                    'client_id': duplicate_client_id
+                })
+        
+        # Update legacy_client_ids
+        merged_client.legacy_client_ids = legacy_ids
+        
+        # Set secondary_source_id to the duplicate client's original client_id
+        if duplicate_client_id:
+            merged_client.secondary_source_id = duplicate_client_id
+        
         # Save the updated primary client
         merged_client.save()
         print(f"Updated merged client: {merged_client}")
+        print(f"Legacy client IDs: {merged_client.legacy_client_ids}")
+        print(f"Secondary source ID: {merged_client.secondary_source_id}")
         
         # Delete only the duplicate client (keep the primary one)
         duplicate_client.delete()

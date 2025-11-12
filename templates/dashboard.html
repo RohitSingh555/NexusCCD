@@ -24,7 +24,7 @@
                     </div>
                 </div>
                 <div class="ml-4 flex-1">
-                    <p class="text-sm font-medium text-gray-600">Total Clients</p>
+                    <p class="text-sm font-medium text-gray-600">Active Clients</p>
                     <p class="text-2xl font-semibold text-gray-900">{{ total_clients }}</p>
                 </div>
             </div>
@@ -39,11 +39,11 @@
                     <!-- Tooltip -->
                     <div class="absolute top-full right-0 mt-2 w-64 p-3 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-10">
                         <div class="absolute bottom-full right-4 w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900"></div>
-                        <p class="font-medium mb-1">Total Clients</p>
+                        <p class="font-medium mb-1">Active Clients</p>
                         {% if is_staff_only or is_program_manager %}
-                        <p class="text-gray-300">This shows the total number of clients enrolled in your assigned programs.</p>
+                        <p class="text-gray-300">This shows the number of active clients enrolled in your assigned programs (clients with at least one active enrollment).</p>
                         {% else %}
-                        <p class="text-gray-300">This shows the total number of clients registered in the system, including both active and inactive clients.</p>
+                        <p class="text-gray-300">This shows the number of active clients in the system (clients with at least one active enrollment).</p>
                         {% endif %}
                     </div>
                 </div>

@@ -323,7 +323,7 @@ class ServiceRestrictionForm(forms.ModelForm):
     
     class Meta:
         model = ServiceRestriction
-        fields = ['client', 'scope', 'program', 'restriction_type', 'is_bill_168', 'is_no_trespass', 'start_date', 'end_date', 'is_indefinite', 'behaviors', 'notes', 'entered_by']
+        fields = ['client', 'scope', 'program', 'restriction_type', 'is_bill_168', 'is_no_trespass', 'start_date', 'end_date', 'is_indefinite', 'behaviors', 'notes', 'entered_by', 'affected_staff']
         widgets = {
             'restriction_type': forms.HiddenInput(),
             'start_date': forms.DateInput(attrs={'type': 'date', 'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent'}),
@@ -372,10 +372,21 @@ class ServiceRestrictionForm(forms.ModelForm):
         self.fields['entered_by'].help_text = "Select the staff member who entered this restriction"
         self.fields['entered_by'].required = False
         
+        # Configure affected_staff field
+        self.fields['affected_staff'].widget.attrs.update({
+            'class': 'w-full px-4 py-3 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-sky focus:border-transparent'
+        })
+        self.fields['affected_staff'].queryset = Staff.objects.filter(active=True, user__isnull=False).select_related('user').order_by('first_name', 'last_name')
+        self.fields['affected_staff'].help_text = "Select the staff member who is affected by or involved in this restriction"
+        self.fields['affected_staff'].required = False
+        
         
         if program_queryset is not None:
             self.fields['program'].queryset = program_queryset
-        
+        else:
+            # Alphabetize the default queryset if no custom queryset is provided
+            from .models import Program
+            self.fields['program'].queryset = Program.objects.all().order_by('name')
         
         self.fields['is_indefinite'].help_text = "Check this box if the restriction has no end date"
         self.fields['behaviors'].help_text = "Select all behaviors that apply to this restriction (only shown for Behavioral Issues type)"

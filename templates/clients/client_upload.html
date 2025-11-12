@@ -94,16 +94,16 @@
                     <p class="text-sm text-neutral-600 font-body mb-4">Choose the source system for the client data you're uploading:</p>
                     <div class="flex space-x-4">
                         <label class="flex items-center p-4 border-2 border-neutral-200 rounded-lg cursor-pointer hover:border-brand-sky transition-all duration-200" 
-                               :class="{ 'border-brand-sky bg-brand-sky/5': selectedSource === 'SMIMS' }">
-                            <input type="radio" name="source" value="SMIMS" x-model="selectedSource" class="sr-only">
+                               :class="{ 'border-brand-sky bg-brand-sky/5': selectedSource === 'SMIS' }">
+                            <input type="radio" name="source" value="SMIS" x-model="selectedSource" class="sr-only">
                             <div class="flex items-center space-x-3">
                                 <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center" 
-                                     :class="{ 'border-brand-sky bg-brand-sky': selectedSource === 'SMIMS', 'border-neutral-300': selectedSource !== 'SMIMS' }">
-                                    <div x-show="selectedSource === 'SMIMS'" class="w-2 h-2 bg-white rounded-full"></div>
+                                     :class="{ 'border-brand-sky bg-brand-sky': selectedSource === 'SMIS', 'border-neutral-300': selectedSource !== 'SMIS' }">
+                                    <div x-show="selectedSource === 'SMIS'" class="w-2 h-2 bg-white rounded-full"></div>
                                 </div>
                                 <div>
-                                    <div class="font-bold text-neutral-900">SMIMS</div>
-                                    <div class="text-sm text-neutral-600">Select for SMIMS system data</div>
+                                    <div class="font-bold text-neutral-900">SMIS</div>
+                                    <div class="text-sm text-neutral-600">Select for SMIS system data</div>
                                 </div>
                             </div>
                         </label>
@@ -678,7 +678,7 @@ function uploadManager() {
         currentStep: 0,
         successMessage: '',
         errorMessage: '',
-        selectedSource: 'SMIMS', // Default to SMIMS
+        selectedSource: 'SMIS', // Default to SMIS
         
         handleFileDrop(event) {
             this.isDragging = false;
@@ -794,6 +794,24 @@ function uploadManager() {
                     }
                 });
                 
+                // Check if response is ok before parsing JSON
+                if (!response.ok) {
+                    let errorText = `HTTP ${response.status}: ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        if (errorData.error) {
+                            errorText = errorData.error;
+                        }
+                    } catch (e) {
+                        // If JSON parsing fails, use the status text
+                        const text = await response.text();
+                        if (text) {
+                            errorText = text.substring(0, 200); // Limit error text length
+                        }
+                    }
+                    throw new Error(errorText);
+                }
+                
                 const result = await response.json();
                 
                 if (result.success) {
@@ -901,10 +919,13 @@ function uploadManager() {
                 }
             } catch (error) {
                 console.error('Upload error:', error);
+                // Show the actual error message if available
+                const errorMsg = error.message || 'Upload failed. Please try again.';
                 this.errorMessage = `
                     <div class="space-y-2">
-                        <p class="font-semibold">Upload failed. Please try again.</p>
+                        <p class="font-semibold">${errorMsg}</p>
                         <p class="text-sm text-red-600">If the problem persists, contact your system administrator.</p>
+                        ${error.stack ? `<details class="text-xs text-red-500 mt-2"><summary>Technical Details</summary><pre class="mt-2 whitespace-pre-wrap">${error.stack.substring(0, 500)}</pre></details>` : ''}
                     </div>
                 `;
             } finally {

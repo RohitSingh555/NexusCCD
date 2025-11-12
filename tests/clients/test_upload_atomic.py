@@ -41,7 +41,7 @@ def test_upload_rolls_back_on_bulk_create_failure(client, monkeypatch):
 
     # Hit the upload endpoint
     url = reverse("clients:upload_process")
-    response = client.post(url, {"file": uploaded, "source": "SMIMS"})
+    response = client.post(url, {"file": uploaded, "source": "SMIS"})
 
     # The view catches at the outermost except and returns 500 on failure
     assert response.status_code == 500

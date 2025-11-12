@@ -176,6 +176,35 @@ CITIZENSHIP_STATUS_CHOICES = [
     ('Visitor Visa', 'Visitor Visa'),
 ]
 
+# Veteran status choices
+VETERAN_STATUS_CHOICES = [
+    ('', 'Select Veteran Status'),
+    ('Do not know', 'Do not know'),
+    ('Non-Veteran', 'Non-Veteran'),
+    ('Prefer not to answer', 'Prefer not to answer'),
+    ('Veteran', 'Veteran'),
+    ('Veteran - Active Duty', 'Veteran - Active Duty'),
+    ('Veteran - Discharged', 'Veteran - Discharged'),
+    ('Veteran - Retired', 'Veteran - Retired'),
+]
+
+# Legal status choices
+LEGAL_STATUS_CHOICES = [
+    ('', 'Select Legal Status'),
+    ('Citizen', 'Citizen'),
+    ('Do not know', 'Do not know'),
+    ('Immigrant', 'Immigrant'),
+    ('Non-Status', 'Non-Status'),
+    ('Permanent Resident', 'Permanent Resident'),
+    ('Prefer not to answer', 'Prefer not to answer'),
+    ('Refugee', 'Refugee'),
+    ('Refugee Claimant', 'Refugee Claimant'),
+    ('Temporary Resident', 'Temporary Resident'),
+    ('Temporary Worker', 'Temporary Worker'),
+    ('Undocumented', 'Undocumented'),
+    ('Visitor', 'Visitor'),
+]
+
 # Ethnicity choices for comprehensive ethnicity options (alphabetically sorted)
 ETHNICITY_CHOICES = [
     ('', 'Select Ethnicity'),
@@ -366,7 +395,7 @@ class ClientForm(forms.ModelForm):
             # 🌍 CULTURAL & DEMOGRAPHIC INFO
             'language', 'preferred_language', 'mother_tongue', 'official_language', 
             'language_interpreter_required', 'self_identification_race_ethnicity', 'ethnicity', 
-            'lgbtq_status', 'highest_level_education', 'children_home', 
+            'lgbtq_status', 'veteran_status', 'legal_status', 'highest_level_education', 'children_home', 
             'children_number', 'lhin',
             
             # 💊 MEDICAL & HEALTH INFORMATION
@@ -375,7 +404,7 @@ class ClientForm(forms.ModelForm):
             'no_health_card_reason',
             
             # 👥 CONTACT & PERMISSIONS
-            'permission_to_phone', 'permission_to_email', 'phone', 'phone_work', 'phone_alt', 
+            'permission_to_phone', 'permission_to_email', 'preferred_communication_method', 'phone', 'phone_work', 'phone_alt', 
             'email', 'next_of_kin', 'emergency_contact', 'comments',
             
             # 🧑‍💼 PROGRAM / ENROLLMENT DETAILS
@@ -413,6 +442,12 @@ class ClientForm(forms.ModelForm):
             # Citizenship status dropdown
             'citizenship_status': forms.Select(attrs={'class': 'form-control'}, choices=CITIZENSHIP_STATUS_CHOICES),
             
+            # Veteran status dropdown
+            'veteran_status': forms.Select(attrs={'class': 'form-control'}, choices=VETERAN_STATUS_CHOICES),
+            
+            # Legal status dropdown
+            'legal_status': forms.Select(attrs={'class': 'form-control'}, choices=LEGAL_STATUS_CHOICES),
+            
             # Ethnicity dropdown - use CharField widget but will convert to list in clean_ethnicity
             'ethnicity': forms.Select(attrs={'class': 'form-control'}, choices=ETHNICITY_CHOICES),
             
@@ -444,7 +479,7 @@ class ClientForm(forms.ModelForm):
             'receiving_services': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             
             # Source dropdown
-            'source': forms.Select(attrs={'class': 'form-control'}, choices=[('', 'Select Source'), ('SMIMS', 'SMIMS'), ('EMHware', 'EMHware')]),
+            'source': forms.Select(attrs={'class': 'form-control'}, choices=[('', 'Select Source'), ('SMIS', 'SMIS'), ('EMHware', 'EMHware')]),
         }
     
     def __init__(self, *args, **kwargs):
@@ -471,10 +506,10 @@ class ClientForm(forms.ModelForm):
             'client_id', 'middle_name', 'preferred_name', 'alias', 'age', 'gender_identity', 
             'pronoun', 'marital_status', 'location_county', 'province', 'city', 'postal_code', 
             'address', 'address_2', 'language', 'preferred_language', 'mother_tongue', 
-            'official_language', 'self_identification_race_ethnicity', 
-            'lgbtq_status', 'highest_level_education', 'children_number', 'lhin', 
+            'official_language',             'self_identification_race_ethnicity', 
+            'lgbtq_status', 'veteran_status', 'legal_status', 'highest_level_education', 'children_number', 'lhin',
             'family_doctor', 'health_card_number', 'health_card_version', 'health_card_exp_date', 
-            'health_card_issuing_province', 'no_health_card_reason', 'phone_work', 'phone_alt', 
+            'health_card_issuing_province', 'no_health_card_reason', 'preferred_communication_method', 'phone_work', 'phone_alt', 
             'program', 'sub_program', 'level_of_support', 'client_type', 'admission_date', 
             'discharge_date', 'days_elapsed', 'program_status', 'reason_discharge', 
             'receiving_services_date', 'referral_source', 'chart_number', 'source', 'image', 'profile_picture'
@@ -490,7 +525,7 @@ class ClientForm(forms.ModelForm):
             'gender', 'gender_identity', 'pronoun', 'marital_status', 'citizenship_status',
             'location_county', 'province', 'city', 'postal_code', 'address', 'address_2',
             'language', 'preferred_language', 'mother_tongue', 'official_language',
-            'self_identification_race_ethnicity', 'lgbtq_status',
+            'self_identification_race_ethnicity', 'lgbtq_status', 'veteran_status', 'legal_status',
             'highest_level_education', 'lhin', 'family_doctor', 'health_card_number',
             'health_card_version', 'health_card_issuing_province', 'no_health_card_reason',
             'phone', 'phone_work', 'phone_alt', 'email', 'program', 'sub_program',

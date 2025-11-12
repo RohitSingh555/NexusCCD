@@ -45,7 +45,7 @@ def user_permissions(request):
                 'is_user': 'User' in role_names,
                 'can_view_clients': any(role in ['SuperAdmin', 'Admin', 'Staff', 'Manager', 'Leader'] for role in role_names),
                 'can_manage_clients': any(role in ['SuperAdmin', 'Admin'] for role in role_names),
-                'can_create_clients': any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names),
+                'can_create_clients': any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names),
                 'can_view_programs': any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names),
                 'can_manage_programs': any(role in ['SuperAdmin', 'Admin'] for role in role_names),
                 'can_create_programs': any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names),

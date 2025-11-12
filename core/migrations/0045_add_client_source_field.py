@@ -13,7 +13,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='client',
             name='source',
-            field=models.CharField(blank=True, choices=[('SMIMS', 'SMIMS'), ('EMHware', 'EMHware')], db_index=True, help_text='Source system where client data originated', max_length=50, null=True),
+            field=models.CharField(blank=True, choices=[('SMIS', 'SMIS'), ('EMHware', 'EMHware')], db_index=True, help_text='Source system where client data originated', max_length=50, null=True),
         ),
         migrations.AddIndex(
             model_name='client',

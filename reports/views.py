@@ -56,6 +56,23 @@ def get_date_range_filter(request):
     
     return start_date, end_date, parsed_start_date, parsed_end_date
 
+def get_client_status_filter(request):
+    """Helper function to get active/inactive client filter from request"""
+    client_status = request.GET.get('client_status', '').strip()
+    # Valid values: 'active', 'inactive', or '' (all)
+    if client_status not in ['active', 'inactive', '']:
+        client_status = ''
+    return client_status
+
+def apply_client_status_filter(queryset, client_status):
+    """Apply active/inactive filter to client queryset"""
+    if client_status == 'active':
+        return queryset.filter(is_inactive=False)
+    elif client_status == 'inactive':
+        return queryset.filter(is_inactive=True)
+    else:
+        return queryset
+
 def get_program_manager_filtering(request):
     """Helper function to get program manager, leader, analyst, and staff-only filtering data"""
     is_program_manager = False
@@ -128,6 +145,10 @@ class ReportListView(ReportsAccessMixin, ListView):
         context['start_date'] = start_date
         context['end_date'] = end_date
         
+        # Get client status filter
+        client_status = get_client_status_filter(self.request)
+        context['client_status'] = client_status
+        
         # Get program manager and staff-only filtering
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
@@ -151,6 +172,8 @@ class ReportListView(ReportsAccessMixin, ListView):
                 client_queryset = client_queryset.filter(created_at__gte=start_datetime)
             if end_datetime:
                 client_queryset = client_queryset.filter(created_at__lte=end_datetime)
+            # Apply client status filter
+            client_queryset = apply_client_status_filter(client_queryset, client_status)
             
             context['total_clients'] = client_queryset.count()
             
@@ -194,6 +217,8 @@ class ReportListView(ReportsAccessMixin, ListView):
                 client_queryset = client_queryset.filter(created_at__gte=start_datetime)
             if end_datetime:
                 client_queryset = client_queryset.filter(created_at__lte=end_datetime)
+            # Apply client status filter
+            client_queryset = apply_client_status_filter(client_queryset, client_status)
             
             context['total_clients'] = client_queryset.count()
             
@@ -237,6 +262,8 @@ class ReportListView(ReportsAccessMixin, ListView):
                 client_queryset = client_queryset.filter(created_at__gte=start_datetime)
             if end_datetime:
                 client_queryset = client_queryset.filter(created_at__lte=end_datetime)
+            # Apply client status filter
+            client_queryset = apply_client_status_filter(client_queryset, client_status)
             
             context['total_clients'] = client_queryset.count()
             
@@ -286,6 +313,8 @@ class ReportListView(ReportsAccessMixin, ListView):
                 client_queryset = client_queryset.filter(created_at__gte=start_datetime)
             if end_datetime:
                 client_queryset = client_queryset.filter(created_at__lte=end_datetime)
+            # Apply client status filter
+            client_queryset = apply_client_status_filter(client_queryset, client_status)
             
             context['total_clients'] = client_queryset.count()
             
@@ -325,6 +354,7 @@ class ReportListView(ReportsAccessMixin, ListView):
         
         context['recent_reports'] = []  # Placeholder for recent reports
         context['is_program_manager'] = is_program_manager
+        context['client_status'] = client_status
         return context
 
 class OrganizationalSummaryView(ReportsAccessMixin, TemplateView):
@@ -337,6 +367,10 @@ class OrganizationalSummaryView(ReportsAccessMixin, TemplateView):
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
         context['start_date'] = start_date
         context['end_date'] = end_date
+        
+        # Get client status filter
+        client_status = get_client_status_filter(self.request)
+        context['client_status'] = client_status
         
         # Get program manager and staff-only filtering
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
@@ -359,6 +393,8 @@ class OrganizationalSummaryView(ReportsAccessMixin, TemplateView):
                 client_queryset = client_queryset.filter(created_at__gte=start_datetime)
             if end_datetime:
                 client_queryset = client_queryset.filter(created_at__lte=end_datetime)
+            # Apply client status filter
+            client_queryset = apply_client_status_filter(client_queryset, client_status)
             
             context['total_clients'] = client_queryset.count()
             
@@ -397,6 +433,8 @@ class OrganizationalSummaryView(ReportsAccessMixin, TemplateView):
                 client_queryset = client_queryset.filter(created_at__gte=start_datetime)
             if end_datetime:
                 client_queryset = client_queryset.filter(created_at__lte=end_datetime)
+            # Apply client status filter
+            client_queryset = apply_client_status_filter(client_queryset, client_status)
             
             context['total_clients'] = client_queryset.count()
             
@@ -433,6 +471,8 @@ class OrganizationalSummaryView(ReportsAccessMixin, TemplateView):
                 client_queryset = client_queryset.filter(created_at__gte=start_datetime)
             if end_datetime:
                 client_queryset = client_queryset.filter(created_at__lte=end_datetime)
+            # Apply client status filter
+            client_queryset = apply_client_status_filter(client_queryset, client_status)
             
             context['total_clients'] = client_queryset.count()
             
@@ -471,6 +511,8 @@ class OrganizationalSummaryView(ReportsAccessMixin, TemplateView):
                 client_queryset = client_queryset.filter(created_at__gte=start_datetime)
             if end_datetime:
                 client_queryset = client_queryset.filter(created_at__lte=end_datetime)
+            # Apply client status filter
+            client_queryset = apply_client_status_filter(client_queryset, client_status)
             
             context['total_clients'] = client_queryset.count()
             
@@ -515,6 +557,7 @@ class OrganizationalSummaryView(ReportsAccessMixin, TemplateView):
         # Add date range parameters to context
         context['start_date'] = start_date
         context['end_date'] = end_date
+        context['client_status'] = client_status
         
         return context
 
@@ -693,6 +736,10 @@ class ClientDemographicsView(ReportsAccessMixin, TemplateView):
         program_filter = self.request.GET.get('program', '').strip()
         department_filter = self.request.GET.get('department', '').strip()
         
+        # Get client status filter
+        client_status = get_client_status_filter(self.request)
+        context['client_status'] = client_status
+        
         # Get program manager and staff-only filtering
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
@@ -705,6 +752,9 @@ class ClientDemographicsView(ReportsAccessMixin, TemplateView):
             clients = assigned_clients
         else:
             clients = Client.objects.all()
+        
+        # Apply client status filter
+        clients = apply_client_status_filter(clients, client_status)
         
         # Apply program filter if specified
         if program_filter:
@@ -1642,6 +1692,9 @@ class ClientDemographicsExportView(ReportsAccessMixin, TemplateView):
         program_filter = request.GET.get('program', '').strip()
         department_filter = request.GET.get('department', '').strip()
         
+        # Get client status filter
+        client_status = get_client_status_filter(request)
+        
         # Get the same data as the main view
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(request)
         
@@ -1654,6 +1707,9 @@ class ClientDemographicsExportView(ReportsAccessMixin, TemplateView):
             clients = assigned_clients
         else:
             clients = Client.objects.all()
+        
+        # Apply client status filter
+        clients = apply_client_status_filter(clients, client_status)
         
         # Apply program filter if specified
         if program_filter:
@@ -1931,11 +1987,17 @@ class OrganizationalSummaryExportView(ReportsAccessMixin, TemplateView):
             total_programs = assigned_programs.count()
             enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
         elif is_staff_only and assigned_clients:
-            total_clients = assigned_clients.count()
+            # Get client status filter
+            client_status = get_client_status_filter(request)
+            assigned_clients_filtered = apply_client_status_filter(assigned_clients, client_status)
+            total_clients = assigned_clients_filtered.count()
             total_programs = assigned_programs.count() if assigned_programs else 0
             enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs) if assigned_programs else ClientProgramEnrollment.objects.none()
         else:
-            total_clients = Client.objects.count()
+            # Get client status filter
+            client_status = get_client_status_filter(request)
+            clients = apply_client_status_filter(Client.objects.all(), client_status)
+            total_clients = clients.count()
             total_programs = Program.objects.count()
             enrollments = ClientProgramEnrollment.objects.all()
         
@@ -1983,6 +2045,9 @@ class OrganizationalSummaryExportView(ReportsAccessMixin, TemplateView):
             ).distinct()
         else:
             clients = Client.objects.all()
+        
+        # Apply client status filter
+        clients = apply_client_status_filter(clients, client_status)
         
         # Age distribution
         age_groups = {

@@ -313,17 +313,21 @@ def dashboard(request):
         pass
     
     # Get basic statistics - filter for program managers and staff-only users
+    today = timezone.now().date()
+    
     if is_program_manager and assigned_programs:
-        # Program managers see only clients enrolled in their assigned programs
+        # Program managers see only active clients enrolled in their assigned programs
         total_clients = Client.objects.filter(
-            clientprogramenrollment__program__in=assigned_programs
+            clientprogramenrollment__program__in=assigned_programs,
+            clientprogramenrollment__is_archived=False,
+            clientprogramenrollment__start_date__lte=today
+        ).filter(
+            Q(clientprogramenrollment__end_date__isnull=True) | Q(clientprogramenrollment__end_date__gt=today)
         ).distinct().count()
-        active_programs = assigned_programs.count()
+        active_programs = assigned_programs.filter(status='active', is_archived=False).count()
         total_staff = Staff.objects.count()  # Staff count is same for all
         
         # Get active restrictions count - Managers see ALL restrictions
-        from django.utils import timezone
-        today = timezone.now().date()
         active_restrictions = ServiceRestriction.objects.filter(
             is_archived=False,
             start_date__lte=today
@@ -347,16 +351,18 @@ def dashboard(request):
             scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     elif is_leader and assigned_programs:
-        # Leader users see data for their assigned departments
+        # Leader users see data for their assigned departments - active clients only
         total_clients = Client.objects.filter(
-            clientprogramenrollment__program__in=assigned_programs
+            clientprogramenrollment__program__in=assigned_programs,
+            clientprogramenrollment__is_archived=False,
+            clientprogramenrollment__start_date__lte=today
+        ).filter(
+            Q(clientprogramenrollment__end_date__isnull=True) | Q(clientprogramenrollment__end_date__gt=today)
         ).distinct().count()
-        active_programs = assigned_programs.count()
+        active_programs = assigned_programs.filter(status='active', is_archived=False).count()
         total_staff = Staff.objects.count()  # Staff count is same for all
         
         # Get active restrictions count - Leaders see ALL restrictions
-        from django.utils import timezone
-        today = timezone.now().date()
         active_restrictions = ServiceRestriction.objects.filter(
             is_archived=False,
             start_date__lte=today
@@ -380,14 +386,17 @@ def dashboard(request):
             scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     elif is_staff_only:
-        # Staff users now see ALL data across all clients and programs (same as analysts)
-        total_clients = Client.objects.count()
-        active_programs = Program.objects.count()
+        # Staff users see active clients only
+        total_clients = Client.objects.filter(
+            clientprogramenrollment__is_archived=False,
+            clientprogramenrollment__start_date__lte=today
+        ).filter(
+            Q(clientprogramenrollment__end_date__isnull=True) | Q(clientprogramenrollment__end_date__gt=today)
+        ).distinct().count()
+        active_programs = Program.objects.filter(status='active', is_archived=False).count()
         total_staff = Staff.objects.count()
         
         # Get active restrictions count - Staff users see ALL restrictions
-        from django.utils import timezone
-        today = timezone.now().date()
         active_restrictions = ServiceRestriction.objects.filter(
             is_archived=False,
             start_date__lte=today
@@ -409,14 +418,17 @@ def dashboard(request):
             scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     elif is_analyst:
-        # Analysts see ALL data across all clients and programs
-        total_clients = Client.objects.count()
-        active_programs = Program.objects.count()
+        # Analysts see active clients only
+        total_clients = Client.objects.filter(
+            clientprogramenrollment__is_archived=False,
+            clientprogramenrollment__start_date__lte=today
+        ).filter(
+            Q(clientprogramenrollment__end_date__isnull=True) | Q(clientprogramenrollment__end_date__gt=today)
+        ).distinct().count()
+        active_programs = Program.objects.filter(status='active', is_archived=False).count()
         total_staff = Staff.objects.count()
         
         # Get active restrictions count - Analysts see ALL restrictions
-        from django.utils import timezone
-        today = timezone.now().date()
         active_restrictions = ServiceRestriction.objects.filter(
             is_archived=False,
             start_date__lte=today
@@ -438,14 +450,17 @@ def dashboard(request):
             scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     else:
-        # SuperAdmin and other roles see all data
-        total_clients = Client.objects.count()
-        active_programs = Program.objects.count()
+        # SuperAdmin and other roles see active clients only
+        total_clients = Client.objects.filter(
+            clientprogramenrollment__is_archived=False,
+            clientprogramenrollment__start_date__lte=today
+        ).filter(
+            Q(clientprogramenrollment__end_date__isnull=True) | Q(clientprogramenrollment__end_date__gt=today)
+        ).distinct().count()
+        active_programs = Program.objects.filter(status='active', is_archived=False).count()
         total_staff = Staff.objects.count()
         
         # Get active restrictions count
-        from django.utils import timezone
-        today = timezone.now().date()
         active_restrictions = ServiceRestriction.objects.filter(
             is_archived=False,
             start_date__lte=today
@@ -554,6 +569,8 @@ def departments(request):
                 departments = Department.objects.filter(
                     id__in=assigned_departments.values_list('id', flat=True),
                     is_archived=False
+                ).exclude(
+                    name__iexact='HASS'
                 ).annotate(
                     program_count=Count('program', filter=Q(program__in=assigned_programs, program__is_archived=False), distinct=True),
                     staff_count=Count('program__programstaff__staff', filter=Q(program__programstaff__program__is_archived=False), distinct=True)
@@ -569,13 +586,19 @@ def departments(request):
                     department__in=assigned_departments,
                     is_archived=False
                 ).distinct()
-                departments = assigned_departments.annotate(
+                departments = assigned_departments.exclude(
+                    name__iexact='HASS'
+                ).annotate(
                     program_count=Count('program', filter=Q(program__in=assigned_programs, program__is_archived=False), distinct=True),
                     staff_count=Count('program__programstaff__staff', filter=Q(program__programstaff__program__is_archived=False), distinct=True)
                 ).order_by('name')
             else:
-                # SuperAdmin and Staff can see all departments
-                departments = Department.objects.filter(is_archived=False).annotate(
+                # SuperAdmin and Staff can see all departments (excluding HASS)
+                departments = Department.objects.filter(
+                    is_archived=False
+                ).exclude(
+                    name__iexact='HASS'
+                ).annotate(
                     program_count=Count('program', filter=Q(program__is_archived=False), distinct=True),
                     staff_count=Count('program__programstaff__staff', filter=Q(program__programstaff__program__is_archived=False), distinct=True)
                 ).order_by('name')
@@ -643,11 +666,21 @@ def departments(request):
     else:
         total_staff = Staff.objects.count()
     
+    # Check if user is a Leader
+    is_leader = False
+    if request.user.is_authenticated:
+        try:
+            staff = request.user.staff_profile
+            is_leader = staff.is_leader()
+        except Exception:
+            pass
+    
     context = {
         'departments': departments,
         'total_departments': total_departments,
         'total_programs': total_programs,
         'total_staff': total_staff,
+        'is_leader': is_leader,
     }
     
     return render(request, 'core/departments.html', context)
@@ -1819,13 +1852,60 @@ class EnrollmentListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMan
         filtered_queryset = getattr(self, '_filtered_enrollments', self.get_queryset())
         
         total_filtered_count = filtered_queryset.count()
-        status_summary = filtered_queryset.values('computed_status').annotate(total=Count('id'))
-        status_counts = {row['computed_status']: row['total'] for row in status_summary}
         
-        total_enrollments = sum(status_counts.values())
-        active_count = status_counts.get('active', 0)
-        completed_count = status_counts.get('completed', 0)
-        pending_count = status_counts.get('pending', 0)
+        # Calculate counts from ALL enrollments (excluding archived) for users with full access
+        # This ensures the statistics show the true system-wide counts
+        today = timezone.now().date()
+        all_enrollments = ClientProgramEnrollment.objects.filter(is_archived=False)
+        
+        # Check if user has full access (SuperAdmin, Admin, Analyst, or no restrictions)
+        has_full_access = False
+        if self.request.user.is_authenticated:
+            if self.request.user.is_superuser:
+                has_full_access = True
+            else:
+                try:
+                    staff = self.request.user.staff_profile
+                    user_roles = staff.staffrole_set.select_related('role').all()
+                    role_names = [staff_role.role.name for staff_role in user_roles]
+                    # SuperAdmin, Admin, and Analyst should see all counts
+                    if any(role in ['SuperAdmin', 'Admin', 'Analyst'] for role in role_names):
+                        has_full_access = True
+                except Exception:
+                    pass
+        
+        if has_full_access:
+            # Use all enrollments for counts
+            counts_queryset = all_enrollments
+        else:
+            # Use filtered queryset for counts (respects user permissions)
+            counts_queryset = filtered_queryset.filter(is_archived=False)
+        
+        # Calculate status counts using date-based logic
+        active_count = counts_queryset.filter(
+            start_date__lte=today
+        ).filter(
+            Q(end_date__isnull=True) | Q(end_date__gt=today)
+        ).exclude(
+            status__in=['cancelled', 'suspended']
+        ).count()
+        
+        completed_count = counts_queryset.filter(
+            end_date__isnull=False,
+            end_date__lt=today
+        ).exclude(
+            status__in=['cancelled', 'suspended']
+        ).count()
+        
+        pending_count = counts_queryset.filter(
+            start_date__gt=today
+        ).exclude(
+            status__in=['cancelled', 'suspended']
+        ).count()
+        
+        total_enrollments = counts_queryset.exclude(
+            status__in=['cancelled', 'suspended']
+        ).count()
         
         context['total_enrollments'] = total_enrollments
         context['active_enrollments'] = active_count
@@ -2582,7 +2662,7 @@ class RestrictionCreateView(AnalystAccessMixin, ProgramManagerAccessMixin, Creat
                 staff = self.request.user.staff_profile
                 if staff.is_program_manager():
                     # Filter programs to only assigned ones
-                    assigned_programs = staff.get_assigned_programs()
+                    assigned_programs = staff.get_assigned_programs().order_by('name')
                     kwargs['program_queryset'] = assigned_programs
                 elif staff.is_leader():
                     # Filter programs to only assigned ones via departments
@@ -2592,7 +2672,7 @@ class RestrictionCreateView(AnalystAccessMixin, ProgramManagerAccessMixin, Creat
                     ).distinct()
                     assigned_programs = Program.objects.filter(
                         department__in=assigned_departments
-                    ).distinct()
+                    ).distinct().order_by('name')
                     kwargs['program_queryset'] = assigned_programs
             except Exception:
                 pass
@@ -2726,7 +2806,7 @@ class RestrictionUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, Updat
                     pass
                 elif staff.is_program_manager():
                     # Filter programs to only assigned ones
-                    assigned_programs = staff.get_assigned_programs()
+                    assigned_programs = staff.get_assigned_programs().order_by('name')
                     kwargs['program_queryset'] = assigned_programs
                 elif staff.is_leader():
                     # Filter programs to only assigned ones via departments
@@ -2736,7 +2816,7 @@ class RestrictionUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, Updat
                     ).distinct()
                     assigned_programs = Program.objects.filter(
                         department__in=assigned_departments
-                    ).distinct()
+                    ).distinct().order_by('name')
                     kwargs['program_queryset'] = assigned_programs
             except Exception:
                 pass

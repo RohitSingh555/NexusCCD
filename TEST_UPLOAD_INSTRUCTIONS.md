@@ -1,13 +1,13 @@
 # Test Upload Files - Duplicate Detection Testing Guide
 
 ## Overview
-These test CSV files are designed to test the duplicate detection functionality for SMIMS and EMHware source uploads.
+These test CSV files are designed to test the duplicate detection functionality for SMIS and EMHware source uploads.
 
 ## Test Files
 
-### 1. `test_smims_upload.csv` (SMIMS Source)
-- Contains 10 clients with SMIMS client IDs (SM001-SM010)
-- Use this file to test SMIMS source uploads
+### 1. `test_smims_upload.csv` (SMIS Source)
+- Contains 10 clients with SMIS client IDs (SM001-SM010)
+- Use this file to test SMIS source uploads
 
 ### 2. `test_emhware_upload.csv` (EMHware Source)
 - Contains 10 clients with EMHware client IDs (EM001-EM010)
@@ -17,7 +17,7 @@ These test CSV files are designed to test the duplicate detection functionality 
 
 ### Scenario 1: First Upload (New Clients)
 **Steps:**
-1. Upload `test_smims_upload.csv` with source = **SMIMS**
+1. Upload `test_smims_upload.csv` with source = **SMIS**
 2. All 10 clients should be created as new clients
 3. No duplicates should be flagged
 
@@ -28,7 +28,7 @@ These test CSV files are designed to test the duplicate detection functionality 
 ### Scenario 2: Duplicate Detection (Name-Based Matching)
 **Steps:**
 1. After Scenario 1, upload `test_emhware_upload.csv` with source = **EMHware**
-2. The following clients have similar names to SMIMS clients:
+2. The following clients have similar names to SMIS clients:
    - EM001: "Jon Smith" (similar to SM001: "John Smith")
    - EM002: "Mike Brown" (similar to SM002: "Michael Brown")
    - EM003: "Jennifer Williams" (exact match with SM003)
@@ -41,7 +41,7 @@ These test CSV files are designed to test the duplicate detection functionality 
 
 ### Scenario 3: Update Existing Client (ID Match)
 **Steps:**
-1. Upload `test_smims_upload.csv` again with source = **SMIMS**
+1. Upload `test_smims_upload.csv` again with source = **SMIS**
 2. Modify some data in the CSV (e.g., change John Smith's email)
 3. Upload the modified file
 
@@ -52,7 +52,7 @@ These test CSV files are designed to test the duplicate detection functionality 
 
 ### Scenario 4: Cross-Source Duplicate Detection
 **Steps:**
-1. Upload a new CSV with SMIMS source containing:
+1. Upload a new CSV with SMIS source containing:
    - Client ID: SM011
    - First Name: "Patricia"
    - Last Name: "Moore"
@@ -85,7 +85,7 @@ These test CSV files are designed to test the duplicate detection functionality 
    - Exact matches = 100% similarity (will match)
 
 2. **Source-Specific Logic**: 
-   - SMIMS and EMHware sources check for name duplicates when no ID match is found
+   - SMIS and EMHware sources check for name duplicates when no ID match is found
    - Other sources use email/phone-based duplicate detection
 
 3. **Duplicate Review**: 
@@ -94,10 +94,10 @@ These test CSV files are designed to test the duplicate detection functionality 
 
 ## Testing Checklist
 
-- [ ] Upload SMIMS file - all clients created successfully
+- [ ] Upload SMIS file - all clients created successfully
 - [ ] Upload EMHware file - name duplicates detected and flagged
 - [ ] Check ClientDuplicate records created correctly
-- [ ] Re-upload SMIMS file - existing clients updated (not duplicated)
+- [ ] Re-upload SMIS file - existing clients updated (not duplicated)
 - [ ] Verify similarity scores are calculated correctly
 - [ ] Check duplicate review page shows all flagged duplicates
 

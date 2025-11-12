@@ -449,6 +449,8 @@ class Client(BaseModel):
     ethnicity = models.JSONField(default=list, help_text="List of ethnicities (multi-select)")
     aboriginal_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     lgbtq_status = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="LGBTQ+ Status")
+    veteran_status = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Veteran Status")
+    legal_status = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Legal Status")
     highest_level_education = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     children_home = models.BooleanField(default=False, db_index=True)
     children_number = models.IntegerField(null=True, blank=True)
@@ -467,6 +469,7 @@ class Client(BaseModel):
     # 👥 CONTACT & PERMISSIONS
     permission_to_phone = models.BooleanField(default=False, db_index=True, help_text="Permission to contact by phone")
     permission_to_email = models.BooleanField(default=False, db_index=True, help_text="Permission to contact by email")
+    preferred_communication_method = models.CharField(max_length=50, null=True, blank=True, db_index=True, help_text="Preferred Method of Communication")
     phone = models.CharField(max_length=20, null=True, blank=True, db_index=True)
     phone_work = models.CharField(max_length=20, null=True, blank=True, help_text="Work phone number")
     phone_alt = models.CharField(max_length=20, null=True, blank=True, help_text="Alternative phone number")
@@ -492,7 +495,9 @@ class Client(BaseModel):
     
     # 🧾 ADMINISTRATIVE / SYSTEM FIELDS
     chart_number = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    source = models.CharField(max_length=50, choices=[('SMIMS', 'SMIMS'), ('EMHware', 'EMHware')], null=True, blank=True, db_index=True, help_text="Source system where client data originated")
+    source = models.CharField(max_length=50, choices=[('SMIS', 'SMIS'), ('EMHware', 'EMHware')], null=True, blank=True, db_index=True, help_text="Source system where client data originated")
+    legacy_client_ids = models.JSONField(default=list, help_text="List of legacy client IDs from different sources (e.g., [{'source': 'SMIS', 'client_id': '123'}, {'source': 'EMHware', 'client_id': '456'}])")
+    secondary_source_id = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Client ID of the duplicate client that was merged into this client")
     is_archived = models.BooleanField(default=False, db_index=True, help_text="Whether this client is archived")
     archived_at = models.DateTimeField(null=True, blank=True, db_index=True, help_text="Timestamp when this client was archived")
     is_inactive = models.BooleanField(default=False, db_index=True, help_text="Whether this client is inactive (has zero active enrollments)")
@@ -932,6 +937,9 @@ class ServiceRestriction(BaseModel):
     # Staff member who entered the restriction (agency/program agnostic)
     entered_by = models.ForeignKey('Staff', on_delete=models.SET_NULL, null=True, blank=True, db_index=True, related_name='restrictions_entered', help_text="Staff member who entered this restriction")
     
+    # Staff member who is affected by or involved in the restriction
+    affected_staff = models.ForeignKey('Staff', on_delete=models.SET_NULL, null=True, blank=True, db_index=True, related_name='restrictions_affecting', help_text="Staff member who is affected by or involved in this restriction")
+    
     # Audit fields
     created_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who created this record")
     updated_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who last updated this record")
@@ -1160,6 +1168,14 @@ class ClientDuplicate(BaseModel):
     reviewed_at = models.DateTimeField(null=True, blank=True, db_index=True)
     # Notes from the reviewer
     review_notes = models.TextField(null=True, blank=True)
+    # Source of detection (upload, scan, manual, etc.)
+    detection_source = models.CharField(
+        max_length=50, 
+        null=True, 
+        blank=True, 
+        db_index=True,
+        help_text="How this duplicate was detected (e.g., 'scan', 'upload', 'manual')"
+    )
     
     class Meta:
         db_table = 'client_duplicates'
@@ -1531,7 +1547,7 @@ class ClientUploadLog(BaseModel):
     file_name = models.CharField(max_length=255, db_index=True)
     file_size = models.BigIntegerField(help_text="File size in bytes")
     file_type = models.CharField(max_length=10, db_index=True, help_text="csv, xlsx, or xls")
-    source = models.CharField(max_length=50, db_index=True, help_text="SMIMS or EMHware")
+    source = models.CharField(max_length=50, db_index=True, help_text="SMIS or EMHware")
     
     # Upload metrics
     total_rows = models.IntegerField(default=0, help_text="Total number of rows in the uploaded file")

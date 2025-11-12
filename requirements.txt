@@ -16,3 +16,5 @@ pandas
 openpyxl==3.1.2
 dj-database-url==2.1.0
 dotenv
+pytest==7.4.3
+pytest-django==4.7.0

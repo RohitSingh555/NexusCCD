@@ -191,6 +191,11 @@
                         <h3 class="text-xl font-bold text-primary-900 mb-2">Client A</h3>
                         <p class="text-lg font-semibold text-primary-800">{{ primary_client.first_name }} {{ primary_client.last_name }}</p>
                         <p class="text-sm text-primary-600 mt-2">ID: {{ primary_client.id }}</p>
+                        {% if primary_client.dob %}
+                        <p class="text-sm text-primary-600 mt-1">DOB: {{ primary_client.dob|date:"M d, Y" }}</p>
+                        {% else %}
+                        <p class="text-sm text-primary-400 mt-1">DOB: Not set</p>
+                        {% endif %}
                         <div class="mt-3 text-xs text-primary-500 bg-primary-100 px-2 py-1 rounded-full inline-block">
                             Original Client
                         </div>
@@ -208,6 +213,11 @@
                         <h3 class="text-xl font-bold text-secondary-900 mb-2">Client B</h3>
                         <p class="text-lg font-semibold text-secondary-800">{{ duplicate_client.first_name }} {{ duplicate_client.last_name }}</p>
                         <p class="text-sm text-secondary-600 mt-2">ID: {{ duplicate_client.id }}</p>
+                        {% if duplicate_client.dob %}
+                        <p class="text-sm text-secondary-600 mt-1">DOB: {{ duplicate_client.dob|date:"M d, Y" }}</p>
+                        {% else %}
+                        <p class="text-sm text-secondary-400 mt-1">DOB: Not set</p>
+                        {% endif %}
                         <div class="mt-3 text-xs text-secondary-500 bg-secondary-100 px-2 py-1 rounded-full inline-block">
                             Duplicate Client
                         </div>
@@ -243,7 +253,12 @@
                                     <div class="bg-primary-50 border border-primary-200 rounded px-3 py-2 text-sm">
                                         {% if field_data.has_primary %}
                                             {% if field_name == 'dob' %}
-                                                {{ field_data.primary_value|date:"M d, Y" }}
+                                                {% if field_data.primary_value %}
+                                                    {{ field_data.primary_value|date:"M d, Y" }}
+                                                    <div class="text-xs text-primary-500 mt-1">({{ field_data.primary_value|date:"Y-m-d" }})</div>
+                                                {% else %}
+                                                    <span class="text-neutral-400">No DOB</span>
+                                                {% endif %}
                                             {% elif field_name == 'permission_to_phone' or field_name == 'permission_to_email' %}
                                                 {% if field_data.primary_value %}Yes{% else %}No{% endif %}
                                             {% elif field_name == 'addresses' %}
@@ -279,7 +294,12 @@
                                     <div class="bg-secondary-50 border border-secondary-200 rounded px-3 py-2 text-sm">
                                         {% if field_data.has_duplicate %}
                                             {% if field_name == 'dob' %}
-                                                {{ field_data.duplicate_value|date:"M d, Y" }}
+                                                {% if field_data.duplicate_value %}
+                                                    {{ field_data.duplicate_value|date:"M d, Y" }}
+                                                    <div class="text-xs text-secondary-500 mt-1">({{ field_data.duplicate_value|date:"Y-m-d" }})</div>
+                                                {% else %}
+                                                    <span class="text-neutral-400">No DOB</span>
+                                                {% endif %}
                                             {% elif field_name == 'permission_to_phone' or field_name == 'permission_to_email' %}
                                                 {% if field_data.duplicate_value %}Yes{% else %}No{% endif %}
                                             {% elif field_name == 'addresses' %}
@@ -447,6 +467,57 @@ function confirmMerge() {
     
     closeConfirmationModal();
 }
+
+// Handle value-box clicks to select which value to keep
+document.addEventListener('DOMContentLoaded', function() {
+    const valueBoxes = document.querySelectorAll('.value-box');
+    
+    valueBoxes.forEach(box => {
+        box.addEventListener('click', function() {
+            const fieldName = this.getAttribute('data-field');
+            const source = this.getAttribute('data-source');
+            
+            // Remove selected class from all value boxes for this field
+            const allBoxesForField = document.querySelectorAll(`[data-field="${fieldName}"]`);
+            allBoxesForField.forEach(b => b.classList.remove('selected'));
+            
+            // Add selected class to clicked box
+            this.classList.add('selected');
+            
+            // Update the hidden input for this field
+            const hiddenInput = document.getElementById(`${fieldName}_hidden`);
+            if (hiddenInput) {
+                hiddenInput.value = source;
+            } else {
+                // Create hidden input if it doesn't exist
+                const newInput = document.createElement('input');
+                newInput.type = 'hidden';
+                newInput.name = fieldName;
+                newInput.id = `${fieldName}_hidden`;
+                newInput.value = source;
+                // Find the table cell and append the input
+                const cell = this.closest('tr').querySelector('td:last-child');
+                if (cell) {
+                    cell.appendChild(newInput);
+                }
+            }
+            
+            console.log(`Selected ${source} for field ${fieldName}`);
+        });
+    });
+    
+    // Initialize selections based on default values
+    valueBoxes.forEach(box => {
+        if (box.classList.contains('selected')) {
+            const fieldName = box.getAttribute('data-field');
+            const source = box.getAttribute('data-source');
+            const hiddenInput = document.getElementById(`${fieldName}_hidden`);
+            if (hiddenInput) {
+                hiddenInput.value = source;
+            }
+        }
+    });
+});
 
 </script>
 {% endblock %}

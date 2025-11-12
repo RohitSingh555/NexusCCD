@@ -204,6 +204,14 @@
                         <span class="text-sm text-neutral-900 font-body">{{ client.indigenous_status|default:"—" }}</span>
                     </div>
                     <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Veteran Status:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.veteran_status|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Legal Status:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ client.legal_status|default:"—" }}</span>
+                    </div>
+                    <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Ethnicity:</span>
                         <span class="text-sm text-neutral-900 font-body">
                             {% if client.ethnicity %}

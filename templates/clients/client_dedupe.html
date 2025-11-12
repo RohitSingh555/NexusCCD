@@ -515,12 +515,12 @@
                     </div>
                 </div>
                 <div class="flex items-center space-x-2">
-                    <button type="button" onclick="openScanModal()"
-                            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
+                    <button type="button" onclick="runDuplicateScanDirect()" id="scanButton"
+                            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13l-3 3m0 0l-3-3m3 3V8m8 8a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
-                        Scan Existing Data
+                        <span id="scanButtonText">Scan Existing Data</span>
                     </button>
                     <a href="{% url 'clients:list' %}" 
                        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
@@ -702,6 +702,26 @@
             </div>
         </div>
 
+        <!-- Tabs -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+            <div class="flex space-x-1 border-b border-gray-200">
+                <a href="?tab=all{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}"
+                   class="px-6 py-3 text-sm font-medium border-b-2 transition-colors duration-200 {% if tab_filter == 'all' or not tab_filter %}border-blue-500 text-blue-600{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %}">
+                    All Duplicates
+                    <span class="ml-2 px-2 py-0.5 text-xs font-semibold rounded-full {% if tab_filter == 'all' or not tab_filter %}bg-blue-100 text-blue-800{% else %}bg-gray-100 text-gray-600{% endif %}">
+                        {{ total_duplicates }}
+                    </span>
+                </a>
+                <a href="?tab=scanned{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}"
+                   class="px-6 py-3 text-sm font-medium border-b-2 transition-colors duration-200 {% if tab_filter == 'scanned' %}border-blue-500 text-blue-600{% else %}border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300{% endif %}">
+                    Scanned Duplicates
+                    <span class="ml-2 px-2 py-0.5 text-xs font-semibold rounded-full {% if tab_filter == 'scanned' %}bg-blue-100 text-blue-800{% else %}bg-gray-100 text-gray-600{% endif %}">
+                        {{ scanned_duplicates }}
+                    </span>
+                </a>
+            </div>
+        </div>
+
         <!-- Filters -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
             <div class="flex items-center justify-between mb-4">
@@ -715,6 +735,7 @@
                 </div>
             </div>
             <form method="GET" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <input type="hidden" name="tab" value="{{ tab_filter }}">
                 <div>
                     <label for="status" class="block text-base font-medium text-gray-700 mb-2">Status Filter</label>
                     <select name="status" id="status" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-base">
@@ -734,9 +755,8 @@
                     </select>
                 </div>
                 <div>
-                    <label for="time_filter" class="block text-base font-medium text-gray-700 mb-2">Created At</label>
-                    <select name="time_filter" id="time_filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-base">
-                        <option value="">All Time</option>
+                    <label for="time_filter" class="block text-base font-medium text-gray-700 mb-2">Marked Date/Time</label>
+                    <select name="time_filter" id="time_filter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 bg-white text-base" onchange="this.form.submit()">
                         {% for value, label in time_filter_choices %}
                         <option value="{{ value }}" {% if time_filter == value %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
@@ -751,7 +771,7 @@
                     </button>
                 </div>
                 <div class="flex items-end">
-                    <a href="{% url 'clients:dedupe' %}" class="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 font-medium text-base flex items-center justify-center">
+                    <a href="{% url 'clients:dedupe' %}?tab={{ tab_filter }}" class="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 font-medium text-base flex items-center justify-center">
                         <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                         </svg>
@@ -1170,7 +1190,7 @@
                 <div>
                     <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
                         {% if paginated_groups.has_previous %}
-                            <a href="?page={{ paginated_groups.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}" 
+                            <a href="?page={{ paginated_groups.previous_page_number }}{% if tab_filter %}&tab={{ tab_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}" 
                                class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
                                 <span class="sr-only">Previous</span>
                                 <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
@@ -1192,7 +1212,7 @@
                                     {{ num }}
                                 </span>
                             {% elif num > paginated_groups.number|add:'-3' and num < paginated_groups.number|add:'3' %}
-                                <a href="?page={{ num }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}" 
+                                <a href="?page={{ num }}{% if tab_filter %}&tab={{ tab_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}" 
                                    class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
                                     {{ num }}
                                 </a>
@@ -1200,7 +1220,7 @@
                         {% endfor %}
                         
                         {% if paginated_groups.has_next %}
-                            <a href="?page={{ paginated_groups.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}"
+                            <a href="?page={{ paginated_groups.next_page_number }}{% if tab_filter %}&tab={{ tab_filter }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if confidence_filter %}&confidence={{ confidence_filter }}{% endif %}{% if time_filter %}&time_filter={{ time_filter }}{% endif %}"
                                class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
                                 <span class="sr-only">Next</span>
                                 <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
@@ -1255,7 +1275,7 @@
                     <select id="scanSourceFilter"
                             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
                         <option value="">All sources</option>
-                        <option value="SMIMS">SMIMS</option>
+                        <option value="SMIS">SMIS</option>
                         <option value="EMHware">EMHware</option>
                     </select>
                 </div>
@@ -1634,30 +1654,98 @@ function confirmDeleteHighConfidenceDuplicates() {
         });
 }
 
-function openScanModal() {
-    const modal = document.getElementById('duplicateScanModal');
-    if (!modal) {
-        console.error('duplicateScanModal element not found');
+function runDuplicateScanDirect() {
+    const scanButton = document.getElementById('scanButton');
+    const scanButtonText = document.getElementById('scanButtonText');
+    
+    if (!scanButton || scanButton.disabled) {
         return;
     }
-    modal.classList.remove('hidden');
-    const statusMessage = document.getElementById('scanStatusMessage');
-    if (statusMessage) {
-        statusMessage.classList.add('hidden');
-        statusMessage.textContent = '';
-    }
-    const errorBox = document.getElementById('scanError');
-    if (errorBox) {
-        errorBox.classList.add('hidden');
-        errorBox.textContent = '';
-    }
+    
+    // Disable button and show loading state
+    scanButton.disabled = true;
+    scanButtonText.textContent = 'Scanning...';
+    
+    // Default scan parameters
+    const scanParams = {
+        limit: 50,
+        include_archived: false,
+        source: ''
+    };
+    
+    // Get CSRF token
+    const csrfElement = document.querySelector('[name=csrfmiddlewaretoken]');
+    const csrfToken = csrfElement ? csrfElement.value : getCookie('csrftoken');
+    
+    // Run the scan
+    fetch("{% url 'clients:dedupe_run_scan' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify(scanParams)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Show success message
+            const message = data.message || `Scan completed. Found ${data.created_count || 0} new duplicates.`;
+            
+            // Show a brief notification
+            showNotification(message, 'success');
+            
+            // Reload the page to the scanned tab after a short delay to show the new duplicates
+            setTimeout(() => {
+                window.location.href = "{% url 'clients:dedupe' %}?tab=scanned";
+            }, 1500);
+        } else {
+            // Show error message
+            showNotification(data.error || 'Scan failed. Please try again.', 'error');
+            
+            // Re-enable button
+            scanButton.disabled = false;
+            scanButtonText.textContent = 'Scan Existing Data';
+        }
+    })
+    .catch(error => {
+        console.error('Scan error:', error);
+        showNotification('An error occurred while scanning. Please try again.', 'error');
+        
+        // Re-enable button
+        scanButton.disabled = false;
+        scanButtonText.textContent = 'Scan Existing Data';
+    });
 }
 
-function closeScanModal() {
-    const modal = document.getElementById('duplicateScanModal');
-    if (modal) {
-        modal.classList.add('hidden');
+function showNotification(message, type) {
+    // Create a temporary notification element
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg ${
+        type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+    }`;
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
     }
+    return cookieValue;
 }
 
 function runDuplicateScan() {
@@ -1727,10 +1815,33 @@ function runDuplicateScan() {
         .then(data => {
             renderScanResults(data && data.results ? data.results : []);
             if (statusMessage) {
-                statusMessage.textContent = data && typeof data.count === 'number'
+                let message = data && typeof data.count === 'number'
                     ? `Showing ${data.count} of the top ${limit} matches${source ? ` for source "${source}"` : ''}.`
                     : 'Scan completed.';
+                
+                // Add marking information if available
+                if (data && data.created_count !== undefined) {
+                    const created = data.created_count || 0;
+                    const skipped = data.skipped_count || 0;
+                    if (created > 0 || skipped > 0) {
+                        message += ` Marked ${created} duplicate${created !== 1 ? 's' : ''} for review.`;
+                        if (skipped > 0) {
+                            message += ` Skipped ${skipped} already marked.`;
+                        }
+                    }
+                } else if (data && data.message) {
+                    message = data.message;
+                }
+                
+                statusMessage.textContent = message;
                 statusMessage.classList.remove('hidden');
+            }
+            
+            // Show success notification and reload page to show newly marked duplicates
+            if (data && data.success && data.created_count > 0) {
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
             }
         })
         .catch(error => {
@@ -2851,6 +2962,48 @@ function loadMergeContent(duplicateId) {
                                                 <label class="flex items-center justify-center cursor-pointer">
                                                     <input type="radio" name="lgbtq_status" value="custom" class="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500">
                                                     <input type="text" name="lgbtq_status_custom" placeholder="Enter custom LGBTQ+ status" class="ml-2 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                                </label>
+                                            </td>
+                                        </tr>
+                                        <tr class="field-row border-b border-gray-100" data-field="veteran_status">
+                                            <td class="py-3 px-4 font-medium">Veteran Status</td>
+                                            <td class="py-3 px-4">
+                                                <label class="flex items-center justify-center cursor-pointer">
+                                                    <input type="radio" name="veteran_status" value="primary" class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                                                    <span class="ml-2 text-sm field-value-primary">Loading...</span>
+                                                </label>
+                                            </td>
+                                            <td class="py-3 px-4">
+                                                <label class="flex items-center justify-center cursor-pointer">
+                                                    <input type="radio" name="veteran_status" value="duplicate" class="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500">
+                                                    <span class="ml-2 text-sm field-value-duplicate">Loading...</span>
+                                                </label>
+                                            </td>
+                                            <td class="py-3 px-4">
+                                                <label class="flex items-center justify-center cursor-pointer">
+                                                    <input type="radio" name="veteran_status" value="custom" class="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500">
+                                                    <input type="text" name="veteran_status_custom" placeholder="Enter custom veteran status" class="ml-2 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                                                </label>
+                                            </td>
+                                        </tr>
+                                        <tr class="field-row border-b border-gray-100" data-field="legal_status">
+                                            <td class="py-3 px-4 font-medium">Legal Status</td>
+                                            <td class="py-3 px-4">
+                                                <label class="flex items-center justify-center cursor-pointer">
+                                                    <input type="radio" name="legal_status" value="primary" class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500">
+                                                    <span class="ml-2 text-sm field-value-primary">Loading...</span>
+                                                </label>
+                                            </td>
+                                            <td class="py-3 px-4">
+                                                <label class="flex items-center justify-center cursor-pointer">
+                                                    <input type="radio" name="legal_status" value="duplicate" class="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500">
+                                                    <span class="ml-2 text-sm field-value-duplicate">Loading...</span>
+                                                </label>
+                                            </td>
+                                            <td class="py-3 px-4">
+                                                <label class="flex items-center justify-center cursor-pointer">
+                                                    <input type="radio" name="legal_status" value="custom" class="w-4 h-4 text-purple-600 border-gray-300 focus:ring-purple-500">
+                                                    <input type="text" name="legal_status_custom" placeholder="Enter custom legal status" class="ml-2 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
                                                 </label>
                                             </td>
                                         </tr>

@@ -72,7 +72,7 @@ class ClientAdmin(admin.ModelAdmin):
     ]
     list_filter = [
         'gender', 'gender_identity', 'citizenship_status', 'indigenous_status', 'aboriginal_status',
-        'lgbtq_status', 'marital_status', 'program_status', 'client_type', 'level_of_support',
+        'lgbtq_status', 'veteran_status', 'legal_status', 'marital_status', 'program_status', 'client_type', 'level_of_support',
         'receiving_services', 'permission_to_phone', 'permission_to_email', 'children_home',
         'language_interpreter_required', 'province', 'city', 'lhin', 'created_at'
     ]
@@ -90,7 +90,7 @@ class ClientAdmin(admin.ModelAdmin):
             'fields': (
                 'language', 'preferred_language', 'mother_tongue', 'official_language',
                 'language_interpreter_required', 'self_identification_race_ethnicity', 'ethnicity',
-                'aboriginal_status', 'lgbtq_status', 'highest_level_education', 'children_home',
+                'aboriginal_status', 'lgbtq_status', 'veteran_status', 'legal_status', 'highest_level_education', 'children_home',
                 'children_number', 'lhin'
             )
         }),
@@ -160,9 +160,9 @@ class DischargeAdmin(admin.ModelAdmin):
 
 @admin.register(ServiceRestriction)
 class ServiceRestrictionAdmin(admin.ModelAdmin):
-    list_display = ['client', 'scope', 'program', 'restriction_type', 'is_bill_168', 'is_no_trespass', 'start_date', 'end_date', 'created_at']
-    search_fields = ['client__first_name', 'client__last_name', 'notes']
-    list_filter = ['scope', 'restriction_type', 'is_bill_168', 'is_no_trespass', 'start_date', 'end_date', 'created_at']
+    list_display = ['client', 'scope', 'program', 'restriction_type', 'is_bill_168', 'is_no_trespass', 'entered_by', 'affected_staff', 'start_date', 'end_date', 'created_at']
+    search_fields = ['client__first_name', 'client__last_name', 'notes', 'entered_by__first_name', 'entered_by__last_name', 'affected_staff__first_name', 'affected_staff__last_name']
+    list_filter = ['scope', 'restriction_type', 'is_bill_168', 'is_no_trespass', 'entered_by', 'affected_staff', 'start_date', 'end_date', 'created_at']
     readonly_fields = ['external_id', 'created_at', 'updated_at']
 
 

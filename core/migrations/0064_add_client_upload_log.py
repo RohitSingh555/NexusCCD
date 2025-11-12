@@ -26,7 +26,7 @@ class Migration(migrations.Migration):
                 ('file_name', models.CharField(db_index=True, max_length=255)),
                 ('file_size', models.BigIntegerField(help_text='File size in bytes')),
                 ('file_type', models.CharField(db_index=True, help_text='csv, xlsx, or xls', max_length=10)),
-                ('source', models.CharField(db_index=True, help_text='SMIMS or EMHware', max_length=50)),
+                ('source', models.CharField(db_index=True, help_text='SMIS or EMHware', max_length=50)),
                 ('total_rows', models.IntegerField(default=0, help_text='Total number of rows in the uploaded file')),
                 ('records_created', models.IntegerField(default=0)),
                 ('records_updated', models.IntegerField(default=0)),
