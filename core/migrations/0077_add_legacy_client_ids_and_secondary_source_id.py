@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0077_add_affected_staff_to_service_restriction'),
+        ('core', '0076_add_affected_staff_to_service_restriction'),
     ]
 
     operations = [

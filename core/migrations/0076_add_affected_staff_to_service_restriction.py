@@ -7,7 +7,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0076_add_preferred_communication_method'),
+        ('core', '0075_add_preferred_communication_method'),
     ]
 
     operations = [
