@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect
-from django.db.models import Count, Q, Case, When, Value, CharField, F
+from django.db.models import Count, Q, Case, When, Value, CharField, F, Exists, OuterRef
 from django.db import models
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import get_user_model
@@ -35,6 +35,71 @@ from .notification_utils import create_service_restriction_notification
 
 
 User = get_user_model()
+
+
+def get_active_clients_count(request, assigned_programs=None, is_program_manager=False, is_leader=False, is_staff_only=False, is_analyst=False):
+    """
+    Calculate active clients count using the same logic as the clients list view.
+    Active clients are defined by status only: is_inactive=False
+    
+    Active clients are:
+    - Clients that are not archived (is_archived=False)
+    - Clients that are not marked as duplicates (duplicate_of__status != 'pending')
+    - Clients that are not marked as inactive (is_inactive=False)
+    """
+    # Start with base queryset - exclude archived clients, duplicates, and inactive clients
+    base_queryset = Client.objects.filter(is_archived=False, is_inactive=False)
+    base_queryset = base_queryset.exclude(duplicate_of__status='pending')
+    
+    # Apply permission filters based on user role
+    if request.user.is_authenticated:
+        try:
+            staff = request.user.staff_profile
+            user_roles = staff.staffrole_set.select_related('role').all()
+            role_names = [staff_role.role.name for staff_role in user_roles]
+            
+            if is_program_manager and assigned_programs:
+                # Program managers see clients enrolled in their assigned programs
+                relationship_filters = Q()
+                relationship_filters |= Q(clientprogramenrollment__program__in=assigned_programs)
+                staff_name = f"{staff.user.first_name} {staff.user.last_name}".strip() or staff.user.username
+                relationship_filters |= Q(clientprogramenrollment__created_by=staff_name)
+                relationship_filters |= Q(servicerestriction__created_by=staff_name)
+                relationship_filters |= Q(updated_by=staff_name)
+                base_queryset = base_queryset.filter(relationship_filters)
+            elif is_staff_only:
+                # Staff-only users see clients assigned to them or enrolled in their assigned programs
+                from staff.models import StaffProgramAssignment, StaffClientAssignment
+                relationship_filters = Q()
+                assigned_program_ids = StaffProgramAssignment.objects.filter(
+                    staff=staff,
+                    is_active=True
+                ).values_list('program_id', flat=True)
+                if assigned_program_ids:
+                    relationship_filters |= Q(clientprogramenrollment__program_id__in=assigned_program_ids)
+                assigned_client_ids = StaffClientAssignment.objects.filter(
+                    staff=staff,
+                    is_active=True
+                ).values_list('client_id', flat=True)
+                if assigned_client_ids:
+                    relationship_filters |= Q(id__in=assigned_client_ids)
+                if relationship_filters:
+                    base_queryset = base_queryset.filter(relationship_filters)
+                else:
+                    base_queryset = base_queryset.none()
+            elif is_leader and assigned_programs:
+                # Leaders see clients enrolled in programs in their assigned departments
+                base_queryset = base_queryset.filter(
+                    clientprogramenrollment__program__in=assigned_programs
+                )
+            # Analysts and SuperAdmin see all clients (no additional filtering needed)
+        except Exception:
+            pass
+    
+    # Count active clients (is_inactive=False)
+    active_clients_count = base_queryset.values('id').distinct().count()
+    
+    return active_clients_count
 
 
 def get_date_range_filter(request):
@@ -315,15 +380,17 @@ def dashboard(request):
     # Get basic statistics - filter for program managers and staff-only users
     today = timezone.now().date()
     
+    # Calculate active clients count using the same logic as clients list view
+    total_clients = get_active_clients_count(
+        request,
+        assigned_programs=assigned_programs,
+        is_program_manager=is_program_manager,
+        is_leader=is_leader,
+        is_staff_only=is_staff_only,
+        is_analyst=is_analyst
+    )
+    
     if is_program_manager and assigned_programs:
-        # Program managers see only active clients enrolled in their assigned programs
-        total_clients = Client.objects.filter(
-            clientprogramenrollment__program__in=assigned_programs,
-            clientprogramenrollment__is_archived=False,
-            clientprogramenrollment__start_date__lte=today
-        ).filter(
-            Q(clientprogramenrollment__end_date__isnull=True) | Q(clientprogramenrollment__end_date__gt=today)
-        ).distinct().count()
         active_programs = assigned_programs.filter(status='active', is_archived=False).count()
         total_staff = Staff.objects.count()  # Staff count is same for all
         
@@ -351,14 +418,6 @@ def dashboard(request):
             scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     elif is_leader and assigned_programs:
-        # Leader users see data for their assigned departments - active clients only
-        total_clients = Client.objects.filter(
-            clientprogramenrollment__program__in=assigned_programs,
-            clientprogramenrollment__is_archived=False,
-            clientprogramenrollment__start_date__lte=today
-        ).filter(
-            Q(clientprogramenrollment__end_date__isnull=True) | Q(clientprogramenrollment__end_date__gt=today)
-        ).distinct().count()
         active_programs = assigned_programs.filter(status='active', is_archived=False).count()
         total_staff = Staff.objects.count()  # Staff count is same for all
         
@@ -386,13 +445,6 @@ def dashboard(request):
             scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     elif is_staff_only:
-        # Staff users see active clients only
-        total_clients = Client.objects.filter(
-            clientprogramenrollment__is_archived=False,
-            clientprogramenrollment__start_date__lte=today
-        ).filter(
-            Q(clientprogramenrollment__end_date__isnull=True) | Q(clientprogramenrollment__end_date__gt=today)
-        ).distinct().count()
         active_programs = Program.objects.filter(status='active', is_archived=False).count()
         total_staff = Staff.objects.count()
         
@@ -418,13 +470,6 @@ def dashboard(request):
             scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     elif is_analyst:
-        # Analysts see active clients only
-        total_clients = Client.objects.filter(
-            clientprogramenrollment__is_archived=False,
-            clientprogramenrollment__start_date__lte=today
-        ).filter(
-            Q(clientprogramenrollment__end_date__isnull=True) | Q(clientprogramenrollment__end_date__gt=today)
-        ).distinct().count()
         active_programs = Program.objects.filter(status='active', is_archived=False).count()
         total_staff = Staff.objects.count()
         
@@ -450,13 +495,6 @@ def dashboard(request):
             scope='org'
         ).select_related('client', 'program').order_by('-created_at')[:10]
     else:
-        # SuperAdmin and other roles see active clients only
-        total_clients = Client.objects.filter(
-            clientprogramenrollment__is_archived=False,
-            clientprogramenrollment__start_date__lte=today
-        ).filter(
-            Q(clientprogramenrollment__end_date__isnull=True) | Q(clientprogramenrollment__end_date__gt=today)
-        ).distinct().count()
         active_programs = Program.objects.filter(status='active', is_archived=False).count()
         total_staff = Staff.objects.count()
         
@@ -1597,6 +1635,24 @@ class DepartmentCreateView(AnalystAccessMixin, CreateView):
     template_name = 'core/department_form.html'
     fields = ['name', 'owner']
     success_url = reverse_lazy('core:departments')
+    
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to create departments"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Manager role users cannot create departments
+                if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    from django.contrib import messages
+                    messages.error(request, 'You do not have permission to create departments. Contact your administrator.')
+                    return redirect('core:departments')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -3649,7 +3705,13 @@ def search_programs(request):
         
         if not search_term:
             # If no query, return all active programs (limit to 20 for performance)
-            queryset = Program.objects.filter(status='active')
+            queryset = Program.objects.filter(
+                status='active',
+                is_archived=False,
+                department__is_archived=False
+            ).exclude(
+                department__name__iexact='HASS'
+            )
             
             # Apply program manager filtering for empty search too
             if request.user.is_authenticated and not request.user.is_superuser:
@@ -3676,7 +3738,13 @@ def search_programs(request):
             return JsonResponse({'success': True, 'programs': programs_data})
         
         # Filter programs based on user's access level
-        queryset = Program.objects.filter(status='active')
+        queryset = Program.objects.filter(
+            status='active',
+            is_archived=False,
+            department__is_archived=False
+        ).exclude(
+            department__name__iexact='HASS'
+        )
         
         # Apply program manager filtering
         if request.user.is_authenticated and not request.user.is_superuser:

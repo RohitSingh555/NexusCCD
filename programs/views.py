@@ -46,6 +46,10 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
         queryset = super().get_queryset()
         # Exclude archived programs by default
         queryset = queryset.filter(is_archived=False)
+        # Exclude programs with archived departments
+        queryset = queryset.filter(department__is_archived=False)
+        # Exclude programs assigned to HASS department (deleted department)
+        queryset = queryset.exclude(department__name__iexact='HASS')
         
         # For staff-only users, filter to only their assigned programs
         if self.request.user.is_authenticated:
@@ -188,7 +192,12 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
         # Calculate status card counts (assigned/unassigned/total)
         # Use base queryset with permission filters but without search/filter params
         today = timezone.now().date()
-        base_queryset = Program.objects.filter(is_archived=False)
+        base_queryset = Program.objects.filter(
+            is_archived=False,
+            department__is_archived=False
+        ).exclude(
+            department__name__iexact='HASS'
+        )
         
         # Apply the same permission filters as ProgramManagerAccessMixin and get_queryset
         if not self.request.user.is_authenticated:
@@ -253,7 +262,12 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
         # Add filter options to context
         context['programs_with_capacity'] = programs_with_capacity
         context['total_filtered_count'] = total_filtered_count
-        context['departments'] = Department.objects.all().order_by('name')
+        # Exclude archived departments and HASS from department dropdown
+        context['departments'] = Department.objects.filter(
+            is_archived=False
+        ).exclude(
+            name__iexact='HASS'
+        ).order_by('name')
         context['status_choices'] = Program.STATUS_CHOICES
         context['capacity_choices'] = [
             ('', 'All Programs'),
@@ -587,6 +601,30 @@ def fetch_enrollments_ajax(request, external_id):
 @method_decorator(jwt_required, name='dispatch')
 class ProgramCSVUploadView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManagerAccessMixin, View):
     """Upload programs via CSV. Avoid duplicates by case-insensitive program name match."""
+
+    def dispatch(self, request, *args, **kwargs):
+        """Check if user has permission to upload programs"""
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Manager role users cannot upload programs
+                if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    from django.contrib import messages
+                    messages.error(request, 'You do not have permission to upload programs. Contact your administrator.')
+                    return redirect('programs:list')
+                
+                # Leader role users cannot upload programs
+                if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    from django.contrib import messages
+                    messages.error(request, 'You do not have permission to upload programs. Contact your administrator.')
+                    return redirect('programs:list')
+            except Exception:
+                pass
+        
+        return super().dispatch(request, *args, **kwargs)
 
     def post(self, request):
         try:
@@ -940,7 +978,19 @@ class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot create programs
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    from django.contrib import messages
+                    messages.error(request, 'You do not have permission to create programs. Contact your administrator.')
+                    return redirect('programs:list')
+                
+                # Manager role users cannot create programs
+                if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    from django.contrib import messages
+                    messages.error(request, 'You do not have permission to create programs. Contact your administrator.')
+                    return redirect('programs:list')
+                
+                # Leader role users cannot create programs
+                if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     from django.contrib import messages
                     messages.error(request, 'You do not have permission to create programs. Contact your administrator.')
                     return redirect('programs:list')
@@ -1263,6 +1313,12 @@ class ProgramCSVExportView(ProgramManagerAccessMixin, ListView):
     def get_queryset(self):
         # Use the same filtering logic as ProgramListView
         queryset = super().get_queryset()
+        # Exclude archived programs by default
+        queryset = queryset.filter(is_archived=False)
+        # Exclude programs with archived departments
+        queryset = queryset.filter(department__is_archived=False)
+        # Exclude programs assigned to HASS department (deleted department)
+        queryset = queryset.exclude(department__name__iexact='HASS')
         
         # For staff-only users, apply the same filtering as ProgramListView
         if self.request.user.is_authenticated:

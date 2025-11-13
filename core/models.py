@@ -556,8 +556,22 @@ class Client(BaseModel):
     @property
     def profile_image_url(self):
         """Get profile image URL, prioritizing uploaded file over URL"""
+        # Check if profile_picture exists and file is accessible
         if self.profile_picture:
-            return self.profile_picture.url
+            try:
+                # Verify the file exists before returning URL
+                if self.profile_picture.storage.exists(self.profile_picture.name):
+                    return self.profile_picture.url
+                else:
+                    # File doesn't exist, fall back to image URL if available
+                    if self.image:
+                        return self.image
+                    return None
+            except Exception:
+                # If there's an error accessing the file, fall back to image URL
+                if self.image:
+                    return self.image
+                return None
         elif self.image:
             return self.image
         return None

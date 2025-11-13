@@ -11,13 +11,17 @@
     <div class="mb-6">
         <div class="flex items-center justify-between">
             <div class="flex items-center space-x-3">
-                <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-sm">
+                <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center shadow-sm overflow-hidden">
                     {% if client.profile_image_url %}
                         <img src="{{ client.profile_image_url }}" 
                              alt="{{ client.first_name }} {{ client.last_name }}" 
                              class="w-16 h-16 rounded-lg object-cover cursor-pointer hover:opacity-90 transition-opacity"
                              ondblclick="openImageModal('{{ client.profile_image_url }}', '{{ client.first_name }} {{ client.last_name }}')"
-                             title="Double-click to view larger image">
+                             title="Double-click to view larger image"
+                             onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <span class="text-2xl font-bold text-white" style="display: none;">
+                            {{ client.first_name|first|upper }}{{ client.last_name|first|upper }}
+                        </span>
                     {% else %}
                         <span class="text-2xl font-bold text-white">
                             {{ client.first_name|first|upper }}{{ client.last_name|first|upper }}

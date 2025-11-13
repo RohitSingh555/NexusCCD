@@ -128,9 +128,12 @@
                 </div>
                 
                 <div id="program-field" :class="{'hidden': !['program', 'org'].includes(scope)}">
-                    <label for="{{ form.program.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">Program</label>
+                    <label for="{{ form.program.id_for_label }}" class="block text-sm font-bold text-neutral-700 mb-2 font-subheader">
+                        Program
+                        <span id="program-required-indicator" class="text-red-600" style="display: none;">*</span>
+                    </label>
                     {{ form.program }}
-                    <p class="mt-1 text-sm text-neutral-500 font-body">Required for program-specific restrictions; optional for agency-wide restrictions</p>
+                    <p id="program-help-text" class="mt-1 text-sm text-neutral-500 font-body">Required for program-specific restrictions; optional for agency-wide restrictions</p>
                     {% if form.program.errors %}
                         <div class="mt-1 text-sm text-red-600">{{ form.program.errors.0 }}</div>
                     {% endif %}
@@ -385,6 +388,17 @@
                     scopeSelect.addEventListener('change', () => {
                         this.updateProgramVisibility();
                     });
+                    
+                    // Also listen for input events (for programmatic changes)
+                    scopeSelect.addEventListener('input', () => {
+                        this.updateProgramVisibility();
+                    });
+                }
+                
+                // Initialize program visibility on page load based on initial scope value
+                if (scopeSelect && scopeSelect.value) {
+                    this.scope = scopeSelect.value;
+                    this.updateProgramVisibility();
                 }
             },
             
@@ -392,6 +406,8 @@
                 const scopeSelect = document.getElementById('{{ form.scope.id_for_label }}');
                 const programField = document.getElementById('program-field');
                 const programSelect = document.getElementById('{{ form.program.id_for_label }}');
+                const programRequiredIndicator = document.getElementById('program-required-indicator');
+                const programHelpText = document.getElementById('program-help-text');
                 
                 this.scope = scopeSelect.value;
                 
@@ -399,13 +415,35 @@
                     programField.classList.remove('hidden');
                     if (this.scope === 'program') {
                         programSelect.required = true;
+                        programSelect.setAttribute('required', 'required');
+                        if (programRequiredIndicator) {
+                            programRequiredIndicator.style.display = 'inline';
+                        }
+                        if (programHelpText) {
+                            programHelpText.textContent = 'Program is required for Program-Specific restrictions.';
+                            programHelpText.classList.remove('text-neutral-500');
+                            programHelpText.classList.add('text-red-600', 'font-bold');
+                        }
                     } else {
                         programSelect.required = false;
+                        programSelect.removeAttribute('required');
+                        if (programRequiredIndicator) {
+                            programRequiredIndicator.style.display = 'none';
+                        }
+                        if (programHelpText) {
+                            programHelpText.textContent = 'Optional for agency-wide restrictions.';
+                            programHelpText.classList.remove('text-red-600', 'font-bold');
+                            programHelpText.classList.add('text-neutral-500');
+                        }
                     }
                 } else {
                     programField.classList.add('hidden');
                     programSelect.required = false;
+                    programSelect.removeAttribute('required');
                     programSelect.value = '';
+                    if (programRequiredIndicator) {
+                        programRequiredIndicator.style.display = 'none';
+                    }
                 }
             },
             

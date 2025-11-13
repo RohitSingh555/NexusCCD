@@ -33,6 +33,38 @@ class ReportsAccessMixin(LoginRequiredMixin):
 
         return super().dispatch(request, *args, **kwargs)
 
+
+class ReportsExportAccessMixin(LoginRequiredMixin):
+    """Shared mixin for export views that prevents Manager and Staff-only users from exporting reports."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return super().dispatch(request, *args, **kwargs)
+
+        try:
+            staff_profile = request.user.staff_profile
+            role_names = [
+                staff_role.role.name
+                for staff_role in staff_profile.staffrole_set.select_related('role').all()
+            ]
+
+            # Block Manager and staff-only users from exporting reports
+            # Only SuperAdmin, Admin, Leader, and Analyst can export
+            if 'Manager' in role_names and not any(
+                role in ['SuperAdmin', 'Admin'] for role in role_names
+            ):
+                raise PermissionDenied("Manager users cannot export reports.")
+            
+            # Block staff-only users (no elevated roles) from exporting reports
+            if 'Staff' in role_names and not any(
+                role in ['SuperAdmin', 'Admin', 'Leader', 'Analyst'] for role in role_names
+            ):
+                raise PermissionDenied("Staff users cannot export reports.")
+        except Staff.DoesNotExist:
+            pass
+
+        return super().dispatch(request, *args, **kwargs)
+
 def get_date_range_filter(request):
     """Helper function to get date range filter parameters from request"""
     start_date = request.GET.get('start_date', '').strip()
@@ -627,7 +659,7 @@ class VacancyTrackerView(ReportsAccessMixin, TemplateView):
         context['is_program_manager'] = is_program_manager
         return context
 
-class ReportExportView(ReportsAccessMixin, TemplateView):
+class ReportExportView(ReportsExportAccessMixin, TemplateView):
     def get(self, request, report_type):
         if report_type == 'organizational-summary':
             return self.export_organizational_summary(request)
@@ -931,6 +963,9 @@ class ClientEnrollmentHistoryView(ReportsAccessMixin, ListView):
         program_filter = self.request.GET.get('program', '').strip()
         department_filter = self.request.GET.get('department', '').strip()
         
+        # Get client status filter
+        client_status = get_client_status_filter(self.request)
+        
         # Get program manager and staff-only filtering
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
         
@@ -951,6 +986,13 @@ class ClientEnrollmentHistoryView(ReportsAccessMixin, ListView):
                 return ClientProgramEnrollment.objects.none()
         else:
             queryset = ClientProgramEnrollment.objects.select_related('client', 'program', 'program__department')
+        
+        # Apply client status filter (filter by client's is_inactive status)
+        if client_status == 'active':
+            queryset = queryset.filter(client__is_inactive=False)
+        elif client_status == 'inactive':
+            queryset = queryset.filter(client__is_inactive=True)
+        # If client_status is empty, show all clients (no filter)
         
         # Apply program filter if specified
         if program_filter:
@@ -987,6 +1029,10 @@ class ClientEnrollmentHistoryView(ReportsAccessMixin, ListView):
         program_filter = self.request.GET.get('program', '').strip()
         department_filter = self.request.GET.get('department', '').strip()
         
+        # Get client status filter
+        client_status = get_client_status_filter(self.request)
+        context['client_status'] = client_status
+        
         context['start_date'] = start_date
         context['end_date'] = end_date
         
@@ -1000,6 +1046,13 @@ class ClientEnrollmentHistoryView(ReportsAccessMixin, ListView):
             all_enrollments = ClientProgramEnrollment.objects.filter(program__in=assigned_programs)
         else:
             all_enrollments = ClientProgramEnrollment.objects.all()
+        
+        # Apply client status filter to statistics (filter by client's is_inactive status)
+        if client_status == 'active':
+            all_enrollments = all_enrollments.filter(client__is_inactive=False)
+        elif client_status == 'inactive':
+            all_enrollments = all_enrollments.filter(client__is_inactive=True)
+        # If client_status is empty, show all clients (no filter)
         
         # Apply program filter to statistics if specified
         if program_filter:
@@ -1074,16 +1127,22 @@ class ClientEnrollmentHistoryView(ReportsAccessMixin, ListView):
         return context
 
 
-class ClientEnrollmentHistoryExportView(ReportsAccessMixin, ListView):
+class ClientEnrollmentHistoryExportView(ReportsExportAccessMixin, ListView):
     """Export client enrollment history to CSV"""
     model = ClientProgramEnrollment
     template_name = 'reports/client_enrollment_history.html'
     
     def get_queryset(self):
         """Get enrollments ordered by most recent start date first"""
+        # Get date range filter parameters
+        start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
+        
         # Get program and department filter parameters
         program_filter = self.request.GET.get('program', '').strip()
         department_filter = self.request.GET.get('department', '').strip()
+        
+        # Get client status filter
+        client_status = get_client_status_filter(self.request)
         
         # Get program manager and staff-only filtering
         is_program_manager, is_leader, is_analyst, is_staff_only, assigned_programs, assigned_clients = get_program_manager_filtering(self.request)
@@ -1106,6 +1165,13 @@ class ClientEnrollmentHistoryExportView(ReportsAccessMixin, ListView):
         else:
             queryset = ClientProgramEnrollment.objects.select_related('client', 'program', 'program__department')
         
+        # Apply client status filter (filter by client's is_inactive status)
+        if client_status == 'active':
+            queryset = queryset.filter(client__is_inactive=False)
+        elif client_status == 'inactive':
+            queryset = queryset.filter(client__is_inactive=True)
+        # If client_status is empty, show all clients (no filter)
+        
         # Apply program filter if specified
         if program_filter:
             try:
@@ -1121,6 +1187,12 @@ class ClientEnrollmentHistoryExportView(ReportsAccessMixin, ListView):
                 queryset = queryset.filter(program__department=department)
             except (Department.DoesNotExist, ValueError):
                 pass
+        
+        # Apply date filtering
+        if parsed_start_date:
+            queryset = queryset.filter(start_date__gte=parsed_start_date)
+        if parsed_end_date:
+            queryset = queryset.filter(start_date__lte=parsed_end_date)
         
         return queryset.order_by('-start_date')
     
@@ -1347,7 +1419,7 @@ class ProgramCapacityView(ReportsAccessMixin, ListView):
         return program_data
 
 
-class ProgramCapacityExportView(ReportsAccessMixin, ListView):
+class ProgramCapacityExportView(ReportsExportAccessMixin, ListView):
     """Export program capacity data to CSV"""
     model = Program
     template_name = 'reports/program_capacity.html'
@@ -1524,7 +1596,7 @@ class ProgramPerformanceView(ReportsAccessMixin, ListView):
         return context
 
 
-class ProgramPerformanceExportView(ReportsAccessMixin, ListView):
+class ProgramPerformanceExportView(ReportsExportAccessMixin, ListView):
     """Export program performance data to CSV"""
     model = Program
     template_name = 'reports/program_performance.html'
@@ -1681,7 +1753,7 @@ class DepartmentSummaryView(ReportsAccessMixin, TemplateView):
 
 
 # Export Views for the three specific reports
-class ClientDemographicsExportView(ReportsAccessMixin, TemplateView):
+class ClientDemographicsExportView(ReportsExportAccessMixin, TemplateView):
     """Export client demographics report to CSV"""
     
     def get(self, request, *args, **kwargs):
@@ -1860,7 +1932,7 @@ class ClientDemographicsExportView(ReportsAccessMixin, TemplateView):
         return response
 
 
-class ClientOutcomesExportView(ReportsAccessMixin, TemplateView):
+class ClientOutcomesExportView(ReportsExportAccessMixin, TemplateView):
     """Export client outcomes report to CSV"""
     
     def get(self, request, *args, **kwargs):
@@ -1965,7 +2037,7 @@ class ClientOutcomesExportView(ReportsAccessMixin, TemplateView):
         return response
 
 
-class OrganizationalSummaryExportView(ReportsAccessMixin, TemplateView):
+class OrganizationalSummaryExportView(ReportsExportAccessMixin, TemplateView):
     """Export organizational summary report to CSV"""
     
     def get(self, request, *args, **kwargs):

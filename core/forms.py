@@ -388,6 +388,16 @@ class ServiceRestrictionForm(forms.ModelForm):
             from .models import Program
             self.fields['program'].queryset = Program.objects.all().order_by('name')
         
+        # Set program field as required if scope is 'program' (for existing instances)
+        if self.instance and self.instance.pk:
+            if self.instance.scope == 'program':
+                self.fields['program'].required = True
+        elif args and len(args) > 0 and hasattr(args[0], 'get'):
+            # Check if scope is 'program' in the initial data
+            scope_value = args[0].get('scope', '')
+            if scope_value == 'program':
+                self.fields['program'].required = True
+        
         self.fields['is_indefinite'].help_text = "Check this box if the restriction has no end date"
         self.fields['behaviors'].help_text = "Select all behaviors that apply to this restriction (only shown for Behavioral Issues type)"
         self.fields['notes'].help_text = "Additional notes about the restriction (required for Behavioral Issues type)"
@@ -429,6 +439,8 @@ class ServiceRestrictionForm(forms.ModelForm):
         restriction_type = cleaned_data.get('restriction_type')
         behaviors = cleaned_data.get('behaviors')
         notes = cleaned_data.get('notes')
+        scope = cleaned_data.get('scope')
+        program = cleaned_data.get('program')
         
         
         print(f"Form data: {cleaned_data}")
@@ -438,6 +450,16 @@ class ServiceRestrictionForm(forms.ModelForm):
         print(f"Is indefinite: {is_indefinite}")
         print(f"Start date: {start_date}")
         print(f"End date: {end_date}")
+        print(f"Scope: {scope}")
+        print(f"Program: {program}")
+        
+        
+        # Validate that program is required for program-specific restrictions
+        if scope == 'program':
+            if not program:
+                raise forms.ValidationError({
+                    'program': "Program is required for Program-Specific restrictions."
+                })
         
         
         if is_indefinite and end_date:

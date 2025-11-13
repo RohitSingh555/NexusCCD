@@ -8,7 +8,7 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Exists, OuterRef, Max
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import IntegrityError, transaction
 from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate, ClientUploadLog, ServiceRestrictionNotificationSubscription
@@ -242,7 +242,7 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         gender_filter = self.request.GET.get('gender', '').strip()
         status_filter = self.request.GET.get('status', '').strip()
         
-        # Filter by status (active vs inactive)
+        # Filter by status (active vs inactive) - based on is_inactive field only
         if status_filter == 'active':
             # Show only active clients (is_inactive=False)
             queryset = queryset.filter(is_inactive=False)
@@ -344,34 +344,19 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         if gender_filter:
             queryset = queryset.filter(gender=gender_filter)
         
-        # Enrollment count filtering
+        # Enrollment count filtering - discrete numbers
         enrollment_count_filter = self.request.GET.get('enrollment_count', '').strip()
         if enrollment_count_filter:
-            if enrollment_count_filter == '0':
-                # Clients with no enrollments
+            try:
+                # Try to parse as integer for discrete number filtering
+                enrollment_count = int(enrollment_count_filter)
+                # Annotate queryset with enrollment count
                 queryset = queryset.annotate(
                     enrollment_count_temp=Count('clientprogramenrollment', filter=Q(clientprogramenrollment__is_archived=False), distinct=True)
-                ).filter(enrollment_count_temp=0)
-            elif enrollment_count_filter == '1':
-                # Clients with exactly 1 enrollment
-                queryset = queryset.annotate(
-                    enrollment_count_temp=Count('clientprogramenrollment', filter=Q(clientprogramenrollment__is_archived=False), distinct=True)
-                ).filter(enrollment_count_temp=1)
-            elif enrollment_count_filter == '2-5':
-                # Clients with 2-5 enrollments
-                queryset = queryset.annotate(
-                    enrollment_count_temp=Count('clientprogramenrollment', filter=Q(clientprogramenrollment__is_archived=False), distinct=True)
-                ).filter(enrollment_count_temp__gte=2, enrollment_count_temp__lte=5)
-            elif enrollment_count_filter == '6-10':
-                # Clients with 6-10 enrollments
-                queryset = queryset.annotate(
-                    enrollment_count_temp=Count('clientprogramenrollment', filter=Q(clientprogramenrollment__is_archived=False), distinct=True)
-                ).filter(enrollment_count_temp__gte=6, enrollment_count_temp__lte=10)
-            elif enrollment_count_filter == '11+':
-                # Clients with 11+ enrollments
-                queryset = queryset.annotate(
-                    enrollment_count_temp=Count('clientprogramenrollment', filter=Q(clientprogramenrollment__is_archived=False), distinct=True)
-                ).filter(enrollment_count_temp__gte=11)
+                ).filter(enrollment_count_temp=enrollment_count)
+            except (ValueError, TypeError):
+                # If not a valid integer, ignore the filter
+                pass
         
         # Program manager filtering - only apply if user has permission and manager is selected
         manager_filter = self.request.GET.get('manager', '')
@@ -491,6 +476,7 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         context['age_range'] = self.request.GET.get('age_range', '')
         context['gender_filter'] = self.request.GET.get('gender', '')
         context['manager_filter'] = self.request.GET.get('manager', '')
+        context['enrollment_count_filter'] = self.request.GET.get('enrollment_count', '')
         context['per_page'] = self.request.GET.get('per_page', '10')
         context['sort'] = self.request.GET.get('sort', 'name_asc')
         
@@ -540,6 +526,81 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         context['current_status'] = self.request.GET.get('status', '')
         context['enrollment_count_filter'] = self.request.GET.get('enrollment_count', '')
         
+        # Calculate maximum enrollment count for filter options
+        # Get base queryset with same permission filters as get_queryset (but without other filters)
+        base_queryset_for_max = Client.objects.filter(is_archived=False)
+        base_queryset_for_max = base_queryset_for_max.exclude(duplicate_of__status='pending')
+        
+        # Apply permission filters if needed
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                if staff.is_program_manager():
+                    assigned_programs = staff.get_assigned_programs()
+                    relationship_filters = Q()
+                    relationship_filters |= Q(clientprogramenrollment__program__in=assigned_programs)
+                    staff_name = f"{staff.user.first_name} {staff.user.last_name}".strip() or staff.user.username
+                    relationship_filters |= Q(clientprogramenrollment__created_by=staff_name)
+                    relationship_filters |= Q(servicerestriction__created_by=staff_name)
+                    relationship_filters |= Q(updated_by=staff_name)
+                    base_queryset_for_max = base_queryset_for_max.filter(relationship_filters)
+                elif 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager', 'Leader'] for role in role_names):
+                    from staff.models import StaffProgramAssignment, StaffClientAssignment
+                    relationship_filters = Q()
+                    assigned_program_ids = StaffProgramAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('program_id', flat=True)
+                    if assigned_program_ids:
+                        relationship_filters |= Q(clientprogramenrollment__program_id__in=assigned_program_ids)
+                    assigned_client_ids = StaffClientAssignment.objects.filter(
+                        staff=staff,
+                        is_active=True
+                    ).values_list('client_id', flat=True)
+                    if assigned_client_ids:
+                        relationship_filters |= Q(id__in=assigned_client_ids)
+                    if relationship_filters:
+                        base_queryset_for_max = base_queryset_for_max.filter(relationship_filters)
+                    else:
+                        base_queryset_for_max = base_queryset_for_max.none()
+                elif staff.is_leader():
+                    from core.models import Department
+                    assigned_departments = Department.objects.filter(
+                        leader_assignments__staff=staff,
+                        leader_assignments__is_active=True
+                    ).distinct()
+                    assigned_programs = Program.objects.filter(
+                        department__in=assigned_departments
+                    ).distinct()
+                    base_queryset_for_max = base_queryset_for_max.filter(
+                        clientprogramenrollment__program__in=assigned_programs
+                    )
+            except Exception:
+                pass
+        
+        # Calculate maximum enrollment count and create list of discrete numbers
+        try:
+            max_enrollment_count_result = base_queryset_for_max.annotate(
+                enrollment_count=Count('clientprogramenrollment', filter=Q(clientprogramenrollment__is_archived=False), distinct=True)
+            ).aggregate(Max('enrollment_count'))['enrollment_count__max']
+            
+            if max_enrollment_count_result is None:
+                # No clients found, default to 20
+                max_enrollment_count = 20
+            else:
+                # Set a reasonable maximum (at least 20, but use actual max if higher, cap at 100)
+                max_enrollment_count = min(max(20, max_enrollment_count_result), 100)
+        except Exception:
+            # Fallback to 20 if calculation fails
+            max_enrollment_count = 20
+        
+        # Create list of enrollment count numbers (0, 1, 2, ..., max_enrollment_count)
+        enrollment_count_options = list(range(max_enrollment_count + 1))
+        context['enrollment_count_options'] = enrollment_count_options
+        
         # Check if user is a Leader
         is_leader = False
         if self.request.user.is_authenticated:
@@ -579,11 +640,7 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         # Calculate client status counts for the cards
         # Get base queryset WITHOUT date filters or other GET parameter filters
         # This ensures counts show totals, not filtered results
-        from django.db.models import Count, Exists, OuterRef
-        from django.utils import timezone
-        from datetime import date
-        today = timezone.now().date()
-        
+        # Start with all non-archived clients (regardless of is_inactive status)
         base_queryset = Client.objects.filter(is_archived=False)
         
         # Exclude clients marked as duplicates
@@ -639,26 +696,17 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
             except Exception:
                 pass
         
-        # Optimize count queries by using a single queryset with annotations
-        # This reduces the number of database queries from 3 to 1
-        base_ids = base_queryset.values('id').distinct()
-        context['total_clients_count'] = base_ids.count()
+        # Total clients: all non-archived clients (regardless of is_inactive status)
+        total_ids = base_queryset.values('id').distinct()
+        context['total_clients_count'] = total_ids.count()
         
-        # Active: clients with at least one active enrollment
-        # Use Exists subquery for better performance
-        active_enrollments = ClientProgramEnrollment.objects.filter(
-            client=OuterRef('pk'),
-            is_archived=False,
-            start_date__lte=today
-        ).filter(
-            Q(end_date__isnull=True) | Q(end_date__gt=today)
-        )
-        active_queryset = base_queryset.annotate(has_active_enrollment=Exists(active_enrollments))
-        context['active_clients_count'] = active_queryset.filter(has_active_enrollment=True).values('id').distinct().count()
+        # Active clients: clients with is_inactive=False
+        active_queryset = base_queryset.filter(is_inactive=False)
+        context['active_clients_count'] = active_queryset.values('id').distinct().count()
         
-        # Inactive: clients with is_inactive=True (uses the is_inactive field from the model)
-        inactive_ids = base_queryset.filter(is_inactive=True).values('id').distinct()
-        context['inactive_clients_count'] = inactive_ids.count()
+        # Inactive clients: clients with is_inactive=True
+        inactive_queryset = base_queryset.filter(is_inactive=True)
+        context['inactive_clients_count'] = inactive_queryset.values('id').distinct().count()
         
         # Duplicate: clients that have been marked as duplicates (duplicate_of with status='pending' or 'confirmed_duplicate')
         duplicate_clients = Client.objects.filter(
@@ -4152,7 +4200,11 @@ def get_upload_logs(request):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot view upload logs
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Leader'] for role in role_names):
+                    return JsonResponse({'success': False, 'error': 'You do not have permission to view upload logs.'}, status=403)
+                
+                # Manager role users cannot view upload logs
+                if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     return JsonResponse({'success': False, 'error': 'You do not have permission to view upload logs.'}, status=403)
             except Exception:
                 pass
@@ -4680,12 +4732,17 @@ class ClientDedupeView(TemplateView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot access duplicate detection
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Leader'] for role in role_names):
+                    messages.error(request, 'You do not have permission to access duplicate detection. Contact your administrator.')
+                    return redirect('clients:list')
+                
+                # Manager role users cannot access duplicate detection
+                if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     messages.error(request, 'You do not have permission to access duplicate detection. Contact your administrator.')
                     return redirect('clients:list')
                 
                 # Leader role users cannot access duplicate detection
-                if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+                if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     messages.error(request, 'You do not have permission to access duplicate detection. Contact your administrator.')
                     return redirect('clients:list')
             except Exception:
@@ -4695,6 +4752,7 @@ class ClientDedupeView(TemplateView):
     
     def get_context_data(self, **kwargs):
         from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+        from django.db.models import Count, Q, Case, When, IntegerField
         
         context = super().get_context_data(**kwargs)
         
@@ -4712,8 +4770,8 @@ class ClientDedupeView(TemplateView):
             ('last_month', 'Last 30 Days'),
         ]
         
-        # Build optimized query with select_related and only necessary fields
-        duplicates_query = ClientDuplicate.objects.select_related(
+        # Build base query with filters (optimized)
+        base_query = ClientDuplicate.objects.select_related(
             'primary_client', 'duplicate_client'
         ).only(
             'id', 'status', 'confidence_level', 'similarity_score', 'created_at', 'detection_source',
@@ -4721,84 +4779,165 @@ class ClientDedupeView(TemplateView):
             'primary_client__external_id', 'primary_client__client_id',
             'duplicate_client__id', 'duplicate_client__first_name', 'duplicate_client__last_name',
             'duplicate_client__external_id', 'duplicate_client__client_id'
-        ).all()
+        )
         
         # Filter by tab (all duplicates vs scanned duplicates)
         if tab_filter == 'scanned':
-            duplicates_query = duplicates_query.filter(detection_source='scan')
+            base_query = base_query.filter(detection_source='scan')
         
         if status_filter:
-            duplicates_query = duplicates_query.filter(status=status_filter)
+            base_query = base_query.filter(status=status_filter)
         
         if confidence_filter:
-            duplicates_query = duplicates_query.filter(confidence_level=confidence_filter)
+            base_query = base_query.filter(confidence_level=confidence_filter)
         
         if time_filter:
             now = timezone.now()
             local_now = timezone.localtime(now)
             if time_filter == 'last_hour':
                 start = now - timedelta(hours=1)
-                duplicates_query = duplicates_query.filter(created_at__gte=start)
+                base_query = base_query.filter(created_at__gte=start)
             elif time_filter == 'today':
                 start_today = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-                duplicates_query = duplicates_query.filter(created_at__gte=start_today)
+                base_query = base_query.filter(created_at__gte=start_today)
             elif time_filter == 'yesterday':
                 start_today = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
                 start_yesterday = start_today - timedelta(days=1)
-                duplicates_query = duplicates_query.filter(
+                base_query = base_query.filter(
                     created_at__gte=start_yesterday,
                     created_at__lt=start_today
                 )
             elif time_filter == 'last_week':
                 start_week = local_now - timedelta(days=7)
-                duplicates_query = duplicates_query.filter(created_at__gte=start_week)
+                base_query = base_query.filter(created_at__gte=start_week)
             elif time_filter == 'last_month':
                 start_month = local_now - timedelta(days=30)
-                duplicates_query = duplicates_query.filter(created_at__gte=start_month)
+                base_query = base_query.filter(created_at__gte=start_month)
         
-        # Order by confidence level and similarity score
-        duplicates_query = duplicates_query.order_by(
-            '-confidence_level', '-similarity_score', '-created_at'
-        )
+        # OPTIMIZATION: Get unique primary client IDs first (with ordering)
+        # This avoids loading all duplicates into memory
+        # Order by similarity score (numeric) first, then by confidence level
+        # Get the max similarity score for each primary client to order by
+        from django.db.models import Max
         
-        # Group duplicates by primary client for better organization
-        grouped_duplicates = {}
-        for duplicate in duplicates_query:
-            primary_id = duplicate.primary_client.id
-            if primary_id not in grouped_duplicates:
-                grouped_duplicates[primary_id] = {
-                    'primary_client': duplicate.primary_client,
-                    'duplicates': []
-                }
-            grouped_duplicates[primary_id]['duplicates'].append(duplicate)
+        # Get primary clients with their max similarity score, ordered by similarity DESC
+        # This is more efficient than ordering by confidence_level (CharField)
+        # Get just the IDs as a queryset (not evaluated yet)
+        primary_client_stats_qs = base_query.values('primary_client_id').annotate(
+            max_similarity=Max('similarity_score'),
+            latest_created=Max('created_at')
+        ).order_by('-max_similarity', '-latest_created')
         
-        # Convert to list for pagination
-        grouped_duplicates_list = list(grouped_duplicates.values())
+        # Extract just the primary_client_id values as a flat list
+        # This query is evaluated but only returns IDs, not full objects
+        ordered_primary_ids = list(primary_client_stats_qs.values_list('primary_client_id', flat=True))
         
-        # Paginate the grouped duplicates
-        paginator = Paginator(grouped_duplicates_list, self.paginate_by)
+        # Paginate the primary client IDs (much more efficient - paginating IDs, not full objects)
+        paginator = Paginator(ordered_primary_ids, self.paginate_by)
         page = self.request.GET.get('page', 1)
         
         try:
-            paginated_groups = paginator.page(page)
+            paginated_primary_ids_page = paginator.page(page)
         except PageNotAnInteger:
-            paginated_groups = paginator.page(1)
+            paginated_primary_ids_page = paginator.page(1)
         except EmptyPage:
-            paginated_groups = paginator.page(paginator.num_pages)
+            paginated_primary_ids_page = paginator.page(paginator.num_pages)
         
-        # Get statistics (optimized with single queries)
-        total_duplicates = ClientDuplicate.objects.count()
-        pending_duplicates = ClientDuplicate.objects.filter(status='pending').count()
-        high_confidence_duplicates = ClientDuplicate.objects.filter(
-            confidence_level='high', status='pending'
-        ).count()
-        scanned_duplicates = ClientDuplicate.objects.filter(detection_source='scan').count()
-        scanned_pending_duplicates = ClientDuplicate.objects.filter(
-            detection_source='scan', status='pending'
-        ).count()
+        # Now fetch only the duplicates for the paginated primary clients
+        # This dramatically reduces memory usage and query time
+        paginated_primary_ids_list = list(paginated_primary_ids_page.object_list)
+        
+        if paginated_primary_ids_list:
+            # Fetch duplicates for these primary clients only
+            # Order by confidence_level and similarity_score for display
+            # Map confidence_level to numeric for proper ordering
+            from django.db.models import Case, When, IntegerField
+            confidence_order = Case(
+                When(confidence_level='high', then=4),
+                When(confidence_level='medium', then=3),
+                When(confidence_level='low', then=2),
+                When(confidence_level='very_low', then=1),
+                default=0,
+                output_field=IntegerField()
+            )
+            
+            duplicates_for_page = base_query.filter(
+                primary_client_id__in=paginated_primary_ids_list
+            ).annotate(
+                conf_order=confidence_order
+            ).order_by('-conf_order', '-similarity_score', '-created_at')
+            
+            # Group duplicates by primary client (only for the current page)
+            grouped_duplicates = {}
+            
+            for duplicate in duplicates_for_page:
+                primary_id = duplicate.primary_client_id
+                if primary_id not in grouped_duplicates:
+                    grouped_duplicates[primary_id] = {
+                        'primary_client': duplicate.primary_client,
+                        'duplicates': []
+                    }
+                grouped_duplicates[primary_id]['duplicates'].append(duplicate)
+            
+            # Maintain the order from paginated_primary_ids_list
+            grouped_duplicates_list = [
+                grouped_duplicates[primary_id] 
+                for primary_id in paginated_primary_ids_list 
+                if primary_id in grouped_duplicates
+            ]
+        else:
+            grouped_duplicates_list = []
+        
+        # Create a page-like object for the grouped duplicates
+        # This maintains all pagination attributes the template expects
+        class GroupedDuplicatesPage:
+            def __init__(self, groups, id_page_obj):
+                self.object_list = groups
+                self.paginator = id_page_obj.paginator
+                self.number = id_page_obj.number
+                self.has_previous = id_page_obj.has_previous()
+                self.has_next = id_page_obj.has_next()
+                self.has_other_pages = id_page_obj.has_other_pages()
+                self.previous_page_number = id_page_obj.previous_page_number() if self.has_previous else None
+                self.next_page_number = id_page_obj.next_page_number() if self.has_next else None
+                self.start_index = id_page_obj.start_index()
+                self.end_index = id_page_obj.end_index()
+            
+            def __iter__(self):
+                return iter(self.object_list)
+            
+            def __len__(self):
+                return len(self.object_list)
+        
+        paginated_groups = GroupedDuplicatesPage(grouped_duplicates_list, paginated_primary_ids_page)
+        
+        # OPTIMIZATION: Get all statistics using a single aggregate query
+        # This replaces multiple separate queries with one efficient aggregate query
+        all_stats = ClientDuplicate.objects.aggregate(
+            total_duplicates=Count('id'),
+            pending_duplicates=Count('id', filter=Q(status='pending')),
+            high_confidence_duplicates=Count('id', filter=Q(confidence_level='high', status='pending')),
+            scanned_duplicates=Count('id', filter=Q(detection_source='scan')),
+            scanned_pending_duplicates=Count('id', filter=Q(detection_source='scan', status='pending')),
+            scanned_high_confidence=Count('id', filter=Q(detection_source='scan', confidence_level='high', status='pending'))
+        )
+        
+        # Use tab-filtered stats if on scanned tab, otherwise use all stats
+        if tab_filter == 'scanned':
+            total_duplicates = all_stats['scanned_duplicates']
+            pending_duplicates = all_stats['scanned_pending_duplicates']
+            high_confidence_duplicates = all_stats['scanned_high_confidence']
+            scanned_duplicates = all_stats['scanned_duplicates']
+            scanned_pending_duplicates = all_stats['scanned_pending_duplicates']
+        else:
+            total_duplicates = all_stats['total_duplicates']
+            pending_duplicates = all_stats['pending_duplicates']
+            high_confidence_duplicates = all_stats['high_confidence_duplicates']
+            scanned_duplicates = all_stats['scanned_duplicates']
+            scanned_pending_duplicates = all_stats['scanned_pending_duplicates']
         
         context.update({
-            'grouped_duplicates': {i: group for i, group in enumerate(paginated_groups)},
+            'grouped_duplicates': {i: group for i, group in enumerate(grouped_duplicates_list)},
             'paginated_groups': paginated_groups,
             'status_filter': status_filter,
             'confidence_filter': confidence_filter,
@@ -4817,11 +4956,248 @@ class ClientDedupeView(TemplateView):
         return context
 
 
+def auto_merge_high_confidence_duplicate(primary_client, duplicate_client, similarity_score, match_type, confidence_level, reviewed_by=None):
+    """
+    Automatically merge high-confidence duplicate clients.
+    This function merges duplicate_client into primary_client, preserving all data and legacy IDs.
+    
+    Args:
+        primary_client: The primary client to keep
+        duplicate_client: The duplicate client to merge into primary
+        similarity_score: Similarity score between clients
+        match_type: Type of match (e.g., 'exact_email', 'name_dob_match')
+        confidence_level: Confidence level ('high', 'medium', etc.)
+        reviewed_by: Staff member who reviewed this (optional)
+    
+    Returns:
+        dict: Result with 'success', 'merged', 'message', and optional 'error'
+    """
+    try:
+        from django.db import transaction
+        
+        with transaction.atomic():
+            # Store original client IDs and sources before merge (for legacy_client_ids tracking)
+            primary_client_id = primary_client.client_id
+            primary_source = primary_client.source
+            duplicate_client_id = duplicate_client.client_id
+            duplicate_source = duplicate_client.source
+            
+            # Use the primary client as the base
+            merged_client = primary_client
+            
+            # Strategy: Merge duplicate client's data into primary if primary is missing data
+            # For fields where both have values, prefer primary's value
+            # For fields where only one has a value, use that value
+            
+            # List of fields to merge (excluding id, external_id, created_at, updated_at)
+            fields_to_merge = [
+                'first_name', 'last_name', 'middle_name', 'preferred_name', 'alias',
+                'dob', 'age', 'gender', 'gender_identity', 'pronoun', 'marital_status',
+                'citizenship_status', 'location_county', 'province', 'city', 'postal_code',
+                'address', 'address_2', 'language', 'preferred_language', 'mother_tongue',
+                'official_language', 'language_interpreter_required', 'self_identification_race_ethnicity',
+                'ethnicity', 'aboriginal_status', 'lgbtq_status', 'highest_level_education',
+                'children_home', 'children_number', 'lhin', 'medical_conditions', 'primary_diagnosis',
+                'family_doctor', 'health_card_number', 'health_card_version', 'health_card_exp_date',
+                'health_card_issuing_province', 'no_health_card_reason', 'permission_to_phone',
+                'permission_to_email', 'phone', 'phone_work', 'phone_alt', 'email',
+                'next_of_kin', 'emergency_contact', 'comments', 'program', 'sub_program',
+                'support_workers', 'level_of_support', 'client_type', 'admission_date',
+                'discharge_date', 'days_elapsed', 'program_status', 'reason_discharge',
+                'receiving_services', 'receiving_services_date', 'referral_source',
+                'chart_number', 'source', 'image', 'profile_picture', 'contact_information',
+                'addresses', 'uid_external', 'languages_spoken', 'indigenous_status',
+                'country_of_birth', 'sexual_orientation', 'updated_by'
+            ]
+            
+            # Merge fields: prefer primary's value, but use duplicate's if primary is empty
+            for field_name in fields_to_merge:
+                try:
+                    primary_value = getattr(merged_client, field_name, None)
+                    duplicate_value = getattr(duplicate_client, field_name, None)
+                    
+                    # Skip if both are None or empty
+                    if not primary_value and duplicate_value:
+                        # Primary is empty, use duplicate's value
+                        if field_name in ['addresses', 'next_of_kin', 'emergency_contact', 'support_workers', 'languages_spoken', 'contact_information']:
+                            # JSON fields - copy entire structure
+                            setattr(merged_client, field_name, duplicate_value)
+                        else:
+                            setattr(merged_client, field_name, duplicate_value)
+                    elif isinstance(primary_value, str) and not primary_value.strip() and duplicate_value:
+                        # Primary is empty string, use duplicate's value
+                        if isinstance(duplicate_value, str):
+                            setattr(merged_client, field_name, duplicate_value)
+                        else:
+                            setattr(merged_client, field_name, duplicate_value)
+                except Exception:
+                    # Skip fields that don't exist or can't be set
+                    continue
+            
+            # Handle legacy client IDs - save multiple IDs if present from different sources
+            legacy_ids = []
+            
+            # Get existing legacy IDs from primary client
+            if merged_client.legacy_client_ids:
+                legacy_ids = list(merged_client.legacy_client_ids)
+            
+            # Add primary client's original ID if it exists and has a source
+            if primary_client_id and primary_source:
+                existing_entry = next(
+                    (entry for entry in legacy_ids if entry.get('client_id') == primary_client_id and entry.get('source') == primary_source),
+                    None
+                )
+                if not existing_entry:
+                    legacy_ids.append({
+                        'source': primary_source,
+                        'client_id': primary_client_id
+                    })
+            
+            # Add duplicate client's ID if it exists and has a source
+            if duplicate_client_id and duplicate_source:
+                existing_entry = next(
+                    (entry for entry in legacy_ids if entry.get('client_id') == duplicate_client_id and entry.get('source') == duplicate_source),
+                    None
+                )
+                if not existing_entry:
+                    legacy_ids.append({
+                        'source': duplicate_source,
+                        'client_id': duplicate_client_id
+                    })
+            
+            # Update legacy_client_ids
+            merged_client.legacy_client_ids = legacy_ids
+            
+            # Set secondary_source_id to the duplicate client's original client_id
+            if duplicate_client_id:
+                merged_client.secondary_source_id = duplicate_client_id
+            
+            # Migrate related data from duplicate client to primary client
+            # This ensures data integrity when deleting the duplicate client
+            
+            # 1. Migrate ClientProgramEnrollments
+            from core.models import ClientProgramEnrollment
+            duplicate_enrollments = ClientProgramEnrollment.objects.filter(client=duplicate_client)
+            migrated_enrollments_count = 0
+            skipped_enrollments_count = 0
+            
+            for enrollment in duplicate_enrollments:
+                # Check if primary client already has an enrollment in the same program with same dates
+                # Only skip if it's an exact duplicate (same program, same start_date, same end_date, same sub_program)
+                # Handle NULL end_date properly using Q objects
+                enrollment_filter = Q(
+                    client=merged_client,
+                    program=enrollment.program,
+                    start_date=enrollment.start_date,
+                    sub_program=enrollment.sub_program
+                )
+                
+                # Handle end_date - if NULL, check for NULL, otherwise check for exact match
+                if enrollment.end_date is None:
+                    enrollment_filter &= Q(end_date__isnull=True)
+                else:
+                    enrollment_filter &= Q(end_date=enrollment.end_date)
+                
+                existing_enrollment = ClientProgramEnrollment.objects.filter(enrollment_filter).first()
+                
+                if not existing_enrollment:
+                    # No exact duplicate, migrate this enrollment (preserves enrollments from different sources/dates)
+                    enrollment.client = merged_client
+                    enrollment.save()
+                    migrated_enrollments_count += 1
+                else:
+                    # Exact duplicate exists, check if we should merge data or skip
+                    # If duplicate has additional data (notes, etc.), merge it
+                    if enrollment.notes and not existing_enrollment.notes:
+                        existing_enrollment.notes = enrollment.notes
+                        existing_enrollment.save()
+                    # Archive the duplicate enrollment instead of deleting (preserves data)
+                    if not enrollment.is_archived:
+                        enrollment.is_archived = True
+                        enrollment.archived_at = timezone.now()
+                        enrollment.save()
+                    skipped_enrollments_count += 1
+            
+            # 2. Migrate ServiceRestrictions
+            from core.models import ServiceRestriction
+            duplicate_restrictions = ServiceRestriction.objects.filter(client=duplicate_client)
+            for restriction in duplicate_restrictions:
+                # Check if primary client already has a similar restriction
+                existing_restriction = ServiceRestriction.objects.filter(
+                    client=merged_client,
+                    program=restriction.program,
+                    scope=restriction.scope,
+                    start_date=restriction.start_date
+                ).first()
+                
+                if not existing_restriction:
+                    # No existing restriction, migrate this one
+                    restriction.client = merged_client
+                    restriction.save()
+                # If restriction exists, we skip it (don't create duplicates)
+            
+            # 3. Migrate ClientNotes (if they exist)
+            try:
+                from clients.models import ClientNote
+                duplicate_notes = ClientNote.objects.filter(client=duplicate_client)
+                for note in duplicate_notes:
+                    note.client = merged_client
+                    note.save()
+            except ImportError:
+                # ClientNote model may not exist, skip
+                pass
+            except Exception:
+                # Skip if there's an error
+                pass
+            
+            # 4. Migrate ClientUploadLogs (if they exist)
+            try:
+                from core.models import ClientUploadLog
+                duplicate_logs = ClientUploadLog.objects.filter(client=duplicate_client)
+                for log in duplicate_logs:
+                    log.client = merged_client
+                    log.save()
+            except ImportError:
+                # ClientUploadLog model may not exist, skip
+                pass
+            except Exception:
+                # Skip if there's an error
+                pass
+            
+            # 5. Clean up any ClientDuplicate records referencing the duplicate client
+            # Delete duplicates where duplicate_client is the primary
+            ClientDuplicate.objects.filter(primary_client=duplicate_client).delete()
+            # Delete duplicates where duplicate_client is the duplicate
+            ClientDuplicate.objects.filter(duplicate_client=duplicate_client).delete()
+            
+            # Save the updated primary client
+            merged_client.save()
+            
+            # Delete the duplicate client (after merging data and migrating relationships)
+            # Django's CASCADE will handle any remaining relationships
+            duplicate_client.delete()
+            
+            return {
+                'success': True,
+                'merged': True,
+                'message': f'Successfully merged {duplicate_client_id or "duplicate"} into {primary_client_id or "primary"}'
+            }
+    
+    except Exception as e:
+        logger.error(f"Error auto-merging duplicate: {str(e)}", exc_info=True)
+        return {
+            'success': False,
+            'merged': False,
+            'error': str(e),
+            'message': f'Failed to merge duplicate: {str(e)}'
+        }
+
+
 @csrf_protect
 @require_http_methods(["POST"])
 @jwt_required
 def run_duplicate_scan(request):
-    """Scan existing client data and return the top probable duplicates."""
+    """Scan existing client data and automatically merge high-confidence duplicates, flag others for review."""
     if not request.user.is_authenticated:
         return JsonResponse({'success': False, 'error': 'Authentication required'}, status=401)
     
@@ -4849,7 +5225,18 @@ def run_duplicate_scan(request):
         limit = int(limit)
     except (TypeError, ValueError):
         limit = 10
-    limit = max(1, min(limit, 50))
+    
+    # For auto-merge, we want to process ALL high-confidence duplicates (hundreds if needed)
+    # So we use a much higher limit for scanning, but still limit response for performance
+    auto_merge_mode = payload.get('auto_merge', True)  # Default to True for auto-merge
+    if auto_merge_mode:
+        # Use a high limit for scanning to find all duplicates
+        scan_limit = 10000  # Process up to 10,000 duplicates
+        response_limit = limit  # But only return limited results in response
+    else:
+        # Manual mode - use the requested limit
+        scan_limit = max(1, min(limit, 50))
+        response_limit = scan_limit
     
     include_archived = bool(payload.get('include_archived', False))
     source_filter = payload.get('source')
@@ -4926,7 +5313,7 @@ def run_duplicate_scan(request):
             })
         
         # 1. Exact Client ID + Source matches
-        if len(results) < limit:
+        if len(results) < scan_limit:
             id_groups = (
                 clients_qs
                 .filter(client_id__isnull=False)
@@ -4934,7 +5321,7 @@ def run_duplicate_scan(request):
                 .values('source', 'client_id')
                 .annotate(count=Count('id'))
                 .filter(count__gt=1)
-                .order_by('-count', 'client_id')[:limit * 5]
+                .order_by('-count', 'client_id')[:scan_limit * 5]
             )
             
             for group in id_groups:
@@ -4952,13 +5339,13 @@ def run_duplicate_scan(request):
                 for duplicate_candidate in group_clients[1:]:
                     reason = f"Matching {group['source'] or 'source'} client ID {group['client_id']}"
                     add_candidate(primary_candidate, duplicate_candidate, 'matching_client_id', reason, 1.0)
-                    if len(results) >= limit:
+                    if len(results) >= scan_limit:
                         break
-                if len(results) >= limit:
+                if len(results) >= scan_limit:
                     break
         
         # 2. Exact Email matches
-        if len(results) < limit:
+        if len(results) < scan_limit:
             email_groups = (
                 clients_qs
                 .filter(email__isnull=False)
@@ -4966,7 +5353,7 @@ def run_duplicate_scan(request):
                 .values('email')
                 .annotate(count=Count('id'))
                 .filter(count__gt=1)
-                .order_by('-count', 'email')[:limit * 5]
+                .order_by('-count', 'email')[:scan_limit * 5]
             )
             
             for group in email_groups:
@@ -4981,13 +5368,13 @@ def run_duplicate_scan(request):
                 for duplicate_candidate in group_clients[1:]:
                     reason = f"Matching email address {group['email']}"
                     add_candidate(primary_candidate, duplicate_candidate, 'matching_email', reason, 0.99)
-                    if len(results) >= limit:
+                    if len(results) >= scan_limit:
                         break
-                if len(results) >= limit:
+                if len(results) >= scan_limit:
                     break
         
         # 3. Exact Phone matches
-        if len(results) < limit:
+        if len(results) < scan_limit:
             phone_groups = (
                 clients_qs
                 .filter(phone__isnull=False)
@@ -4995,7 +5382,7 @@ def run_duplicate_scan(request):
                 .values('phone')
                 .annotate(count=Count('id'))
                 .filter(count__gt=1)
-                .order_by('-count', 'phone')[:limit * 5]
+                .order_by('-count', 'phone')[:scan_limit * 5]
             )
             
             for group in phone_groups:
@@ -5010,13 +5397,13 @@ def run_duplicate_scan(request):
                 for duplicate_candidate in group_clients[1:]:
                     reason = f"Matching phone number {group['phone']}"
                     add_candidate(primary_candidate, duplicate_candidate, 'matching_phone', reason, 0.96)
-                    if len(results) >= limit:
+                    if len(results) >= scan_limit:
                         break
-                if len(results) >= limit:
+                if len(results) >= scan_limit:
                     break
         
         # 4. Exact Name + DOB matches
-        if len(results) < limit:
+        if len(results) < scan_limit:
             name_dob_groups = (
                 clients_qs
                 .filter(dob__isnull=False)
@@ -5027,7 +5414,7 @@ def run_duplicate_scan(request):
                 .values('first_name', 'last_name', 'dob')
                 .annotate(count=Count('id'))
                 .filter(count__gt=1)
-                .order_by('-count', 'first_name', 'last_name')[:limit * 5]
+                .order_by('-count', 'first_name', 'last_name')[:scan_limit * 5]
             )
             
             for group in name_dob_groups:
@@ -5049,19 +5436,22 @@ def run_duplicate_scan(request):
                         f"({group['first_name']} {group['last_name']}, {group['dob']})"
                     )
                     add_candidate(primary_candidate, duplicate_candidate, 'matching_name_dob', reason, 0.92)
-                    if len(results) >= limit:
+                    if len(results) >= scan_limit:
                         break
-                if len(results) >= limit:
+                if len(results) >= scan_limit:
                     break
         
         # 5. Fuzzy name matches (sampled set for performance)
-        if len(results) < limit:
+        # For auto-merge, increase sample size to find more duplicates
+        if len(results) < scan_limit:
+            # Increase sample size for auto-merge mode to find hundreds of duplicates
+            fuzzy_sample_size = 2000 if auto_merge_mode else 400
             fuzzy_candidates = list(
                 clients_qs
                 .filter(first_name__isnull=False, last_name__isnull=False)
                 .exclude(first_name__exact='')
                 .exclude(last_name__exact='')
-                .order_by('last_name', 'first_name')[:400]
+                .order_by('last_name', 'first_name')[:fuzzy_sample_size]
             )
             
             if fuzzy_candidates:
@@ -5077,7 +5467,7 @@ def run_duplicate_scan(request):
                         continue
                     
                     for i in range(bucket_size):
-                        if len(results) >= limit:
+                        if len(results) >= scan_limit:
                             break
                         for j in range(i + 1, bucket_size):
                             c1 = bucket_clients[i]
@@ -5100,50 +5490,171 @@ def run_duplicate_scan(request):
                                 continue
                             
                             add_candidate(c1, c2, match_type, reason, similarity)
-                            if len(results) >= limit:
+                            if len(results) >= scan_limit:
                                 break
-                        if len(results) >= limit:
+                        if len(results) >= scan_limit:
                             break
-                    if len(results) >= limit:
+                    if len(results) >= scan_limit:
                         break
         
         results.sort(key=lambda item: item['similarity_score'], reverse=True)
-        limited_results = results[:limit]
+        # For auto-merge, process ALL results (not just limited)
+        # This ensures hundreds of high-confidence duplicates can be auto-merged
+        # Only limit results for display/response
+        limited_results = results[:response_limit] if response_limit else results
+        all_results = results  # Process all results for auto-merge
         
-        # Automatically mark duplicates by creating ClientDuplicate records
-        created_count = 0
+        # Automatically merge high-confidence duplicates, flag others for review
+        merged_count = 0
+        flagged_count = 0
         skipped_count = 0
         errors = []
+        merge_errors = []
         
-        # Use transaction to ensure all duplicates are marked atomically
+        # Threshold for automatic merge: high confidence (similarity >= 0.9)
+        AUTO_MERGE_CONFIDENCE_THRESHOLD = 'high'
+        AUTO_MERGE_SIMILARITY_THRESHOLD = 0.9
+        
+        # Use transaction to ensure all operations are atomic
         from django.db import transaction
-        with transaction.atomic():
-            for result in limited_results:
+        
+        # Process ALL results for auto-merge (not just the first N)
+        # This allows hundreds of duplicates to be automatically merged
+        processed_clients = set()  # Track processed client pairs to avoid duplicates
+        
+        for result in all_results:
+            try:
+                primary_client_id = result['primary_client']['id']
+                duplicate_client_id = result['duplicate_client']['id']
+                similarity_score = result['similarity_score']
+                confidence_level = result['confidence_level']
+                match_type = result['match_type']
+                
+                # Get the actual client objects
                 try:
-                    primary_client_id = result['primary_client']['id']
-                    duplicate_client_id = result['duplicate_client']['id']
-                    
-                    # Get the actual client objects
                     primary_client = Client.objects.get(id=primary_client_id)
                     duplicate_client = Client.objects.get(id=duplicate_client_id)
-                    
-                    # Check if duplicate record already exists
-                    existing_duplicate = ClientDuplicate.objects.filter(
-                        primary_client=primary_client,
-                        duplicate_client=duplicate_client
-                    ).first()
-                    
-                    if existing_duplicate:
+                except Client.DoesNotExist as e:
+                    errors.append(f"Client not found: {str(e)}")
+                    continue
+                
+                # Skip if either client is archived (unless include_archived is True)
+                if not include_archived:
+                    if primary_client.is_archived or duplicate_client.is_archived:
                         skipped_count += 1
                         continue
+                
+                # Skip if either client has already been processed (merged or deleted)
+                client_pair_key = tuple(sorted([primary_client_id, duplicate_client_id]))
+                if client_pair_key in processed_clients:
+                    skipped_count += 1
+                    continue
+                
+                # Check if duplicate record already exists
+                existing_duplicate = ClientDuplicate.objects.filter(
+                    primary_client=primary_client,
+                    duplicate_client=duplicate_client
+                ).first()
+                
+                if existing_duplicate:
+                    skipped_count += 1
+                    continue
+                
+                # Check if either client has been deleted (might happen during processing)
+                try:
+                    primary_client.refresh_from_db()
+                    duplicate_client.refresh_from_db()
+                except Client.DoesNotExist:
+                    skipped_count += 1
+                    continue
+                
+                # Check if this is a high-confidence duplicate that should be automatically merged
+                should_auto_merge = (
+                    confidence_level == AUTO_MERGE_CONFIDENCE_THRESHOLD and
+                    similarity_score >= AUTO_MERGE_SIMILARITY_THRESHOLD
+                )
+                
+                # Also auto-merge exact matches (email, phone, name+dob) regardless of similarity score
+                is_exact_match = match_type in ['matching_email', 'matching_phone', 'name_dob_match'] or similarity_score >= 0.95
+                
+                if should_auto_merge or is_exact_match:
+                    # Automatically merge high-confidence duplicates
+                    try:
+                        merge_result = auto_merge_high_confidence_duplicate(
+                            primary_client=primary_client,
+                            duplicate_client=duplicate_client,
+                            similarity_score=similarity_score,
+                            match_type=match_type,
+                            confidence_level=confidence_level,
+                            reviewed_by=request.user.staff_profile if hasattr(request.user, 'staff_profile') else None
+                        )
+                        
+                        if merge_result.get('success') and merge_result.get('merged'):
+                            merged_count += 1
+                            # Mark this pair as processed
+                            processed_clients.add(client_pair_key)
+                        else:
+                            # Merge failed, flag for manual review instead
+                            merge_errors.append({
+                                'primary': f"{primary_client.first_name} {primary_client.last_name}",
+                                'duplicate': f"{duplicate_client.first_name} {duplicate_client.last_name}",
+                                'error': merge_result.get('error', 'Unknown error')
+                            })
+                            
+                            # Create ClientDuplicate record for manual review
+                            ClientDuplicate.objects.create(
+                                primary_client=primary_client,
+                                duplicate_client=duplicate_client,
+                                similarity_score=similarity_score,
+                                match_type=match_type,
+                                confidence_level=confidence_level,
+                                status='pending',
+                                detection_source='scan',
+                                match_details={
+                                    'reason': result['reason'],
+                                    'source': 'scan_existing_data',
+                                    'scanned_at': timezone.now().isoformat(),
+                                    'auto_merge_failed': True,
+                                    'merge_error': merge_result.get('error', 'Unknown error')
+                                }
+                            )
+                            flagged_count += 1
                     
-                    # Create the ClientDuplicate record with status='pending'
+                    except Exception as merge_exc:
+                        logger.error(f"Error auto-merging duplicate: {merge_exc}", exc_info=True)
+                        merge_errors.append({
+                            'primary': f"{primary_client.first_name} {primary_client.last_name}",
+                            'duplicate': f"{duplicate_client.first_name} {duplicate_client.last_name}",
+                            'error': str(merge_exc)
+                        })
+                        
+                        # Merge failed, flag for manual review instead
+                        ClientDuplicate.objects.create(
+                            primary_client=primary_client,
+                            duplicate_client=duplicate_client,
+                            similarity_score=similarity_score,
+                            match_type=match_type,
+                            confidence_level=confidence_level,
+                            status='pending',
+                            detection_source='scan',
+                            match_details={
+                                'reason': result['reason'],
+                                'source': 'scan_existing_data',
+                                'scanned_at': timezone.now().isoformat(),
+                                'auto_merge_failed': True,
+                                'merge_error': str(merge_exc)
+                            }
+                        )
+                        flagged_count += 1
+                
+                else:
+                    # Lower confidence - flag for manual review
                     ClientDuplicate.objects.create(
                         primary_client=primary_client,
                         duplicate_client=duplicate_client,
-                        similarity_score=result['similarity_score'],
-                        match_type=result['match_type'],
-                        confidence_level=result['confidence_level'],
+                        similarity_score=similarity_score,
+                        match_type=match_type,
+                        confidence_level=confidence_level,
                         status='pending',
                         detection_source='scan',
                         match_details={
@@ -5152,25 +5663,40 @@ def run_duplicate_scan(request):
                             'scanned_at': timezone.now().isoformat()
                         }
                     )
-                    created_count += 1
+                    flagged_count += 1
                     
-                except Client.DoesNotExist as e:
-                    errors.append(f"Client not found: {str(e)}")
-                except Exception as e:
-                    errors.append(f"Error creating duplicate record: {str(e)}")
-                    logger.error(f"Error creating ClientDuplicate record: {e}", exc_info=True)
+            except Client.DoesNotExist as e:
+                errors.append(f"Client not found: {str(e)}")
+            except Exception as e:
+                errors.append(f"Error processing duplicate: {str(e)}")
+                logger.error(f"Error processing duplicate record: {e}", exc_info=True)
+        
+        # Build response message
+        message_parts = []
+        if merged_count > 0:
+            message_parts.append(f'Auto-merged {merged_count} high-confidence duplicate(s)')
+        if flagged_count > 0:
+            message_parts.append(f'Flagged {flagged_count} duplicate(s) for manual review')
+        if skipped_count > 0:
+            message_parts.append(f'Skipped {skipped_count} existing record(s)')
+        
+        message = 'Scan completed. ' + ', '.join(message_parts) + '.'
         
         return JsonResponse({
             'success': True,
             'results': limited_results,
             'count': len(limited_results),
-            'created_count': created_count,
+            'merged_count': merged_count,
+            'flagged_count': flagged_count,
             'skipped_count': skipped_count,
             'errors': errors if errors else None,
-            'limit': limit,
+            'merge_errors': merge_errors if merge_errors else None,
+            'limit': response_limit,
+            'scan_limit': scan_limit,
+            'auto_merge_mode': auto_merge_mode,
             'include_archived': include_archived,
             'source': source_filter,
-            'message': f'Scan completed. Marked {created_count} duplicates, skipped {skipped_count} existing records.'
+            'message': message
         })
     
     except Exception as exc:
@@ -6072,7 +6598,132 @@ def merge_clients(request, duplicate_id):
         print(f"Legacy client IDs: {merged_client.legacy_client_ids}")
         print(f"Secondary source ID: {merged_client.secondary_source_id}")
         
-        # Delete only the duplicate client (keep the primary one)
+        # Migrate related data from duplicate client to primary client BEFORE deleting
+        # This ensures data integrity when deleting the duplicate client
+        
+        # 1. Migrate ClientProgramEnrollments
+        from core.models import ClientProgramEnrollment
+        duplicate_enrollments = ClientProgramEnrollment.objects.filter(client=duplicate_client)
+        migrated_enrollments_count = 0
+        skipped_enrollments_count = 0
+        
+        for enrollment in duplicate_enrollments:
+            # Check if primary client already has an enrollment in the same program with same dates
+            # Only skip if it's an exact duplicate (same program, same start_date, same end_date, same sub_program)
+            # Handle NULL end_date properly using Q objects
+            enrollment_filter = Q(
+                client=merged_client,
+                program=enrollment.program,
+                start_date=enrollment.start_date,
+                sub_program=enrollment.sub_program
+            )
+            
+            # Handle end_date - if NULL, check for NULL, otherwise check for exact match
+            if enrollment.end_date is None:
+                enrollment_filter &= Q(end_date__isnull=True)
+            else:
+                enrollment_filter &= Q(end_date=enrollment.end_date)
+            
+            existing_enrollment = ClientProgramEnrollment.objects.filter(enrollment_filter).first()
+            
+            if not existing_enrollment:
+                # No exact duplicate, migrate this enrollment (preserves enrollments from different sources/dates like SMIS and EMHware)
+                enrollment.client = merged_client
+                enrollment.save()
+                migrated_enrollments_count += 1
+                print(f"Migrated enrollment: {enrollment.program.name} - {enrollment.start_date}")
+            else:
+                # Exact duplicate exists, check if we should merge data or skip
+                # If duplicate has additional data (notes, etc.), merge it
+                if enrollment.notes and not existing_enrollment.notes:
+                    existing_enrollment.notes = enrollment.notes
+                    existing_enrollment.save()
+                # Archive the duplicate enrollment instead of deleting (preserves data)
+                if not enrollment.is_archived:
+                    enrollment.is_archived = True
+                    enrollment.archived_at = timezone.now()
+                    enrollment.save()
+                skipped_enrollments_count += 1
+                print(f"Skipped duplicate enrollment: {enrollment.program.name} - {enrollment.start_date}")
+        
+        # 2. Migrate ServiceRestrictions
+        from core.models import ServiceRestriction
+        duplicate_restrictions = ServiceRestriction.objects.filter(client=duplicate_client)
+        for restriction in duplicate_restrictions:
+            # Check if primary client already has a similar restriction
+            existing_restriction = ServiceRestriction.objects.filter(
+                client=merged_client,
+                program=restriction.program,
+                scope=restriction.scope,
+                start_date=restriction.start_date
+            ).first()
+            
+            if not existing_restriction:
+                # No duplicate restriction, migrate this one
+                restriction.client = merged_client
+                restriction.save()
+                print(f"Migrated restriction: {restriction.scope} - {restriction.start_date}")
+            else:
+                # Similar restriction exists, merge notes if available
+                if restriction.notes and not existing_restriction.notes:
+                    existing_restriction.notes = restriction.notes
+                    existing_restriction.save()
+                # Archive the duplicate restriction
+                restriction.is_archived = True
+                restriction.archived_at = timezone.now()
+                restriction.save()
+        
+        # 3. Migrate ClientNotes
+        from clients.models import ClientNote
+        duplicate_notes = ClientNote.objects.filter(client=duplicate_client)
+        for note in duplicate_notes:
+            note.client = merged_client
+            note.save()
+            print(f"Migrated note: {note.title}")
+        
+        # 4. Migrate ClientContacts (if exists)
+        try:
+            from clients.models import ClientContact
+            duplicate_contacts = ClientContact.objects.filter(client=duplicate_client)
+            for contact in duplicate_contacts:
+                contact.client = merged_client
+                contact.save()
+                print(f"Migrated contact: {contact.name}")
+        except ImportError:
+            pass
+        
+        # 5. Migrate Intakes
+        duplicate_intakes = Intake.objects.filter(client=duplicate_client)
+        for intake in duplicate_intakes:
+            # Check if primary client already has an intake for the same program and date
+            existing_intake = Intake.objects.filter(
+                client=merged_client,
+                program=intake.program,
+                intake_date=intake.intake_date
+            ).first()
+            
+            if not existing_intake:
+                # No duplicate intake, migrate this one
+                intake.client = merged_client
+                intake.save()
+                print(f"Migrated intake: {intake.program.name} - {intake.intake_date}")
+            else:
+                # Similar intake exists, merge notes if available
+                if intake.notes and not existing_intake.notes:
+                    existing_intake.notes = intake.notes
+                    existing_intake.save()
+        
+        # 6. Migrate ClientUploadLogs (to preserve upload history)
+        from core.models import ClientUploadLog
+        duplicate_logs = ClientUploadLog.objects.filter(client=duplicate_client)
+        for log in duplicate_logs:
+            log.client = merged_client
+            log.save()
+            print(f"Migrated upload log: {log.upload_date}")
+        
+        print(f"Migration complete: {migrated_enrollments_count} enrollments migrated, {skipped_enrollments_count} duplicates skipped")
+        
+        # Now delete the duplicate client (all related data has been migrated)
         duplicate_client.delete()
         
         # Delete the duplicate relationship
@@ -6099,6 +6750,20 @@ def merge_clients(request, duplicate_id):
 def export_clients(request):
     """Export clients to CSV with current filters applied"""
     try:
+        # Check permissions first
+        if request.user.is_authenticated:
+            try:
+                staff = request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Manager role users cannot export clients
+                if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    messages.error(request, 'You do not have permission to export clients. Contact your administrator.')
+                    return redirect('clients:list')
+            except Exception:
+                pass
+        
         # Get the same queryset as the list view
         queryset = Client.objects.all()
         
