@@ -1839,22 +1839,40 @@ def upload_clients(request):
         # Check if we have client_id column (now required for all uploads)
         # Check if any column maps to client_id (not just exact column name)
         has_client_id = any(column_mapping.get(col) == 'client_id' for col in df.columns)
+
+        # Helper used in multiple phases to normalize client ids
+        def _clean_client_id(value):
+            """Normalize client_id values to strings suitable for lookups"""
+            if pd.isna(value) or value is None:
+                return None
+            try:
+                str_value = str(value).strip()
+                if not str_value or str_value.lower() in ['nan', 'none', 'null']:
+                    return None
+                if '.' in str_value:
+                    float_val = float(str_value)
+                    if float_val.is_integer():
+                        return str(int(float_val))
+                return str_value
+            except (ValueError, TypeError):
+                return None
         
-        # Check if any row has a Client ID + Source combination that exists in the database - if so, we'll allow updates with partial data
+        # Determine if any Client ID + source combinations already exist (single batched lookup)
         has_existing_client_ids = False
-        for col in df.columns:
-            if column_mapping.get(col) == 'client_id':
-                # Check if any of the client_ids + source combinations in the CSV actually exist in the database
-                for index, row in df.iterrows():
-                    client_id_value = row[col]
-                    if pd.notna(client_id_value) and str(client_id_value).strip():
-                        client_id_clean = str(client_id_value).strip()
-                        existing_client = Client.objects.filter(client_id=client_id_clean, source=source).first()
-                        if existing_client:
-                            has_existing_client_ids = True
-                            break
-                if has_existing_client_ids:
-                    break
+        if has_client_id:
+            client_id_candidates = set()
+            for col in df.columns:
+                if column_mapping.get(col) == 'client_id':
+                    client_id_series = df[col]
+                    for value in client_id_series:
+                        cleaned = _clean_client_id(value)
+                        if cleaned:
+                            client_id_candidates.add(cleaned)
+            if client_id_candidates:
+                has_existing_client_ids = Client.objects.filter(
+                    client_id__in=list(client_id_candidates),
+                    source=source
+                ).exists()
         
         
         # Check for required fields using case-insensitive mapping
@@ -2111,7 +2129,19 @@ def upload_clients(request):
             # If we get here, the data is essentially the same
             return True
         
-        def process_intake_data(client, row, index, column_mapping, df_columns, departments_cache, programs_by_department):
+        def process_intake_data(
+            client,
+            row,
+            index,
+            column_mapping,
+            df_columns,
+            departments_cache,
+            program_lookup_by_name,
+            all_programs_list,
+            program_fuzzy_cache,
+            enrollment_cache,
+            intake_cache,
+        ):
             """Process intake data for a client - optimized with pre-loaded caches"""
             try:
                 # Helper function to get data using field mapping
@@ -2370,8 +2400,6 @@ def upload_clients(request):
                 
                 # Process each program-date pair
                 for i, (current_program_name, current_intake_date) in enumerate(zip(program_names, intake_dates)):
-                    print(f"DEBUG: Processing program {i+1}/{len(program_names)}: '{current_program_name}' with date {current_intake_date}")
-                    
                     # Find existing program by name matching (DO NOT CREATE NEW PROGRAMS)
                     # Search across ALL programs, not just within department
                     normalized_name = (current_program_name or '').strip()
@@ -2381,56 +2409,54 @@ def upload_clients(request):
                         logger.warning(f"Skipping enrollment: empty program name for client {client.first_name} {client.last_name}")
                         continue
                     
-                    # First, try exact match (case-insensitive) across all departments
-                    program = Program.objects.filter(name__iexact=normalized_name).first()
+                    # First, try exact match (case-insensitive) across all departments from cache
+                    program = program_lookup_by_name.get(normalized_name.lower())
                     
-                    # If no exact match, try fuzzy matching across ALL programs
-                    # Use the best match found, regardless of score
+                    # If no exact match, try cached fuzzy match before scanning all programs
                     if not program:
-                        best_match = None
-                        best_score = 0
-                        # Search all programs (load them if not already cached globally)
-                        all_programs_list = []
-                        for dept_programs in programs_by_department.values():
-                            if isinstance(dept_programs, dict) and '_all' in dept_programs:
-                                all_programs_list.extend(dept_programs['_all'])
-                        
-                        # If cache doesn't have all programs, query database
-                        if not all_programs_list:
-                            all_programs_list = list(Program.objects.select_related('department').all())
-                        
-                        # Find the best matching program
-                        for p in all_programs_list:
-                            score = calculate_name_similarity(normalized_name, p.name or '')
-                            if score > best_score:
-                                best_score = score
-                                best_match = p
-                        
-                        # Use the best match found (even if score is low)
-                        if best_match and best_score > 0:
-                            program = best_match
-                            logger.info(f"Fuzzy matched program '{current_program_name}' to existing program '{program.name}' (score: {best_score:.2f})")
+                        cached_program = program_fuzzy_cache.get(normalized_name)
+                        if cached_program is not None:
+                            program = cached_program
                         else:
-                            # No match found at all
-                            logger.warning(
-                                f"Skipping enrollment for client {client.first_name} {client.last_name}: "
-                                f"Program '{current_program_name}' not found. Please create the program first or check the name spelling."
-                            )
-                            continue
+                            best_match = None
+                            best_score = 0
+                            for p in all_programs_list:
+                                score = calculate_name_similarity(normalized_name, p.name or '')
+                                if score > best_score:
+                                    best_score = score
+                                    best_match = p
+                            # Store even if None to avoid repeated scans
+                            program_fuzzy_cache[normalized_name] = best_match if best_score > 0 else None
+                            if best_match and best_score > 0:
+                                program = best_match
+                                logger.info(f"Fuzzy matched program '{current_program_name}' to existing program '{program.name}' (score: {best_score:.2f})")
+                    
+                    if not program:
+                        logger.warning(
+                            f"Skipping enrollment for client {client.first_name} {client.last_name}: "
+                            f"Program '{current_program_name}' not found. Please create the program first or check the name spelling."
+                        )
+                        continue
                     
                     # Create intake record
-                    intake, created = Intake.objects.get_or_create(
-                        client=client,
-                        program=program,
-                        defaults={
-                            'department': department,
-                            'intake_date': current_intake_date,
-                            'intake_database': intake_database,
-                            'referral_source': referral_source,
-                            'intake_housing_status': intake_housing_status,
-                            'notes': f'Intake created from {source} upload (program {i+1})'
-                        }
-                    )
+                    intake_cache_key = (client.id, program.id)
+                    intake = intake_cache.get(intake_cache_key)
+                    if intake is None:
+                        intake, created = Intake.objects.get_or_create(
+                            client=client,
+                            program=program,
+                            defaults={
+                                'department': department,
+                                'intake_date': current_intake_date,
+                                'intake_database': intake_database,
+                                'referral_source': referral_source,
+                                'intake_housing_status': intake_housing_status,
+                                'notes': f'Intake created from {source} upload (program {i+1})'
+                            }
+                        )
+                        intake_cache[intake_cache_key] = intake
+                    else:
+                        created = False
                     
                     if created:
                         logger.info(f"Created intake record for {client.first_name} {client.last_name} in {current_program_name}")
@@ -2445,15 +2471,22 @@ def upload_clients(request):
                     created = False
                     
                     # Try to get existing enrollment first - look for any enrollment for this client-program combination
-                    existing_enrollment = ClientProgramEnrollment.objects.filter(
-                        client=client,
-                        program=program
-                    ).order_by('-start_date').first()
+                    enrollment_cache_key = (client.id, program.id)
+                    enrollment = enrollment_cache.get(enrollment_cache_key)
+                    
+                    if enrollment is None:
+                        existing_enrollment = ClientProgramEnrollment.objects.filter(
+                            client=client,
+                            program=program
+                        ).order_by('-start_date').first()
+                    else:
+                        existing_enrollment = enrollment
                     
                     if existing_enrollment:
                         # Update existing enrollment
                         enrollment = existing_enrollment
                         created = False
+                        enrollment_cache[enrollment_cache_key] = enrollment
                         
                         # If discharge_date is present, update end_date and add discharge reason to notes
                         if discharge_date:
@@ -2555,6 +2588,7 @@ def upload_clients(request):
                                 'created_by': request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
                             }
                         )
+                        enrollment_cache[enrollment_cache_key] = enrollment
                         
                         if not created:
                             # Enrollment was found during get_or_create (race condition), update it instead
@@ -2588,14 +2622,11 @@ def upload_clients(request):
                     
                     if created:
                         logger.info(f"Created {final_status} enrollment for {client.first_name} {client.last_name} in {current_program_name}")
-                        print(f"DEBUG: Successfully created enrollment for {client.first_name} {client.last_name} in {current_program_name}")
-                        
                         # Skip audit log for bulk imports to improve performance
                         # Audit logs can be created separately if needed for specific tracking
                         # For 10k+ records, creating individual audit logs adds significant overhead
                         pass
                     else:
-                        print(f"DEBUG: Enrollment already exists for {client.first_name} {client.last_name} in {current_program_name}")
                         logger.info(f"Enrollment already exists for {client.first_name} {client.last_name} in {current_program_name}")
                     
             except Exception as e:
@@ -2638,20 +2669,18 @@ def upload_clients(request):
         # Pre-load all departments and programs for intake processing optimization
         logger.info("Pre-loading departments and programs for batch processing")
         departments_cache = {dept.name: dept for dept in Department.objects.all()}
-        # Pre-load all programs grouped by department for fast lookup
-        programs_by_department = {}
-        all_programs = Program.objects.select_related('department').all()
-        for program in all_programs:
-            dept_name = program.department.name if program.department else 'NA'
-            # Initialize department entry if not exists
-            if dept_name not in programs_by_department:
-                programs_by_department[dept_name] = {'_all': []}
-            # Store program by name (case-insensitive key) for direct lookup
-            programs_by_department[dept_name][program.name.lower()] = program
-            # Store in '_all' list for fuzzy matching
-            programs_by_department[dept_name]['_all'].append(program)
+        all_programs_list = list(Program.objects.select_related('department').all())
+        program_lookup_by_name = {}
+        for program in all_programs_list:
+            name_key = (program.name or '').strip().lower()
+            if name_key:
+                program_lookup_by_name[name_key] = program
         
-        logger.info(f"Pre-loaded {len(departments_cache)} departments and {len(all_programs)} programs")
+        program_fuzzy_cache = {}
+        enrollment_cache = {}
+        intake_cache = {}
+        
+        logger.info(f"Pre-loaded {len(departments_cache)} departments and {len(all_programs_list)} programs")
         logger.info("Starting batch data collection phase")
         for index, row in df.iterrows():
             try:
@@ -2665,23 +2694,7 @@ def upload_clients(request):
                     return default
                 
                 # Helper function to clean client_id
-                def clean_client_id_inline(value):
-                    if pd.isna(value) or value is None:
-                        return None
-                    try:
-                        str_value = str(value).strip()
-                        if not str_value or str_value.lower() in ['nan', 'none', 'null', '']:
-                            return None
-                        if '.' in str_value:
-                            float_val = float(str_value)
-                            if float_val.is_integer():
-                                return str(int(float_val))
-                            return str_value
-                        return str_value
-                    except (ValueError, TypeError):
-                        return None
-                
-                client_id = clean_client_id_inline(get_field_data_inline('client_id'))
+                client_id = _clean_client_id(get_field_data_inline('client_id'))
                 email = get_field_data_inline('email', '').strip()
                 phone = get_field_data_inline('phone', '').strip()
                 
@@ -3904,7 +3917,19 @@ def upload_clients(request):
                             row_index = update_data['row_index']
                             row = df.iloc[row_index]
                             # Pass pre-loaded caches to avoid repeated database queries
-                            process_intake_data(client, row, row_index, column_mapping, df.columns, departments_cache, programs_by_department)
+                            process_intake_data(
+                                client,
+                                row,
+                                row_index,
+                                column_mapping,
+                                df.columns,
+                                departments_cache,
+                                program_lookup_by_name,
+                                all_programs_list,
+                                program_fuzzy_cache,
+                                enrollment_cache,
+                                intake_cache,
+                            )
                         except Exception as e:
                             logger.error(f"Error processing intake data for updated client {update_data['client'].client_id}: {str(e)}")
                             errors.append(f"Row {update_data['row_index'] + 2}: Error processing intake data - {str(e)}")
@@ -4016,7 +4041,19 @@ def upload_clients(request):
                             row = df.iloc[row_index]
                             
                             # Pass pre-loaded caches to avoid repeated database queries
-                            process_intake_data(client, row, row_index, column_mapping, df.columns, departments_cache, programs_by_department)
+                            process_intake_data(
+                                client,
+                                row,
+                                row_index,
+                                column_mapping,
+                                df.columns,
+                                departments_cache,
+                                program_lookup_by_name,
+                                all_programs_list,
+                                program_fuzzy_cache,
+                                enrollment_cache,
+                                intake_cache,
+                            )
                         except Exception as e:
                             logger.error(f"Error processing intake data for client {client.first_name} {client.last_name}: {str(e)}")
                             errors.append(f"Row {row_index + 2}: Error processing intake data - {str(e)}")

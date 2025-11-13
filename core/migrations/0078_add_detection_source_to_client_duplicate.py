@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0078_add_legacy_client_ids_and_secondary_source_id'),
+        ('core', '0077_add_legacy_client_ids_and_secondary_source_id'),
     ]
 
     operations = [

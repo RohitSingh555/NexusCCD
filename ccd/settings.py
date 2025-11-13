@@ -3,7 +3,12 @@ from dotenv import load_dotenv
 from pathlib import Path
 from decouple import config
 
-load_dotenv('.env.dev')
+# Load environment-specific .env file
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'development')
+if ENVIRONMENT == 'production':
+    load_dotenv('.env.prod')
+else:
+    load_dotenv('.env.dev')
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 

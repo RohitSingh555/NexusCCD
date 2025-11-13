@@ -12,26 +12,40 @@ services:
       - media_volume:/app/media
     environment:
       - ENVIRONMENT=production
+      - DB_NAME=${DB_NAME:-nexusccd_db}
+      - DB_USER=${DB_USER:-nexusccd_user}
+      - DB_PASSWORD=${DB_PASSWORD:-nexusccd_password}
+      - DB_HOST=db
+      - DB_PORT=5432
     env_file:
       - .env.prod
     depends_on:
-      - db
-    command: gunicorn ccd.wsgi:application --bind 0.0.0.0:8000 --workers 3
+      db:
+        condition: service_healthy
+    # Use start_prod.sh which handles migrations and setup
+    # command is defined in Dockerfile.prod CMD
 
   db:
-    image: postgres:15
+    image: postgres:15-alpine
+    restart: always
     environment:
-      POSTGRES_DB: ccd_prod
-      POSTGRES_USER: ccd
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nexusccd_prod_password}
+      POSTGRES_DB: nexusccd_db
+      POSTGRES_USER: nexusccd_user
+      POSTGRES_PASSWORD: nexusccd_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexusccd_user -d nexusccd_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   nginx:
     image: nginx:alpine
     ports:
+      - "80:80"
       - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
@@ -58,6 +72,7 @@ services:
 
 volumes:
   postgres_data:
+    external: true
   static_volume:
   media_volume:
   certbot-etc:
