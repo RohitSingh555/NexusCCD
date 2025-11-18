@@ -703,7 +703,12 @@ def manage_department_assignments(request, external_id):
     ).select_related('department')
     
     # Get all available departments
-    available_departments = Department.objects.all().order_by('name')
+    # Exclude archived departments and HASS from department dropdown
+    available_departments = Department.objects.filter(
+        is_archived=False
+    ).exclude(
+        name__iexact='HASS'
+    ).order_by('name')
     
     context = {
         'staff_member': staff,

@@ -226,6 +226,32 @@
             </div>
         </div>
 
+        <!-- Legacy Client IDs Section -->
+        {% if legacy_ids %}
+        <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
+            <h3 class="text-lg font-semibold text-neutral-900 mb-4">Legacy Client IDs</h3>
+            <p class="text-sm text-neutral-600 mb-4">The following legacy client IDs will be preserved in the merged client record:</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {% for legacy_id in legacy_ids %}
+                <div class="bg-neutral-50 border border-neutral-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-semibold text-neutral-500 uppercase tracking-wide">{{ legacy_id.label }}</p>
+                            <p class="text-lg font-bold text-neutral-900 mt-1">{{ legacy_id.client_id }}</p>
+                            {% if legacy_id.from == 'primary' or legacy_id.from == 'primary_legacy' %}
+                            <span class="inline-block mt-2 text-xs text-primary-600 bg-primary-100 px-2 py-1 rounded">From Client A</span>
+                            {% elif legacy_id.from == 'duplicate' or legacy_id.from == 'duplicate_legacy' %}
+                            <span class="inline-block mt-2 text-xs text-secondary-600 bg-secondary-100 px-2 py-1 rounded">From Client B</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <p class="text-xs text-neutral-500 mt-4 italic">All legacy IDs will be automatically preserved during the merge process.</p>
+        </div>
+        {% endif %}
+
         <!-- Field Comparison -->
         <div class="bg-white rounded-xl shadow-sm border border-neutral-200 p-6 mb-8">
             <h3 class="text-lg font-semibold text-neutral-900 mb-6">Select Information to Keep</h3>

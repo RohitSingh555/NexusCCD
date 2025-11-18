@@ -24,7 +24,7 @@ import csv
 import io
 from django.core.mail import EmailMultiAlternatives
 from django.core.validators import validate_email
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ValidationError, FieldError
 from django.template.loader import render_to_string
 from django.conf import settings
 from functools import wraps
@@ -344,6 +344,45 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         if gender_filter:
             queryset = queryset.filter(gender=gender_filter)
         
+        # Postal code filtering
+        postal_code_filter = self.request.GET.get('postal_code', '').strip()
+        if postal_code_filter:
+            queryset = queryset.filter(postal_code__icontains=postal_code_filter)
+        
+        # DOB filtering
+        dob_filter = self.request.GET.get('dob', '').strip()
+        if dob_filter:
+            from datetime import datetime
+            dob_found = False
+            date_formats = [
+                '%Y-%m-%d',      # 1990-01-15
+                '%m/%d/%Y',      # 01/15/1990
+                '%d/%m/%Y',      # 15/01/1990
+                '%m-%d-%Y',      # 01-15-1990
+                '%d-%m-%Y',      # 15-01-1990
+                '%Y/%m/%d',      # 1990/01/15
+                '%m.%d.%Y',      # 01.15.1990
+                '%d.%m.%Y',      # 15.01.1990
+            ]
+            
+            for date_format in date_formats:
+                try:
+                    parsed_date = datetime.strptime(dob_filter.strip(), date_format).date()
+                    queryset = queryset.filter(dob=parsed_date)
+                    dob_found = True
+                    break
+                except (ValueError, TypeError):
+                    continue
+            
+            # Also try searching by year only (e.g., "1990" to find all clients born in 1990)
+            if not dob_found and len(dob_filter.strip()) == 4:
+                try:
+                    year = int(dob_filter.strip())
+                    if 1900 <= year <= 2100:  # Reasonable year range
+                        queryset = queryset.filter(dob__year=year)
+                except (ValueError, TypeError):
+                    pass
+        
         # Enrollment count filtering - discrete numbers
         enrollment_count_filter = self.request.GET.get('enrollment_count', '').strip()
         if enrollment_count_filter:
@@ -477,6 +516,8 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         context['gender_filter'] = self.request.GET.get('gender', '')
         context['manager_filter'] = self.request.GET.get('manager', '')
         context['enrollment_count_filter'] = self.request.GET.get('enrollment_count', '')
+        context['postal_code_filter'] = self.request.GET.get('postal_code', '')
+        context['dob_filter'] = self.request.GET.get('dob', '')
         context['per_page'] = self.request.GET.get('per_page', '10')
         context['sort'] = self.request.GET.get('sort', 'name_asc')
         
@@ -1016,6 +1057,15 @@ class ClientCreateView(AnalystAccessMixin, CreateView):
             client.created_by = 'System'
             client.updated_by = 'System'
         
+        # Copy uid_external to emhware_id or smis_id based on source
+        source = form.cleaned_data.get('source')
+        uid_external = form.cleaned_data.get('uid_external')
+        if source and uid_external:
+            if source == 'EMHware':
+                client.emhware_id = uid_external
+            elif source == 'SMIS':
+                client.smis_id = uid_external
+        
         # Check for potential duplicates using fuzzy matching
         client_data = {
             'first_name': client.first_name,
@@ -1272,6 +1322,15 @@ class ClientUpdateView(AnalystAccessMixin, UpdateView):
     def form_valid(self, form):
         try:
             client = form.save(commit=False)
+            
+            # Copy uid_external to emhware_id or smis_id based on source
+            source = form.cleaned_data.get('source')
+            uid_external = form.cleaned_data.get('uid_external')
+            if source and uid_external:
+                if source == 'EMHware':
+                    client.emhware_id = uid_external
+                elif source == 'SMIS':
+                    client.smis_id = uid_external
             
             # Store original values for audit log
             original_client = Client.objects.get(pk=client.pk)
@@ -3532,6 +3591,14 @@ def upload_clients(request):
                                 if hasattr(client, field) and field not in extended_fields_list:
                                     setattr(client, field, value)
                             
+                            # Copy client_id to emhware_id or smis_id based on source
+                            client_id_value = client_data.get('client_id')
+                            if source and client_id_value:
+                                if source == 'EMHware':
+                                    client.emhware_id = client_id_value
+                                elif source == 'SMIS':
+                                    client.smis_id = client_id_value
+                            
                             # Ensure discharge_date and reason_discharge are set if they exist (even if not in filtered_data)
                             # BUT only if NO program is specified - if program is present, discharge is enrollment-level only
                             # Also add them to filtered_data so they're included in the update
@@ -3793,6 +3860,14 @@ def upload_clients(request):
                         client_fields['created_by'] = 'System'
                         client_fields['updated_by'] = 'System'
                     
+                    # Copy client_id to emhware_id or smis_id based on source
+                    client_id_value = client_data.get('client_id')
+                    if source and client_id_value:
+                        if source == 'EMHware':
+                            client_fields['emhware_id'] = client_id_value
+                        elif source == 'SMIS':
+                            client_fields['smis_id'] = client_id_value
+                    
                     # Add client to bulk create list instead of creating immediately
                     clients_to_create.append({
                         'client_fields': client_fields,
@@ -3881,7 +3956,8 @@ def upload_clients(request):
                     'health_card_version', 'health_card_exp_date', 'health_card_issuing_province',
                     'no_health_card_reason', 'next_of_kin', 'emergency_contact', 'comments',
                     'chart_number', 'contact_information', 'addresses', 'languages_spoken',
-                    'ethnicity', 'support_workers', 'discharge_date', 'reason_discharge', 'updated_by'
+                    'ethnicity', 'support_workers', 'discharge_date', 'reason_discharge', 'updated_by',
+                    'emhware_id', 'smis_id'
                 ]
                 
                 # Use bulk_update - Django will only update fields that are set on the objects
@@ -5074,6 +5150,16 @@ def auto_merge_high_confidence_duplicate(primary_client, duplicate_client, simil
             # Handle legacy client IDs - save multiple IDs if present from different sources
             legacy_ids = []
             
+            # Helper function to get display label for source
+            def get_source_label(source):
+                """Map source to clear display label"""
+                source_map = {
+                    'EMHware': 'EMHware ID',
+                    'SMIS': 'SMIS ID',
+                    'FFAI': 'FFAI ID',
+                }
+                return source_map.get(source, f'{source} ID' if source else 'Legacy ID')
+            
             # Get existing legacy IDs from primary client
             if merged_client.legacy_client_ids:
                 legacy_ids = list(merged_client.legacy_client_ids)
@@ -5087,7 +5173,8 @@ def auto_merge_high_confidence_duplicate(primary_client, duplicate_client, simil
                 if not existing_entry:
                     legacy_ids.append({
                         'source': primary_source,
-                        'client_id': primary_client_id
+                        'client_id': primary_client_id,
+                        'label': get_source_label(primary_source)
                     })
             
             # Add duplicate client's ID if it exists and has a source
@@ -5099,8 +5186,34 @@ def auto_merge_high_confidence_duplicate(primary_client, duplicate_client, simil
                 if not existing_entry:
                     legacy_ids.append({
                         'source': duplicate_source,
-                        'client_id': duplicate_client_id
+                        'client_id': duplicate_client_id,
+                        'label': get_source_label(duplicate_source)
                     })
+            
+            # Also check if either client has existing legacy_client_ids and merge them
+            if primary_client.legacy_client_ids:
+                for legacy_entry in primary_client.legacy_client_ids:
+                    existing_entry = next(
+                        (entry for entry in legacy_ids if entry.get('client_id') == legacy_entry.get('client_id') and entry.get('source') == legacy_entry.get('source')),
+                        None
+                    )
+                    if not existing_entry:
+                        legacy_entry_copy = dict(legacy_entry)
+                        if 'label' not in legacy_entry_copy:
+                            legacy_entry_copy['label'] = get_source_label(legacy_entry_copy.get('source'))
+                        legacy_ids.append(legacy_entry_copy)
+            
+            if duplicate_client.legacy_client_ids:
+                for legacy_entry in duplicate_client.legacy_client_ids:
+                    existing_entry = next(
+                        (entry for entry in legacy_ids if entry.get('client_id') == legacy_entry.get('client_id') and entry.get('source') == legacy_entry.get('source')),
+                        None
+                    )
+                    if not existing_entry:
+                        legacy_entry_copy = dict(legacy_entry)
+                        if 'label' not in legacy_entry_copy:
+                            legacy_entry_copy['label'] = get_source_label(legacy_entry_copy.get('source'))
+                        legacy_ids.append(legacy_entry_copy)
             
             # Update legacy_client_ids
             merged_client.legacy_client_ids = legacy_ids
@@ -5243,7 +5356,20 @@ def run_duplicate_scan(request):
         staff = request.user.staff_profile
         user_roles = staff.staffrole_set.select_related('role').all()
         role_names = [staff_role.role.name for staff_role in user_roles]
-        if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
+        # Staff role users cannot access duplicate detection
+        if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+            return JsonResponse({
+                'success': False,
+                'error': 'You do not have permission to run duplicate scans.'
+            }, status=403)
+        # Manager role users cannot access duplicate detection
+        if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+            return JsonResponse({
+                'success': False,
+                'error': 'You do not have permission to run duplicate scans.'
+            }, status=403)
+        # Leader role users cannot access duplicate detection
+        if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
             return JsonResponse({
                 'success': False,
                 'error': 'You do not have permission to run duplicate scans.'
@@ -5757,7 +5883,20 @@ def delete_high_confidence_duplicates(request):
         staff = request.user.staff_profile
         user_roles = staff.staffrole_set.select_related('role').all()
         role_names = [staff_role.role.name for staff_role in user_roles]
-        if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
+        # Staff role users cannot access duplicate detection
+        if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+            return JsonResponse({
+                'success': False,
+                'error': 'You do not have permission to delete duplicates.'
+            }, status=403)
+        # Manager role users cannot access duplicate detection
+        if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+            return JsonResponse({
+                'success': False,
+                'error': 'You do not have permission to delete duplicates.'
+            }, status=403)
+        # Leader role users cannot access duplicate detection
+        if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
             return JsonResponse({
                 'success': False,
                 'error': 'You do not have permission to delete duplicates.'
@@ -6492,6 +6631,65 @@ def client_merge_view(request, duplicate_id):
                 else:
                     print(f"    - Field NOT in all_fields")
         
+        # Prepare legacy IDs information for display
+        def get_source_label(source):
+            """Map source to clear display label"""
+            source_map = {
+                'EMHware': 'EMHware ID',
+                'SMIS': 'SMIS ID',
+            }
+            return source_map.get(source, f'{source} ID' if source else 'Legacy ID')
+        
+        # Collect all legacy IDs from both clients
+        legacy_ids_info = []
+        
+        # Primary client's current client_id and source
+        if primary_client.client_id and primary_client.source:
+            legacy_ids_info.append({
+                'source': primary_client.source,
+                'client_id': primary_client.client_id,
+                'label': get_source_label(primary_client.source),
+                'from': 'primary'
+            })
+        
+        # Primary client's existing legacy_client_ids
+        if primary_client.legacy_client_ids:
+            for entry in primary_client.legacy_client_ids:
+                legacy_ids_info.append({
+                    'source': entry.get('source'),
+                    'client_id': entry.get('client_id'),
+                    'label': entry.get('label') or get_source_label(entry.get('source')),
+                    'from': 'primary_legacy'
+                })
+        
+        # Duplicate client's current client_id and source
+        if duplicate_client.client_id and duplicate_client.source:
+            legacy_ids_info.append({
+                'source': duplicate_client.source,
+                'client_id': duplicate_client.client_id,
+                'label': get_source_label(duplicate_client.source),
+                'from': 'duplicate'
+            })
+        
+        # Duplicate client's existing legacy_client_ids
+        if duplicate_client.legacy_client_ids:
+            for entry in duplicate_client.legacy_client_ids:
+                legacy_ids_info.append({
+                    'source': entry.get('source'),
+                    'client_id': entry.get('client_id'),
+                    'label': entry.get('label') or get_source_label(entry.get('source')),
+                    'from': 'duplicate_legacy'
+                })
+        
+        # Remove duplicates (same source and client_id)
+        seen = set()
+        unique_legacy_ids = []
+        for entry in legacy_ids_info:
+            key = (entry.get('source'), entry.get('client_id'))
+            if key not in seen and entry.get('client_id'):
+                seen.add(key)
+                unique_legacy_ids.append(entry)
+        
         context = {
             'duplicate': duplicate,
             'primary_client': primary_client,
@@ -6500,6 +6698,7 @@ def client_merge_view(request, duplicate_id):
             'match_type': duplicate.match_type,
             'confidence_level': duplicate.confidence_level,
             'fields_with_values': fields_with_values,
+            'legacy_ids': unique_legacy_ids,
         }
         
         return render(request, 'clients/client_merge.html', context)
@@ -6592,6 +6791,15 @@ def merge_clients(request, duplicate_id):
         # Use original values before merge to capture both IDs
         legacy_ids = []
         
+        # Helper function to get display label for source
+        def get_source_label(source):
+            """Map source to clear display label"""
+            source_map = {
+                'EMHware': 'EMHware ID',
+                'SMIS': 'SMIS ID',
+            }
+            return source_map.get(source, f'{source} ID' if source else 'Legacy ID')
+        
         # Get existing legacy IDs from primary client
         if merged_client.legacy_client_ids:
             legacy_ids = list(merged_client.legacy_client_ids)
@@ -6606,7 +6814,8 @@ def merge_clients(request, duplicate_id):
             if not existing_entry:
                 legacy_ids.append({
                     'source': primary_source,
-                    'client_id': primary_client_id
+                    'client_id': primary_client_id,
+                    'label': get_source_label(primary_source)
                 })
         
         # Add duplicate client's ID if it exists and has a source
@@ -6619,8 +6828,38 @@ def merge_clients(request, duplicate_id):
             if not existing_entry:
                 legacy_ids.append({
                     'source': duplicate_source,
-                    'client_id': duplicate_client_id
+                    'client_id': duplicate_client_id,
+                    'label': get_source_label(duplicate_source)
                 })
+        
+        # Also check if either client has existing legacy_client_ids and merge them
+        if primary_client.legacy_client_ids:
+            for legacy_entry in primary_client.legacy_client_ids:
+                # Check if this entry already exists
+                existing_entry = next(
+                    (entry for entry in legacy_ids if entry.get('client_id') == legacy_entry.get('client_id') and entry.get('source') == legacy_entry.get('source')),
+                    None
+                )
+                if not existing_entry:
+                    # Ensure label is set
+                    legacy_entry_copy = dict(legacy_entry)
+                    if 'label' not in legacy_entry_copy:
+                        legacy_entry_copy['label'] = get_source_label(legacy_entry_copy.get('source'))
+                    legacy_ids.append(legacy_entry_copy)
+        
+        if duplicate_client.legacy_client_ids:
+            for legacy_entry in duplicate_client.legacy_client_ids:
+                # Check if this entry already exists
+                existing_entry = next(
+                    (entry for entry in legacy_ids if entry.get('client_id') == legacy_entry.get('client_id') and entry.get('source') == legacy_entry.get('source')),
+                    None
+                )
+                if not existing_entry:
+                    # Ensure label is set
+                    legacy_entry_copy = dict(legacy_entry)
+                    if 'label' not in legacy_entry_copy:
+                        legacy_entry_copy['label'] = get_source_label(legacy_entry_copy.get('source'))
+                    legacy_ids.append(legacy_entry_copy)
         
         # Update legacy_client_ids
         merged_client.legacy_client_ids = legacy_ids
@@ -6710,25 +6949,11 @@ def merge_clients(request, duplicate_id):
                 restriction.archived_at = timezone.now()
                 restriction.save()
         
-        # 3. Migrate ClientNotes
-        from clients.models import ClientNote
-        duplicate_notes = ClientNote.objects.filter(client=duplicate_client)
-        for note in duplicate_notes:
             note.client = merged_client
             note.save()
             print(f"Migrated note: {note.title}")
         
-        # 4. Migrate ClientContacts (if exists)
-        try:
-            from clients.models import ClientContact
-            duplicate_contacts = ClientContact.objects.filter(client=duplicate_client)
-            for contact in duplicate_contacts:
-                contact.client = merged_client
-                contact.save()
-                print(f"Migrated contact: {contact.name}")
-        except ImportError:
-            pass
-        
+       
         # 5. Migrate Intakes
         duplicate_intakes = Intake.objects.filter(client=duplicate_client)
         for intake in duplicate_intakes:
@@ -6750,13 +6975,23 @@ def merge_clients(request, duplicate_id):
                     existing_intake.notes = intake.notes
                     existing_intake.save()
         
-        # 6. Migrate ClientUploadLogs (to preserve upload history)
-        from core.models import ClientUploadLog
-        duplicate_logs = ClientUploadLog.objects.filter(client=duplicate_client)
-        for log in duplicate_logs:
-            log.client = merged_client
-            log.save()
-            print(f"Migrated upload log: {log.upload_date}")
+        # 6. Migrate ClientUploadLogs (if they exist and have client field)
+        # Note: ClientUploadLog tracks file uploads, not individual clients, so this may not be applicable
+        try:
+            from core.models import ClientUploadLog
+            # Check if ClientUploadLog has a client field before trying to filter
+            if hasattr(ClientUploadLog, 'client'):
+                duplicate_logs = ClientUploadLog.objects.filter(client=duplicate_client)
+                for log in duplicate_logs:
+                    log.client = merged_client
+                    log.save()
+                    print(f"Migrated upload log: {log.started_at}")
+        except (AttributeError, FieldError) as e:
+            # ClientUploadLog doesn't have a client field, skip migration
+            print(f"Skipping ClientUploadLog migration: {e}")
+        except Exception as e:
+            # Skip if there's any other error
+            print(f"Skipping ClientUploadLog migration due to error: {e}")
         
         print(f"Migration complete: {migrated_enrollments_count} enrollments migrated, {skipped_enrollments_count} duplicates skipped")
         

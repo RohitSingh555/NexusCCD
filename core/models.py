@@ -498,6 +498,8 @@ class Client(BaseModel):
     source = models.CharField(max_length=50, choices=[('SMIS', 'SMIS'), ('EMHware', 'EMHware')], null=True, blank=True, db_index=True, help_text="Source system where client data originated")
     legacy_client_ids = models.JSONField(default=list, help_text="List of legacy client IDs from different sources (e.g., [{'source': 'SMIS', 'client_id': '123'}, {'source': 'EMHware', 'client_id': '456'}])")
     secondary_source_id = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Client ID of the duplicate client that was merged into this client")
+    emhware_id = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Client ID from EMHware system")
+    smis_id = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Client ID from SMIS system")
     is_archived = models.BooleanField(default=False, db_index=True, help_text="Whether this client is archived")
     archived_at = models.DateTimeField(null=True, blank=True, db_index=True, help_text="Timestamp when this client was archived")
     is_inactive = models.BooleanField(default=False, db_index=True, help_text="Whether this client is inactive (has zero active enrollments)")

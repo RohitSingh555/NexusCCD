@@ -1974,7 +1974,12 @@ class EnrollmentListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMan
             success_rate = round((completed_count / total_enrollments) * 100, 1)
         context['success_rate'] = success_rate
         
-        context['departments'] = Department.objects.all().order_by('name')
+        # Exclude archived departments and HASS from department dropdown
+        context['departments'] = Department.objects.filter(
+            is_archived=False
+        ).exclude(
+            name__iexact='HASS'
+        ).order_by('name')
         context['status_choices'] = [
             ('', 'All Statuses'),
             ('pending', 'Pending'),
