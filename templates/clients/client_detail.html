@@ -121,9 +121,23 @@
                         <span class="text-sm text-neutral-900 font-body break-all font-mono">{{ client.id }}</span>
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-sm font-medium text-neutral-500">Legacy Client ID:</span>
+                        <span class="text-sm font-medium text-neutral-500">Client ID:</span>
                         <span class="text-sm text-neutral-900 font-body break-all font-mono">{{ client.client_id|default:"—" }}</span>
                     </div>
+                    {% if client.legacy_client_ids %}
+                    <div class="flex justify-between items-start">
+                        <span class="text-sm font-medium text-neutral-500">Legacy Client IDs:</span>
+                        <div class="text-sm text-neutral-900 font-body break-all font-mono text-right">
+                            {% for legacy_entry in client.legacy_client_ids %}
+                                {% if legacy_entry.client_id and legacy_entry.source %}
+                                    <div class="mb-1">
+                                        <span class="font-semibold">{{ legacy_entry.source }}:</span> {{ legacy_entry.client_id }}
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">First Name:</span>
                         <span class="text-sm text-neutral-900 font-body">{{ client.first_name|default:"—" }}</span>

@@ -16,7 +16,12 @@ cd "$PROJECT_DIR"
 if [ -f /.dockerenv ] || [ -n "$DOCKER_CONTAINER" ]; then
     # Running in Docker - use docker-compose
     # Clean up delete records older than 7 days, and other records older than 15 days
-    docker-compose exec -T web python manage.py cleanup_old_audit_logs --cleanup-deletes --delete-days 7 --days 15
+    # Use production docker-compose if available, otherwise fall back to default
+    if docker-compose -f docker-compose.prod.yml ps web > /dev/null 2>&1; then
+        docker-compose -f docker-compose.prod.yml exec -T web python manage.py cleanup_old_audit_logs --cleanup-deletes --delete-days 7 --days 15
+    else
+        docker-compose exec -T web python manage.py cleanup_old_audit_logs --cleanup-deletes --delete-days 7 --days 15
+    fi
 else
     # Running locally - use virtual environment
     if [ -d "venv" ]; then

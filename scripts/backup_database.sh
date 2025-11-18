@@ -37,7 +37,14 @@ log_message() {
 log_message "Starting database backup..."
 
 # Create backup using pg_dump
-if docker-compose exec -T db pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE" 2>>"$LOG_FILE"; then
+# Use production docker-compose if available, otherwise fall back to default
+if docker-compose -f docker-compose.prod.yml ps db > /dev/null 2>&1; then
+    COMPOSE_FILE="-f docker-compose.prod.yml"
+else
+    COMPOSE_FILE=""
+fi
+
+if docker-compose $COMPOSE_FILE exec -T db pg_dump -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE" 2>>"$LOG_FILE"; then
     # Compress the backup
     if gzip -f "$BACKUP_FILE" 2>>"$LOG_FILE"; then
         BACKUP_FILE="${BACKUP_FILE}.gz"

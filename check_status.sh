@@ -22,3 +22,5 @@ echo ""
 echo "=== Testing from Nginx ==="
 docker-compose -f docker-compose.prod.yml exec nginx wget -O- -T 2 http://web:8000 2>&1 | head -5
 
+
+

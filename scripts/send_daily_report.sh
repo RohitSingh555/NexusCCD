@@ -12,9 +12,15 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$PROJECT_DIR"
 
 # Check if docker-compose is available and containers are running
-if command -v docker-compose >/dev/null 2>&1 && docker-compose ps | grep -q "Up"; then
-    # Use Docker (preferred method)
-    docker-compose exec -T web python manage.py send_daily_client_report --frequency daily
+# Use production docker-compose if available, otherwise fall back to default
+if command -v docker-compose >/dev/null 2>&1; then
+    if docker-compose -f docker-compose.prod.yml ps web > /dev/null 2>&1; then
+        # Use production Docker (preferred method)
+        docker-compose -f docker-compose.prod.yml exec -T web python manage.py send_daily_client_report --frequency daily
+    elif docker-compose ps | grep -q "Up"; then
+        # Use default Docker
+        docker-compose exec -T web python manage.py send_daily_client_report --frequency daily
+    fi
 elif [ -f /.dockerenv ] || [ -n "$DOCKER_CONTAINER" ]; then
     # Running inside Docker container - use direct command
     python manage.py send_daily_client_report --frequency daily
