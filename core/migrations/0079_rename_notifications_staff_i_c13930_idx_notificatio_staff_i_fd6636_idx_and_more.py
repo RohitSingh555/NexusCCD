@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0079_add_emhware_id_and_smis_id'),
+        ('core', '0078_add_detection_source_to_client_duplicate'),
     ]
 
     operations = [

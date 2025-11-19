@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0078_add_detection_source_to_client_duplicate'),
+        ('core', '0079_rename_notifications_staff_i_c13930_idx_notificatio_staff_i_fd6636_idx_and_more'),
     ]
 
     operations = [
