@@ -511,6 +511,59 @@ You can add additional maintenance tasks:
 0 3 * * * cd /home/Admin0/NexusCCD && docker-compose exec -T web python manage.py migrate >> /home/Admin0/NexusCCD/logs/migrations.log 2>&1
 ```
 
+## 🔍 Duplicate Client Check Commands
+
+### Check for Duplicate Clients
+
+The `check_duplicate_clients_standalone.py` script checks for duplicate client records based on:
+- **First Name + Last Name** combination
+- **Client ID** values
+
+**Basic Usage (Check All Duplicates):**
+```bash
+docker-compose -f docker-compose.prod.yml run --rm -v $(pwd):/app web python /app/check_duplicate_clients_standalone.py --verbose
+```
+
+**Check Only Name Duplicates:**
+```bash
+docker-compose -f docker-compose.prod.yml run --rm -v $(pwd):/app web python /app/check_duplicate_clients_standalone.py --check-name --verbose
+```
+
+**Check Only Client ID Duplicates:**
+```bash
+docker-compose -f docker-compose.prod.yml run --rm -v $(pwd):/app web python /app/check_duplicate_clients_standalone.py --check-client-id --verbose
+```
+
+**Limit Output to First N Groups:**
+```bash
+docker-compose -f docker-compose.prod.yml run --rm -v $(pwd):/app web python /app/check_duplicate_clients_standalone.py --limit 20 --verbose
+```
+
+**Quick Check (Summary Only):**
+```bash
+docker-compose -f docker-compose.prod.yml run --rm -v $(pwd):/app web python /app/check_duplicate_clients_standalone.py
+```
+
+### Script Options
+
+- `--check-name`: Check for duplicates based on first_name + last_name combination
+- `--check-client-id`: Check for duplicates based on client_id
+- `--verbose`: Show detailed output including all duplicate records
+- `--limit N`: Limit the number of duplicate groups to display (default: 50)
+
+### Example Output
+
+The script will show:
+- Total number of duplicate groups found
+- For each duplicate group:
+  - Client IDs
+  - Names
+  - Date of Birth
+  - Creation dates
+- Summary of all duplicates
+
+**Note:** The script automatically detects if it's running inside Docker and uses the correct database host (`db` inside Docker, `localhost` on host).
+
 ---
 *Last updated: $(date)*
 *Application: NexusCCD Django*
