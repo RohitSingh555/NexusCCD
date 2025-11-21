@@ -31,9 +31,20 @@
                     </h1>
                     <p class="text-sm text-gray-600">Service Restriction</p>
                     <p class="text-sm text-gray-600">{{ restriction.get_scope_display }}</p>
+                    {% if not restriction.is_approved %}
+                    <p class="text-sm text-yellow-600 font-semibold mt-1">⚠️ Pending SuperAdmin Approval</p>
+                    {% endif %}
                 </div>
             </div>
             <div class="flex items-center space-x-2">
+                {% if not restriction.is_approved and can_approve %}
+                <a href="{% url 'core:restrictions_approve' restriction.external_id %}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                    </svg>
+                    Approve Restriction
+                </a>
+                {% endif %}
                 {% if not restriction.is_archived %}
                 {% if not user_permissions.is_staff_only and can_edit_restriction %}
                 <a href="{% url 'core:restrictions_edit' restriction.external_id %}" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200">
@@ -132,6 +143,10 @@
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-800">
                                 Archived
                             </span>
+                        {% elif not restriction.is_approved %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-yellow-100 text-yellow-800">
+                                Pending Approval
+                            </span>
                         {% elif restriction.is_expired %}
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-neutral-100 text-neutral-800">
                                 Expired
@@ -142,6 +157,18 @@
                             </span>
                         {% endif %}
                     </div>
+                    {% if restriction.is_approved and restriction.approved_by %}
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Approved By:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ restriction.approved_by.user.get_full_name|default:restriction.approved_by.user.username }}</span>
+                    </div>
+                    {% if restriction.approved_at %}
+                    <div class="flex justify-between">
+                        <span class="text-sm font-medium text-neutral-500">Approved On:</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ restriction.approved_at|date:"M d, Y g:i A" }}</span>
+                    </div>
+                    {% endif %}
+                    {% endif %}
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Behaviors:</span>
                         <div class="flex flex-wrap gap-1">
@@ -247,7 +274,7 @@
                     </div>
                     <div class="flex justify-between">
                         <span class="text-sm font-medium text-neutral-500">Client ID:</span>
-                        <span class="text-sm text-neutral-900 font-body">{{ restriction.client.external_id }}</span>
+                        <span class="text-sm text-neutral-900 font-body">{{ restriction.client.client_id|default:restriction.client.external_id }}</span>
                     </div>
                     {% if restriction.client.date_of_birth %}
                     <div class="flex justify-between">

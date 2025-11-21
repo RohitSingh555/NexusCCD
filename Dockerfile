@@ -13,9 +13,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Make the startup script executable
-RUN chmod +x start.sh
+# Make the startup scripts executable
+RUN chmod +x start.sh start_debug.sh
 
 EXPOSE 8000
+EXPOSE 5678
 
 CMD ["./start.sh"]

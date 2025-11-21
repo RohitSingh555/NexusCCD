@@ -130,10 +130,27 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         from django.db.models import Q, Count
         from datetime import date
         
+        # Check user roles to determine if they can see archived clients
+        can_see_archived = False
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                # Only SuperAdmin and Admin can see archived clients
+                can_see_archived = any(role in ['SuperAdmin', 'Admin'] for role in role_names)
+            except Exception:
+                pass
+        
         # Start with base queryset - exclude archived clients by default
         # Don't use ProgramManagerAccessMixin's get_queryset because it tries to select_related('program') 
         # which doesn't exist on Client model
-        queryset = Client.objects.filter(is_archived=False).order_by('-created_at')
+        # Manager and Leader cannot see archived clients
+        if not can_see_archived:
+            queryset = Client.objects.filter(is_archived=False).order_by('-created_at')
+        else:
+            # SuperAdmin/Admin can see all clients (archived filter will be applied by status_filter if needed)
+            queryset = Client.objects.all().order_by('-created_at')
         
         # Exclude clients that are marked as duplicates (i.e., they are duplicate_client in a pending ClientDuplicate record)
         queryset = queryset.exclude(
@@ -222,6 +239,7 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
                 
                 elif staff.is_leader():
                     # Leader users see only clients enrolled in programs from their assigned departments
+                    # Leaders cannot see archived clients
                     from core.models import Department
                     assigned_departments = Department.objects.filter(
                         leader_assignments__staff=staff,
@@ -243,13 +261,21 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         status_filter = self.request.GET.get('status', '').strip()
         
         # Filter by status (active vs inactive) - based on is_inactive field only
+        # Note: Manager and Leader cannot see archived clients (handled above)
         if status_filter == 'active':
             # Show only active clients (is_inactive=False)
             queryset = queryset.filter(is_inactive=False)
         elif status_filter == 'inactive':
             # Show only inactive clients (is_inactive=True)
             queryset = queryset.filter(is_inactive=True)
-        # If status is empty or 'all', show all clients
+        elif status_filter == 'archived':
+            # Only SuperAdmin/Admin can see archived clients
+            if can_see_archived:
+                queryset = queryset.filter(is_archived=True)
+            else:
+                # Manager/Leader cannot see archived - show empty
+                queryset = queryset.none()
+        # If status is empty or 'all', show all clients (but archived are still filtered for Manager/Leader)
         
         # No need to filter duplicates - they are physically deleted
         # when marked as duplicates
@@ -1017,12 +1043,17 @@ class ClientCreateView(AnalystAccessMixin, CreateView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot create clients
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Leader'] for role in role_names):
+                    messages.error(request, 'You do not have permission to create clients. Contact your administrator.')
+                    return redirect('clients:list')
+                
+                # Manager role users cannot create clients
+                if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     messages.error(request, 'You do not have permission to create clients. Contact your administrator.')
                     return redirect('clients:list')
                 
                 # Leader role users cannot create clients
-                if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+                if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     messages.error(request, 'You do not have permission to create clients. Contact your administrator.')
                     return redirect('clients:list')
             except Exception:
@@ -1699,12 +1730,17 @@ class ClientUploadView(TemplateView):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot upload clients
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Manager','Admin'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    messages.error(request, 'You do not have permission to upload clients. Contact your administrator.')
+                    return redirect('clients:list')
+                
+                # Manager role users cannot upload clients
+                if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     messages.error(request, 'You do not have permission to upload clients. Contact your administrator.')
                     return redirect('clients:list')
                 
                 # Leader role users cannot upload clients
-                if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+                if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     messages.error(request, 'You do not have permission to upload clients. Contact your administrator.')
                     return redirect('clients:list')
             except Exception:
@@ -1733,11 +1769,15 @@ def upload_clients(request):
             role_names = [staff_role.role.name for staff_role in user_roles]
             
             # Staff role users cannot upload clients
-            if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
+            if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                return JsonResponse({'success': False, 'error': 'You do not have permission to upload clients. Contact your administrator.'}, status=403)
+            
+            # Manager role users cannot upload clients
+            if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                 return JsonResponse({'success': False, 'error': 'You do not have permission to upload clients. Contact your administrator.'}, status=403)
             
             # Leader role users cannot upload clients
-            if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+            if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                 return JsonResponse({'success': False, 'error': 'You do not have permission to upload clients. Contact your administrator.'}, status=403)
         except Exception:
             pass
@@ -1937,13 +1977,13 @@ def upload_clients(request):
         # Check for required fields using case-insensitive mapping
         # Note: client_id is now required for ALL uploads (both new and updates)
         # For updates: only client_id is required
-        # For new clients: client_id, first_name, last_name, and either phone or dob are required
+        # For new clients: client_id and first_name are required
         if has_existing_client_ids:
             # If we have existing clients, this is an update - only require client_id
             required_fields = ['client_id']
         else:
             # If no existing clients, this is new client creation - require full set
-            required_fields = ['client_id', 'first_name', 'last_name']
+            required_fields = ['client_id', 'first_name']
         missing_fields = []
         
         # Debug logging
@@ -2529,15 +2569,31 @@ def upload_clients(request):
                     enrollment = None
                     created = False
                     
-                    # Try to get existing enrollment first - look for any enrollment for this client-program combination
-                    enrollment_cache_key = (client.id, program.id)
+                    # Try to get existing enrollment first - look for enrollment with same program and start_date (admission date)
+                    # This prevents duplicate enrollments with the same admission date
+                    enrollment_cache_key = (client.id, program.id, current_intake_date)
                     enrollment = enrollment_cache.get(enrollment_cache_key)
                     
                     if enrollment is None:
+                        # Check for existing enrollment with same program and start_date (admission date)
                         existing_enrollment = ClientProgramEnrollment.objects.filter(
                             client=client,
-                            program=program
+                            program=program,
+                            start_date=current_intake_date
                         ).order_by('-start_date').first()
+                        
+                        # If no exact match, check for overlapping enrollments (same program, overlapping dates)
+                        if not existing_enrollment:
+                            from django.db.models import Q
+                            existing_enrollment = ClientProgramEnrollment.objects.filter(
+                                client=client,
+                                program=program,
+                                is_archived=False
+                            ).filter(
+                                Q(start_date=current_intake_date) |
+                                Q(start_date__lte=current_intake_date, end_date__gte=current_intake_date) |
+                                Q(start_date__lte=current_intake_date, end_date__isnull=True)
+                            ).order_by('-start_date').first()
                     else:
                         existing_enrollment = enrollment
                     
@@ -2634,12 +2690,13 @@ def upload_clients(request):
                             if enrollment_start_date > discharge_date:
                                 enrollment_start_date = discharge_date
                         
-                        # Create new enrollment
+                        # Create new enrollment - check for duplicate with same start_date first
+                        # Use start_date (admission date) as the key to prevent duplicates
                         enrollment, created = ClientProgramEnrollment.objects.get_or_create(
                             client=client,
                             program=program,
+                            start_date=enrollment_start_date,  # Use start_date as part of unique constraint
                             defaults={
-                                'start_date': enrollment_start_date,
                                 'end_date': discharge_date,  # Set discharge_date as end_date
                                 'status': final_status,
                                 'days_elapsed': days_elapsed,
@@ -3458,11 +3515,10 @@ def upload_clients(request):
                 
                 has_client_id = safe_check_field(client_data.get('client_id'))
                 has_first_name = safe_check_field(client_data.get('first_name'))
-                has_last_name = safe_check_field(client_data.get('last_name'))
                 
-                # If we're missing all three required fields, skip early with a clear error
-                if not has_client_id and not has_first_name and not has_last_name:
-                    errors.append(f"Row {index + 2}: Missing all required fields (client_id, first_name, last_name). Row appears to be empty or invalid.")
+                # If we're missing all required fields, skip early with a clear error
+                if not has_client_id and not has_first_name:
+                    errors.append(f"Row {index + 2}: Missing all required fields (client_id, first_name). Row appears to be empty or invalid.")
                     skipped_count += 1
                     continue
                 
@@ -3738,8 +3794,8 @@ def upload_clients(request):
                     
                     # For new client creation, validate required fields.
                     # client_id is optional for new records (blank IDs should create fresh clients),
-                    # but first_name and last_name are still required.
-                    required_fields = ['first_name', 'last_name']
+                    # but first_name is still required.
+                    required_fields = ['first_name']
                     missing_required = []
                     
                     for field in required_fields:
@@ -4313,11 +4369,15 @@ def get_upload_logs(request):
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot view upload logs
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Leader'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     return JsonResponse({'success': False, 'error': 'You do not have permission to view upload logs.'}, status=403)
                 
                 # Manager role users cannot view upload logs
                 if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    return JsonResponse({'success': False, 'error': 'You do not have permission to view upload logs.'}, status=403)
+                
+                # Leader role users cannot view upload logs
+                if 'Leader' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     return JsonResponse({'success': False, 'error': 'You do not have permission to view upload logs.'}, status=403)
             except Exception:
                 pass
@@ -6954,7 +7014,7 @@ def merge_clients(request, duplicate_id):
             print(f"Migrated note: {note.title}")
         
        
-        # 5. Migrate Intakes
+        # 3. Migrate Intakes
         duplicate_intakes = Intake.objects.filter(client=duplicate_client)
         for intake in duplicate_intakes:
             # Check if primary client already has an intake for the same program and date
@@ -6975,7 +7035,7 @@ def merge_clients(request, duplicate_id):
                     existing_intake.notes = intake.notes
                     existing_intake.save()
         
-        # 6. Migrate ClientUploadLogs (if they exist and have client field)
+        # 4. Migrate ClientUploadLogs (if they exist and have client field)
         # Note: ClientUploadLog tracks file uploads, not individual clients, so this may not be applicable
         try:
             from core.models import ClientUploadLog

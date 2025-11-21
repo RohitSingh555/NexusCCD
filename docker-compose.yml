@@ -24,6 +24,7 @@ services:
     restart: always
     ports:
       - "8001:8000"
+      - "5678:5678"  # Debugpy port for VS Code remote debugging
     volumes:
       - .:/app
       - static_volume:/app/static
@@ -40,6 +41,34 @@ services:
       db:
         condition: service_healthy
     command: python manage.py runserver 0.0.0.0:8000
+
+  web-debug:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8002:8000"
+      - "5679:5678"  # Debugpy port for VS Code remote debugging (using 5679 to avoid conflicts)
+    volumes:
+      - .:/app
+      - static_volume:/app/static
+      - media_volume:/app/media
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=True
+      - DB_NAME=nexusccd_db
+      - DB_USER=nexusccd_user
+      - DB_PASSWORD=nexusccd_password
+      - DB_HOST=db
+      - DB_PORT=5432
+      - ALLOWED_HOSTS=localhost,127.0.0.1,20.63.25.169,*
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ./start_debug.sh
+    profiles:
+      - debug
 
   redis:
     image: redis:7-alpine

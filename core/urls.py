@@ -72,6 +72,7 @@ urlpatterns = [
     path('restrictions/<uuid:external_id>/', views.RestrictionDetailView.as_view(), name='restrictions_detail'),
     path('restrictions/<uuid:external_id>/edit/', views.RestrictionUpdateView.as_view(), name='restrictions_edit'),
     path('restrictions/<uuid:external_id>/delete/', views.RestrictionDeleteView.as_view(), name='restrictions_delete'),
+    path('restrictions/<uuid:external_id>/approve/', views.approve_restriction, name='restrictions_approve'),
     path('restrictions/bulk-delete/', views.bulk_delete_restrictions, name='restrictions_bulk_delete'),
     path('restrictions/bulk-restore/', views.bulk_restore_restrictions, name='restrictions_bulk_restore'),
     

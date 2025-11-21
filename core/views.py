@@ -808,9 +808,24 @@ class RestrictionListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListVie
         # First apply the ProgramManagerAccessMixin filtering
         queryset = super().get_queryset()
         
+        # Check user roles - Manager/Leader/Staff should not see archived restrictions
+        user_roles = []
+        try:
+            if self.request.user.is_authenticated:
+                staff = self.request.user.staff_profile
+                user_roles = [staff_role.role.name for staff_role in staff.staffrole_set.select_related('role').all()]
+        except Exception:
+            pass
+        
+        # Manager, Leader, and Staff cannot see archived restrictions
+        is_manager_leader_staff = any(role in ['Manager', 'Leader', 'Staff'] for role in user_roles) and not any(role in ['SuperAdmin', 'Admin'] for role in user_roles)
+        
         # Exclude archived restrictions by default unless explicitly requested
         status_filter = self.request.GET.get('status', '')
-        if status_filter != 'archived':
+        if is_manager_leader_staff:
+            # Manager/Leader/Staff cannot see archived restrictions at all
+            queryset = queryset.filter(is_archived=False)
+        elif status_filter != 'archived':
             queryset = queryset.filter(is_archived=False)
         
         # Apply date range filtering
@@ -876,7 +891,12 @@ class RestrictionListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListVie
                     end_date__lt=today
                 )
             elif status_filter == 'archived':
-                queryset = queryset.filter(is_archived=True)
+                # Only SuperAdmin/Admin can see archived restrictions
+                if not is_manager_leader_staff:
+                    queryset = queryset.filter(is_archived=True)
+                else:
+                    # Manager/Leader/Staff cannot filter for archived - show empty
+                    queryset = queryset.none()
         
         if search_query:
             queryset = queryset.filter(
@@ -2106,7 +2126,12 @@ class EnrollmentCreateView(StaffAccessControlMixin, AnalystAccessMixin, ProgramM
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
                 # Staff role users cannot create enrollments
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Leader'] for role in role_names):
+                    messages.error(request, 'You do not have permission to create enrollments. Contact your administrator.')
+                    return redirect('core:enrollments')
+                
+                # Manager role users cannot create enrollments
+                if 'Manager' in role_names and not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     messages.error(request, 'You do not have permission to create enrollments. Contact your administrator.')
                     return redirect('core:enrollments')
             except Exception:
@@ -2497,6 +2522,8 @@ def search_clients(request):
         # Format results for the frontend
         results = []
         for client in clients:
+            # Use numeric CCD ID (client_id) if available, otherwise fall back to external_id
+            display_id = client.client_id if client.client_id else str(client.external_id)
             results.append({
                 'id': client.id,
                 'external_id': str(client.external_id),
@@ -2505,7 +2532,8 @@ def search_clients(request):
                 'first_name': client.first_name,
                 'last_name': client.last_name,
                 'date_of_birth': client.dob.strftime('%Y-%m-%d') if client.dob else None,
-                'display_text': f"{client.first_name} {client.last_name} ({client.dob.strftime('%m/%d/%Y') if client.dob else 'No DOB'})"
+                'display_text': f"{client.first_name} {client.last_name} ({client.dob.strftime('%m/%d/%Y') if client.dob else 'No DOB'})",
+                'display_id': display_id  # Add display_id for template use
             })
         
         return JsonResponse({
@@ -2596,6 +2624,60 @@ def search_staff(request):
         }, status=500)
 
 
+@login_required
+def approve_restriction(request, external_id):
+    """Approve a service restriction (SuperAdmin/Admin only)"""
+    from django.shortcuts import get_object_or_404, redirect
+    from django.contrib import messages
+    from django.utils import timezone
+    from .models import ServiceRestriction
+    
+    try:
+        restriction = get_object_or_404(ServiceRestriction, external_id=external_id)
+        
+        # Check if user is SuperAdmin/Admin
+        if not request.user.is_authenticated:
+            messages.error(request, 'You must be logged in to approve restrictions.')
+            return redirect('core:restrictions_detail', external_id=external_id)
+        
+        try:
+            staff = request.user.staff_profile
+            user_roles = staff.staffrole_set.select_related('role').all()
+            role_names = [staff_role.role.name for staff_role in user_roles]
+            
+            if not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                messages.error(request, 'You do not have permission to approve restrictions. Only SuperAdmin and Admin can approve.')
+                return redirect('core:restrictions_detail', external_id=external_id)
+        except Exception:
+            messages.error(request, 'Error checking permissions.')
+            return redirect('core:restrictions_detail', external_id=external_id)
+        
+        # Approve the restriction
+        restriction.is_approved = True
+        restriction.approved_by = request.user.staff_profile
+        restriction.approved_at = timezone.now()
+        restriction.save()
+        
+        # Mark related notifications as read
+        from .models import Notification
+        Notification.objects.filter(
+            category='restriction_approval',
+            metadata__restriction_external_id=str(external_id),
+            is_read=False
+        ).update(is_read=True, read_at=timezone.now())
+        
+        messages.success(request, f'Service restriction for {restriction.client.first_name} {restriction.client.last_name} has been approved and is now active.')
+        
+        return redirect('core:restrictions_detail', external_id=external_id)
+        
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error approving restriction {external_id}: {str(e)}")
+        messages.error(request, f'Error approving restriction: {str(e)}')
+        return redirect('core:restrictions_detail', external_id=external_id)
+
+
 # Service Restriction CRUD Views
 # Note: RestrictionListView is defined earlier in the file (line 255) with full pagination support
 
@@ -2651,6 +2733,17 @@ class RestrictionDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, Detai
         context = super().get_context_data(**kwargs)
         restriction = self.get_object()
         
+        # Check if user is SuperAdmin/Admin and can approve
+        can_approve = False
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                can_approve = any(role in ['SuperAdmin', 'Admin'] for role in role_names)
+            except Exception:
+                pass
+        
         # Check if user can edit this restriction
         can_edit = False
         if self.request.user.is_authenticated:
@@ -2688,7 +2781,19 @@ class RestrictionDetailView(AnalystAccessMixin, ProgramManagerAccessMixin, Detai
             except Exception:
                 pass
         
+        # Check if user is SuperAdmin/Admin and can approve
+        can_approve = False
+        if self.request.user.is_authenticated:
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                can_approve = any(role in ['SuperAdmin', 'Admin'] for role in role_names)
+            except Exception:
+                pass
+        
         context['can_edit_restriction'] = can_edit
+        context['can_approve'] = can_approve
         return context
 
 
@@ -2773,13 +2878,54 @@ class RestrictionCreateView(AnalystAccessMixin, ProgramManagerAccessMixin, Creat
             if not restriction.entered_by and hasattr(self.request.user, 'staff_profile'):
                 restriction.entered_by = self.request.user.staff_profile
             
+            # Check if user is Manager or Leader (not SuperAdmin/Admin)
+            user_roles = []
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = [staff_role.role.name for staff_role in staff.staffrole_set.select_related('role').all()]
+            except Exception:
+                pass
+            
+            is_manager_or_leader = ('Manager' in user_roles or 'Leader' in user_roles) and not any(role in ['SuperAdmin', 'Admin'] for role in user_roles)
+            
+            # Set approval status based on user role
+            # Manager/Leader created restrictions need approval (inactive)
+            # SuperAdmin/Admin created restrictions are auto-approved (active)
+            if is_manager_or_leader:
+                restriction.is_approved = False
+                restriction.approved_by = None
+                restriction.approved_at = None
+            else:
+                # SuperAdmin/Admin - auto-approve
+                restriction.is_approved = True
+                if hasattr(self.request.user, 'staff_profile'):
+                    restriction.approved_by = self.request.user.staff_profile
+                    restriction.approved_at = timezone.now()
+            
             restriction.save()
             client_profile_image = form.cleaned_data.get('client_profile_image')
             if client_profile_image:
                 client = restriction.client
                 client.profile_picture = client_profile_image
                 client.save(update_fields=['profile_picture'])
+            
+            # Send notifications
             create_service_restriction_notification(restriction, event_type='new')
+            
+            # If Manager/Leader created restriction, alert SuperAdmin for approval
+            if is_manager_or_leader:
+                from .notification_utils import notify_superadmin_for_approval
+                notify_superadmin_for_approval(restriction, action='created', user=self.request.user)
+                # Inform user that their restriction requires approval
+                messages.info(
+                    self.request, 
+                    'Service restriction created successfully. It is now pending SuperAdmin approval and will be inactive until approved.'
+                )
+                # Inform user that their restriction requires approval
+                messages.info(
+                    self.request, 
+                    'Service restriction created successfully. It is now pending SuperAdmin approval and will be inactive until approved.'
+                )
             
             # Debug: Print after save
             print(f"RestrictionCreateView.form_valid - restriction.behaviors after save: {restriction.behaviors}")
@@ -2897,12 +3043,50 @@ class RestrictionUpdateView(AnalystAccessMixin, ProgramManagerAccessMixin, Updat
         if not restriction.entered_by and hasattr(self.request.user, 'staff_profile'):
             restriction.entered_by = self.request.user.staff_profile
         
+        # Check if user is Manager or Leader (not SuperAdmin/Admin)
+        user_roles = []
+        try:
+            staff = self.request.user.staff_profile
+            user_roles = [staff_role.role.name for staff_role in staff.staffrole_set.select_related('role').all()]
+        except Exception:
+            pass
+        
+        is_manager_or_leader = ('Manager' in user_roles or 'Leader' in user_roles) and not any(role in ['SuperAdmin', 'Admin'] for role in user_roles)
+        
+        # Set approval status based on user role
+        # Manager/Leader edited restrictions need approval (inactive) - ALWAYS require re-approval
+        # SuperAdmin/Admin edited restrictions remain approved (if already approved) or get auto-approved
+        if is_manager_or_leader:
+            # If Manager/Leader edits ANY restriction (even if previously approved), set to unapproved
+            # This ensures all Manager/Leader edits require SuperAdmin approval
+            restriction.is_approved = False
+            restriction.approved_by = None
+            restriction.approved_at = None
+        elif not restriction.is_approved:
+            # If SuperAdmin/Admin edits an unapproved restriction, auto-approve it
+            restriction.is_approved = True
+            if hasattr(self.request.user, 'staff_profile'):
+                restriction.approved_by = self.request.user.staff_profile
+                restriction.approved_at = timezone.now()
+        # Note: If SuperAdmin/Admin edits an already-approved restriction, 
+        # is_approved remains True (no change needed - preserves existing approval)
+        
         restriction.save()
         client_profile_image = form.cleaned_data.get('client_profile_image')
         if client_profile_image:
             client = restriction.client
             client.profile_picture = client_profile_image
             client.save(update_fields=['profile_picture'])
+        
+        # If Manager/Leader edited restriction, alert SuperAdmin for approval
+        if is_manager_or_leader:
+            from .notification_utils import notify_superadmin_for_approval
+            notify_superadmin_for_approval(restriction, action='updated', user=self.request.user)
+            # Inform user that their edit requires approval
+            messages.info(
+                self.request, 
+                'Your changes have been saved. This restriction is now pending SuperAdmin approval and will be inactive until approved.'
+            )
 
         if restriction.end_date and not restriction.is_indefinite:
             today = timezone.now().date()

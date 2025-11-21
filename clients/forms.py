@@ -503,7 +503,7 @@ class ClientForm(forms.ModelForm):
         
         # Make most new fields optional
         optional_fields = [
-            'client_id', 'middle_name', 'preferred_name', 'alias', 'age', 'gender_identity', 
+            'client_id', 'last_name', 'middle_name', 'preferred_name', 'alias', 'age', 'gender_identity', 
             'pronoun', 'marital_status', 'location_county', 'province', 'city', 'postal_code', 
             'address', 'address_2', 'language', 'preferred_language', 'mother_tongue', 
             'official_language',             'self_identification_race_ethnicity', 

@@ -1,6 +1,6 @@
 {
   "field_mapping": {
-    "_comment": "For updates: only client_id is required. For new clients: client_id, first_name, last_name, and either phone or dob are required.",
+    "_comment": "For updates: only client_id is required. For new clients: client_id and first_name are required.",
     "client_id": ["client_no","client no","ID","client_id", "client id", "clientno", "id", "client number", "Client No.", "Client No", "Client ID", "CLIENT ID"],
     "client_combined": ["Client", "client", "client_name", "client name", "full_name", "full name", "Name", "name"],
     "first_name": ["first_name", "first name", "firstname", "fname", "given name", "First Name", "FIRST NAME"],

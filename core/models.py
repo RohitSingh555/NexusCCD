@@ -420,7 +420,7 @@ class ProgramStaff(BaseModel):
 class Client(BaseModel):
     # 🧍 CLIENT PERSONAL DETAILS
     client_id = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="External client ID")
-    last_name = models.CharField(max_length=100, db_index=True)
+    last_name = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     first_name = models.CharField(max_length=100, db_index=True)
     middle_name = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     preferred_name = models.CharField(max_length=100, null=True, blank=True, db_index=True)
@@ -947,6 +947,9 @@ class ServiceRestriction(BaseModel):
     is_indefinite = models.BooleanField(default=False, db_index=True, help_text="Check if this restriction has no end date")
     is_archived = models.BooleanField(default=False, db_index=True, help_text="Check if this restriction has been archived")
     archived_at = models.DateTimeField(null=True, blank=True, db_index=True, help_text="Timestamp when this restriction was archived")
+    is_approved = models.BooleanField(default=True, db_index=True, help_text="Whether this restriction has been approved by SuperAdmin")
+    approved_by = models.ForeignKey('Staff', on_delete=models.SET_NULL, null=True, blank=True, db_index=True, related_name='restrictions_approved', help_text="Staff member who approved this restriction")
+    approved_at = models.DateTimeField(null=True, blank=True, db_index=True, help_text="Timestamp when this restriction was approved")
     behaviors = models.JSONField(default=list, help_text="List of behaviors that led to this restriction")
     notes = models.TextField(null=True, blank=True, help_text="Additional notes about the restriction")
     
@@ -1462,6 +1465,7 @@ class Notification(BaseModel):
 
     CATEGORY_CHOICES = [
         ('service_restriction', 'Service Restriction'),
+        ('restriction_approval', 'Restriction Approval'),
     ]
 
     staff = models.ForeignKey(
