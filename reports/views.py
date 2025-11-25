@@ -1489,8 +1489,10 @@ class ProgramCapacityExportView(ReportsExportAccessMixin, ListView):
         # Write data rows
         for data in program_data:
             # Determine status based on utilization
-            if data['utilization'] >= 90:
+            if data['utilization'] > 100:
                 status = "Over Capacity"
+            elif data['utilization'] >= 100:
+                status = "At Capacity"
             elif data['utilization'] >= 80:
                 status = "Near Capacity"
             elif data['utilization'] >= 60:

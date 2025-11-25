@@ -155,9 +155,13 @@
                             </div>
                         </td>
                         <td class="px-4 py-4 whitespace-nowrap">
-                            {% if data.utilization >= 90 %}
+                            {% if data.utilization > 100 %}
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800">
                                     Over Capacity
+                                </span>
+                            {% elif data.utilization >= 100 %}
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-orange-100 text-orange-800">
+                                    At Capacity
                                 </span>
                             {% elif data.utilization >= 80 %}
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-brand-orange text-white">

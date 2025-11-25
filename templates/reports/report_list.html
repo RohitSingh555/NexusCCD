@@ -160,6 +160,7 @@
                         </div>
                     </a>
 
+                    {% if user_permissions.can_manage_reports|default:False %}
                     <a href="{% url 'reports:client_outcomes' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
                         <div class="flex-shrink-0">
                             <div class="w-10 h-10 bg-gradient-to-br from-brand-orange to-brand-burntOrange rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
@@ -173,6 +174,7 @@
                             <p class="text-xs text-neutral-500 font-body">Success rates and outcome measurements</p>
                         </div>
                     </a>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -213,6 +215,7 @@
                         </div>
                     </a>
 
+                    {% if user_permissions.can_manage_reports|default:False %}
                     <a href="{% url 'reports:program_performance' %}" class="flex items-center p-4 border border-neutral-200 rounded-xl hover:bg-neutral-50 transition-all duration-200 group">
                         <div class="flex-shrink-0">
                             <div class="w-10 h-10 bg-gradient-to-br from-brand-lime to-brand-moss rounded-lg flex items-center justify-center shadow-sm group-hover:shadow-md transition-all duration-200">
@@ -226,6 +229,7 @@
                             <p class="text-xs text-neutral-500 font-body">Program effectiveness and KPIs</p>
                         </div>
                     </a>
+                    {% endif %}
 
                 </div>
             </div>

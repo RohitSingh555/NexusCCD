@@ -11,29 +11,41 @@
                 <div class="sticky top-24 space-y-2 bg-white border border-neutral-200 rounded-xl p-4 shadow-sm">
                     <h2 class="text-sm font-bold text-neutral-700 uppercase tracking-wider">On this page</h2>
                     <nav class="mt-2 space-y-1 text-sm">
+                        {% if not user_permissions.is_staff_only|default:False %}
                         <a href="#overview" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Overview</a>
+                        {% endif %}
                         <a href="#dashboard" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Dashboard</a>
                         <a href="#clients" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Clients</a>
+                        {% if not user_permissions.is_staff_only|default:False %}
                         <a href="#programs" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Programs & Services</a>
                         <a href="#departments" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Departments</a>
                         <a href="#enrollments" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Enrollments</a>
+                        {% endif %}
                         <a href="#restrictions" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Restrictions</a>
+                        {% if not user_permissions.is_staff_only|default:False %}
                         <a href="#reports" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Reports</a>
+                        {% if not user_permissions.is_program_manager|default:False and not user_permissions.is_leader|default:False %}
                         <a href="#audit-log" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Audit Log</a>
                         <a href="#staff" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Staff Management</a>
+                        {% endif %}
                         <a href="#profile" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Profile & Settings</a>
+                        {% if not user_permissions.is_program_manager|default:False and not user_permissions.is_leader|default:False %}
                         <a href="#permissions" class="block px-3 py-2 rounded-lg hover:bg-neutral-50 font-bold text-neutral-700">Roles & Permissions</a>
+                        {% endif %}
+                        {% endif %}
                     </nav>
                 </div>
             </aside>
 
             <!-- Content -->
             <div class="lg:col-span-3 space-y-10">
+                {% if not user_permissions.is_staff_only|default:False %}
                 <!-- Overview -->
                 <section id="overview" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
                     <h2 class="text-xl font-black text-neutral-800 mb-2">Overview</h2>
                     <p class="text-neutral-700">This system helps you manage clients, programs, enrollments, restrictions, reports, and staff. Use the left sidebar to navigate. Your available sections depend on your role and assigned permissions.</p>
                 </section>
+                {% endif %}
 
                 <!-- Dashboard -->
                 <section id="dashboard" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
@@ -54,6 +66,7 @@
                     </ul>
                 </section>
 
+                {% if not user_permissions.is_staff_only|default:False %}
                 <!-- Programs & Services -->
                 <section id="programs" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
                     <h2 class="text-xl font-black text-neutral-800 mb-3">Programs & Services</h2>
@@ -81,6 +94,7 @@
                         <li>Export enrollments when permitted.</li>
                     </ul>
                 </section>
+                {% endif %}
 
                 <!-- Restrictions -->
                 <section id="restrictions" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
@@ -92,6 +106,7 @@
                     </ul>
                 </section>
 
+                {% if not user_permissions.is_staff_only|default:False %}
                 <!-- Reports -->
                 <section id="reports" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
                     <h2 class="text-xl font-black text-neutral-800 mb-3">Reports</h2>
@@ -101,6 +116,7 @@
                     </ul>
                 </section>
 
+                {% if not user_permissions.is_program_manager|default:False and not user_permissions.is_leader|default:False %}
                 <!-- Audit Log -->
                 <section id="audit-log" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
                     <h2 class="text-xl font-black text-neutral-800 mb-3">Audit Log</h2>
@@ -118,6 +134,7 @@
                         <li>Restricted to administrators.</li>
                     </ul>
                 </section>
+                {% endif %}
 
                 <!-- Profile & Settings -->
                 <section id="profile" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
@@ -128,6 +145,7 @@
                     </ul>
                 </section>
 
+                {% if not user_permissions.is_program_manager|default:False and not user_permissions.is_leader|default:False %}
                 <!-- Roles & Permissions -->
                 <section id="permissions" class="bg-white border border-neutral-200 rounded-2xl shadow-sm p-6">
                     <h2 class="text-xl font-black text-neutral-800 mb-3">Roles & Permissions</h2>
@@ -137,6 +155,8 @@
                         <li>Manage/create permissions allow creating, editing, and deleting.</li>
                     </ul>
                 </section>
+                {% endif %}
+                {% endif %}
             </div>
         </div>
     </div>

@@ -92,6 +92,7 @@
                 <p class="text-xs text-neutral-500 mt-2">Active clients (not marked as inactive)</p>
             </div>
 
+            {% if not user_permissions.is_staff_only|default:False %}
             <!-- Inactive Clients Card -->
             <div class="bg-white rounded-xl shadow-sm border border-orange-200 p-6 hover:shadow-md transition-shadow duration-200">
                 <div class="flex items-center justify-between">
@@ -139,6 +140,7 @@
                 </div>
                 <p class="text-xs text-neutral-500 mt-2">Clients marked as duplicate</p>
             </div>
+            {% endif %}
         </div>
 
         <!-- Filters and Search -->

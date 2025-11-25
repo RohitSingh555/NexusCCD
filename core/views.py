@@ -820,6 +820,13 @@ class RestrictionListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListVie
         # Manager, Leader, and Staff cannot see archived restrictions
         is_manager_leader_staff = any(role in ['Manager', 'Leader', 'Staff'] for role in user_roles) and not any(role in ['SuperAdmin', 'Admin'] for role in user_roles)
         
+        # Check if user is SuperAdmin or Admin
+        is_admin_or_superadmin = any(role in ['SuperAdmin', 'Admin'] for role in user_roles)
+        
+        # Only show approved restrictions to non-admin users (SuperAdmin/Admin need to see pending ones to approve them)
+        if not is_admin_or_superadmin:
+            queryset = queryset.filter(is_approved=True)
+        
         # Exclude archived restrictions by default unless explicitly requested
         status_filter = self.request.GET.get('status', '')
         if is_manager_leader_staff:
