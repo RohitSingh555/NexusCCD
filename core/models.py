@@ -248,29 +248,32 @@ class Program(BaseModel):
         return f"{self.name} - {self.department.name}"
     
     def get_current_enrollments_count(self, as_of_date=None):
-        """Get the current number of active enrollments for this program"""
+        """Get the current number of active enrollments for this program (excluding archived enrollments)"""
         if as_of_date is None:
             as_of_date = timezone.now().date()
         
         return ClientProgramEnrollment.objects.filter(
             program=self,
+            is_archived=False,  # Exclude archived enrollments from capacity calculations
             start_date__lte=as_of_date
         ).filter(
             models.Q(end_date__isnull=True) | models.Q(end_date__gt=as_of_date)
         ).count()
     
     def get_total_enrollments_count(self):
-        """Get the total number of enrollments for this program (including future enrollments)"""
+        """Get the total number of enrollments for this program (including future enrollments, excluding archived)"""
         return ClientProgramEnrollment.objects.filter(
-            program=self
+            program=self,
+            is_archived=False  # Exclude archived enrollments from capacity calculations
         ).filter(
             models.Q(end_date__isnull=True) | models.Q(end_date__gt=timezone.now().date())
         ).count()
     
     def get_enrollments_count_for_date(self, enrollment_date):
-        """Get the number of enrollments that will be active on a specific date"""
+        """Get the number of enrollments that will be active on a specific date (excluding archived enrollments)"""
         return ClientProgramEnrollment.objects.filter(
             program=self,
+            is_archived=False,  # Exclude archived enrollments from capacity calculations
             start_date__lte=enrollment_date
         ).filter(
             models.Q(end_date__isnull=True) | models.Q(end_date__gt=enrollment_date)
@@ -328,6 +331,7 @@ class Program(BaseModel):
         existing_enrollments = ClientProgramEnrollment.objects.filter(
             client=client,
             program=self,
+            is_archived=False,  # Exclude archived enrollments
             start_date__lte=start_date
         ).filter(
             models.Q(end_date__isnull=True) | models.Q(end_date__gt=start_date)

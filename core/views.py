@@ -37,6 +37,24 @@ from .notification_utils import create_service_restriction_notification
 User = get_user_model()
 
 
+def can_see_archived(user):
+    """
+    Helper function to check if a user can see archived items.
+    Only SuperAdmin and Admin can see archived items.
+    Returns True if user is SuperAdmin or Admin, False otherwise.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    
+    try:
+        staff = user.staff_profile
+        user_roles = staff.staffrole_set.select_related('role').all()
+        role_names = [staff_role.role.name for staff_role in user_roles]
+        return any(role in ['SuperAdmin', 'Admin'] for role in role_names)
+    except Exception:
+        return False
+
+
 def get_active_clients_count(request, assigned_programs=None, is_program_manager=False, is_leader=False, is_staff_only=False, is_analyst=False):
     """
     Calculate active clients count using the same logic as the clients list view.
@@ -47,8 +65,11 @@ def get_active_clients_count(request, assigned_programs=None, is_program_manager
     - Clients that are not marked as duplicates (duplicate_of__status != 'pending')
     - Clients that are not marked as inactive (is_inactive=False)
     """
-    # Start with base queryset - exclude archived clients, duplicates, and inactive clients
-    base_queryset = Client.objects.filter(is_archived=False, is_inactive=False)
+    # Start with base queryset - exclude archived clients for non-admin users, duplicates, and inactive clients
+    base_queryset = Client.objects.filter(is_inactive=False)
+    # Exclude archived clients for non-admin users
+    if not can_see_archived(request.user):
+        base_queryset = base_queryset.filter(is_archived=False)
     base_queryset = base_queryset.exclude(duplicate_of__status='pending')
     
     # Apply permission filters based on user role
@@ -379,6 +400,7 @@ def dashboard(request):
     
     # Get basic statistics - filter for program managers and staff-only users
     today = timezone.now().date()
+    user_can_see_archived_items = can_see_archived(request.user)
     
     # Calculate active clients count using the same logic as clients list view
     total_clients = get_active_clients_count(
@@ -391,111 +413,150 @@ def dashboard(request):
     )
     
     if is_program_manager and assigned_programs:
-        active_programs = assigned_programs.filter(status='active', is_archived=False).count()
+        active_programs_queryset = assigned_programs.filter(status='active')
+        if not user_can_see_archived_items:
+            active_programs_queryset = active_programs_queryset.filter(is_archived=False)
+        active_programs = active_programs_queryset.count()
         total_staff = Staff.objects.count()  # Staff count is same for all
         
         # Get active restrictions count - Managers see ALL restrictions
-        active_restrictions = ServiceRestriction.objects.filter(
-            is_archived=False,
+        active_restrictions_queryset = ServiceRestriction.objects.filter(
             start_date__lte=today
         ).filter(
             Q(end_date__isnull=True) | Q(end_date__gte=today)
-        ).count()
+        )
+        if not user_can_see_archived_items:
+            active_restrictions_queryset = active_restrictions_queryset.filter(is_archived=False)
+        active_restrictions = active_restrictions_queryset.count()
         
         # Get recent clients (last 5) from assigned programs
-        recent_clients = Client.objects.filter(
+        recent_clients_queryset = Client.objects.filter(
             clientprogramenrollment__program__in=assigned_programs
-        ).distinct().order_by('-created_at')[:5]
+        )
+        if not user_can_see_archived_items:
+            recent_clients_queryset = recent_clients_queryset.filter(is_archived=False)
+        recent_clients = recent_clients_queryset.distinct().order_by('-created_at')[:5]
         
         # Get recent restrictions (last 5) - Managers see ALL restrictions
-        recent_restrictions = ServiceRestriction.objects.filter(
-            is_archived=False
-        ).select_related('client', 'program').order_by('-created_at')[:5]
+        recent_restrictions_queryset = ServiceRestriction.objects.all()
+        if not user_can_see_archived_items:
+            recent_restrictions_queryset = recent_restrictions_queryset.filter(is_archived=False)
+        recent_restrictions = recent_restrictions_queryset.select_related('client', 'program').order_by('-created_at')[:5]
         
         # Get restricted clients (Agency-wide restrictions) - Managers see ALL agency-wide restrictions
-        restricted_clients = ServiceRestriction.objects.filter(
-            is_archived=False,
-            scope='org'
-        ).select_related('client', 'program').order_by('-created_at')[:10]
+        restricted_clients_queryset = ServiceRestriction.objects.filter(scope='org')
+        if not user_can_see_archived_items:
+            restricted_clients_queryset = restricted_clients_queryset.filter(is_archived=False)
+        restricted_clients = restricted_clients_queryset.select_related('client', 'program').order_by('-created_at')[:10]
     elif is_leader and assigned_programs:
-        active_programs = assigned_programs.filter(status='active', is_archived=False).count()
+        active_programs_queryset = assigned_programs.filter(status='active')
+        if not user_can_see_archived_items:
+            active_programs_queryset = active_programs_queryset.filter(is_archived=False)
+        active_programs = active_programs_queryset.count()
         total_staff = Staff.objects.count()  # Staff count is same for all
         
         # Get active restrictions count - Leaders see ALL restrictions
-        active_restrictions = ServiceRestriction.objects.filter(
-            is_archived=False,
+        active_restrictions_queryset = ServiceRestriction.objects.filter(
             start_date__lte=today
         ).filter(
             Q(end_date__isnull=True) | Q(end_date__gte=today)
-        ).count()
+        )
+        if not user_can_see_archived_items:
+            active_restrictions_queryset = active_restrictions_queryset.filter(is_archived=False)
+        active_restrictions = active_restrictions_queryset.count()
         
         # Get recent clients (last 5) from assigned programs
-        recent_clients = Client.objects.filter(
+        recent_clients_queryset = Client.objects.filter(
             clientprogramenrollment__program__in=assigned_programs
-        ).distinct().order_by('-created_at')[:5]
+        )
+        if not user_can_see_archived_items:
+            recent_clients_queryset = recent_clients_queryset.filter(is_archived=False)
+        recent_clients = recent_clients_queryset.distinct().order_by('-created_at')[:5]
         
         # Get recent restrictions (last 5) - Leaders see ALL restrictions
-        recent_restrictions = ServiceRestriction.objects.filter(
-            is_archived=False
-        ).select_related('client', 'program').order_by('-created_at')[:5]
+        recent_restrictions_queryset = ServiceRestriction.objects.all()
+        if not user_can_see_archived_items:
+            recent_restrictions_queryset = recent_restrictions_queryset.filter(is_archived=False)
+        recent_restrictions = recent_restrictions_queryset.select_related('client', 'program').order_by('-created_at')[:5]
         
         # Get restricted clients (Agency-wide restrictions) - Leaders see ALL agency-wide restrictions
-        restricted_clients = ServiceRestriction.objects.filter(
-            is_archived=False,
-            scope='org'
-        ).select_related('client', 'program').order_by('-created_at')[:10]
+        restricted_clients_queryset = ServiceRestriction.objects.filter(scope='org')
+        if not user_can_see_archived_items:
+            restricted_clients_queryset = restricted_clients_queryset.filter(is_archived=False)
+        restricted_clients = restricted_clients_queryset.select_related('client', 'program').order_by('-created_at')[:10]
     elif is_staff_only:
-        active_programs = Program.objects.filter(status='active', is_archived=False).count()
+        active_programs_queryset = Program.objects.filter(status='active')
+        if not user_can_see_archived_items:
+            active_programs_queryset = active_programs_queryset.filter(is_archived=False)
+        active_programs = active_programs_queryset.count()
         total_staff = Staff.objects.count()
         
         # Get active restrictions count - Staff users see ALL restrictions
-        active_restrictions = ServiceRestriction.objects.filter(
-            is_archived=False,
+        active_restrictions_queryset = ServiceRestriction.objects.filter(
             start_date__lte=today
         ).filter(
             Q(end_date__isnull=True) | Q(end_date__gte=today)
-        ).count()
+        )
+        if not user_can_see_archived_items:
+            active_restrictions_queryset = active_restrictions_queryset.filter(is_archived=False)
+        active_restrictions = active_restrictions_queryset.count()
         
         # Get recent clients (last 5) - Staff users see ALL clients
-        recent_clients = Client.objects.all().order_by('-created_at')[:5]
+        recent_clients_queryset = Client.objects.all()
+        if not user_can_see_archived_items:
+            recent_clients_queryset = recent_clients_queryset.filter(is_archived=False)
+        recent_clients = recent_clients_queryset.order_by('-created_at')[:5]
         
         # Get recent restrictions (last 5) - Staff users see ALL restrictions
-        recent_restrictions = ServiceRestriction.objects.filter(
-            is_archived=False
-        ).select_related('client', 'program').order_by('-created_at')[:5]
+        recent_restrictions_queryset = ServiceRestriction.objects.all()
+        if not user_can_see_archived_items:
+            recent_restrictions_queryset = recent_restrictions_queryset.filter(is_archived=False)
+        recent_restrictions = recent_restrictions_queryset.select_related('client', 'program').order_by('-created_at')[:5]
         
         # Get restricted clients (Agency-wide restrictions) - Staff users see ALL agency-wide restrictions
-        restricted_clients = ServiceRestriction.objects.filter(
-            is_archived=False,
-            scope='org'
-        ).select_related('client', 'program').order_by('-created_at')[:10]
+        restricted_clients_queryset = ServiceRestriction.objects.filter(scope='org')
+        if not user_can_see_archived_items:
+            restricted_clients_queryset = restricted_clients_queryset.filter(is_archived=False)
+        restricted_clients = restricted_clients_queryset.select_related('client', 'program').order_by('-created_at')[:10]
     elif is_analyst:
-        active_programs = Program.objects.filter(status='active', is_archived=False).count()
+        active_programs_queryset = Program.objects.filter(status='active')
+        if not user_can_see_archived_items:
+            active_programs_queryset = active_programs_queryset.filter(is_archived=False)
+        active_programs = active_programs_queryset.count()
         total_staff = Staff.objects.count()
         
         # Get active restrictions count - Analysts see ALL restrictions
-        active_restrictions = ServiceRestriction.objects.filter(
-            is_archived=False,
+        active_restrictions_queryset = ServiceRestriction.objects.filter(
             start_date__lte=today
         ).filter(
             Q(end_date__isnull=True) | Q(end_date__gte=today)
-        ).count()
+        )
+        if not user_can_see_archived_items:
+            active_restrictions_queryset = active_restrictions_queryset.filter(is_archived=False)
+        active_restrictions = active_restrictions_queryset.count()
         
         # Get recent clients (last 5) - Analysts see ALL clients
-        recent_clients = Client.objects.all().order_by('-created_at')[:5]
+        recent_clients_queryset = Client.objects.all()
+        if not user_can_see_archived_items:
+            recent_clients_queryset = recent_clients_queryset.filter(is_archived=False)
+        recent_clients = recent_clients_queryset.order_by('-created_at')[:5]
         
         # Get recent restrictions (last 5) - Analysts see ALL restrictions
-        recent_restrictions = ServiceRestriction.objects.filter(
-            is_archived=False
-        ).select_related('client', 'program').order_by('-created_at')[:5]
+        recent_restrictions_queryset = ServiceRestriction.objects.all()
+        if not user_can_see_archived_items:
+            recent_restrictions_queryset = recent_restrictions_queryset.filter(is_archived=False)
+        recent_restrictions = recent_restrictions_queryset.select_related('client', 'program').order_by('-created_at')[:5]
         
         # Get restricted clients (Agency-wide restrictions) - Analysts see ALL agency-wide restrictions
-        restricted_clients = ServiceRestriction.objects.filter(
-            is_archived=False,
-            scope='org'
-        ).select_related('client', 'program').order_by('-created_at')[:10]
+        restricted_clients_queryset = ServiceRestriction.objects.filter(scope='org')
+        if not user_can_see_archived_items:
+            restricted_clients_queryset = restricted_clients_queryset.filter(is_archived=False)
+        restricted_clients = restricted_clients_queryset.select_related('client', 'program').order_by('-created_at')[:10]
     else:
-        active_programs = Program.objects.filter(status='active', is_archived=False).count()
+        active_programs_queryset = Program.objects.filter(status='active')
+        if not user_can_see_archived_items:
+            active_programs_queryset = active_programs_queryset.filter(is_archived=False)
+        active_programs = active_programs_queryset.count()
         total_staff = Staff.objects.count()
         
         # Get active restrictions count
@@ -808,31 +869,20 @@ class RestrictionListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListVie
         # First apply the ProgramManagerAccessMixin filtering
         queryset = super().get_queryset()
         
-        # Check user roles - Manager/Leader/Staff should not see archived restrictions
-        user_roles = []
-        try:
-            if self.request.user.is_authenticated:
-                staff = self.request.user.staff_profile
-                user_roles = [staff_role.role.name for staff_role in staff.staffrole_set.select_related('role').all()]
-        except Exception:
-            pass
-        
-        # Manager, Leader, and Staff cannot see archived restrictions
-        is_manager_leader_staff = any(role in ['Manager', 'Leader', 'Staff'] for role in user_roles) and not any(role in ['SuperAdmin', 'Admin'] for role in user_roles)
-        
-        # Check if user is SuperAdmin or Admin
-        is_admin_or_superadmin = any(role in ['SuperAdmin', 'Admin'] for role in user_roles)
+        # Check if user can see archived restrictions (only SuperAdmin and Admin)
+        user_can_see_archived_items = can_see_archived(self.request.user)
         
         # Only show approved restrictions to non-admin users (SuperAdmin/Admin need to see pending ones to approve them)
-        if not is_admin_or_superadmin:
+        if not user_can_see_archived_items:
             queryset = queryset.filter(is_approved=True)
         
-        # Exclude archived restrictions by default unless explicitly requested
+        # Exclude archived restrictions for non-admin users unless explicitly requested
         status_filter = self.request.GET.get('status', '')
-        if is_manager_leader_staff:
-            # Manager/Leader/Staff cannot see archived restrictions at all
+        if not user_can_see_archived_items:
+            # Non-admin users cannot see archived restrictions at all
             queryset = queryset.filter(is_archived=False)
         elif status_filter != 'archived':
+            # Admin users: exclude archived unless status filter is 'archived'
             queryset = queryset.filter(is_archived=False)
         
         # Apply date range filtering
@@ -899,10 +949,10 @@ class RestrictionListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListVie
                 )
             elif status_filter == 'archived':
                 # Only SuperAdmin/Admin can see archived restrictions
-                if not is_manager_leader_staff:
+                if user_can_see_archived_items:
                     queryset = queryset.filter(is_archived=True)
                 else:
-                    # Manager/Leader/Staff cannot filter for archived - show empty
+                    # Non-admin users cannot filter for archived - show empty
                     queryset = queryset.none()
         
         if search_query:
@@ -1635,16 +1685,25 @@ class DepartmentListView(AnalystAccessMixin, ListView):
     paginate_by = 10
     
     def get_queryset(self):
-        # Exclude archived departments by default
-        return Department.objects.filter(is_archived=False).annotate(
-            program_count=Count('program', filter=Q(program__is_archived=False), distinct=True),
+        # Exclude archived departments for non-admin users
+        departments_queryset = Department.objects.all()
+        if not can_see_archived(self.request.user):
+            departments_queryset = departments_queryset.filter(is_archived=False)
+        # Also filter archived programs in counts for non-admin users
+        program_filter = Q(program__is_archived=False) if not can_see_archived(self.request.user) else Q()
+        return departments_queryset.annotate(
+            program_count=Count('program', filter=program_filter, distinct=True),
             staff_count=Count('program__programstaff__staff', filter=Q(program__programstaff__program__is_archived=False), distinct=True)
         ).order_by('name')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['total_departments'] = self.get_queryset().count()
-        context['total_programs'] = Program.objects.filter(is_archived=False).count()
+        programs_queryset = Program.objects.all()
+        # Exclude archived programs for non-admin users
+        if not can_see_archived(self.request.user):
+            programs_queryset = programs_queryset.filter(is_archived=False)
+        context['total_programs'] = programs_queryset.count()
         context['total_staff'] = Staff.objects.count()
         return context
 
@@ -1873,6 +1932,10 @@ class EnrollmentListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMan
         # First apply the ProgramManagerAccessMixin filtering
         queryset = super().get_queryset().select_related('client', 'program', 'program__department')
         
+        # Exclude archived enrollments for non-admin users
+        if not can_see_archived(self.request.user):
+            queryset = queryset.filter(is_archived=False)
+        
         # Apply date range filtering (start_date maps to intake_date, end_date maps to discharge_date)
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
         
@@ -1936,10 +1999,13 @@ class EnrollmentListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMan
         
         total_filtered_count = filtered_queryset.count()
         
-        # Calculate counts from ALL enrollments (excluding archived) for users with full access
+        # Calculate counts from ALL enrollments (excluding archived for non-admin users) for users with full access
         # This ensures the statistics show the true system-wide counts
         today = timezone.now().date()
-        all_enrollments = ClientProgramEnrollment.objects.filter(is_archived=False)
+        all_enrollments = ClientProgramEnrollment.objects.all()
+        # Exclude archived enrollments for non-admin users
+        if not can_see_archived(self.request.user):
+            all_enrollments = all_enrollments.filter(is_archived=False)
         
         # Check if user has full access (SuperAdmin, Admin, Analyst, or no restrictions)
         has_full_access = False
@@ -1962,7 +2028,10 @@ class EnrollmentListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMan
             counts_queryset = all_enrollments
         else:
             # Use filtered queryset for counts (respects user permissions)
-            counts_queryset = filtered_queryset.filter(is_archived=False)
+            counts_queryset = filtered_queryset
+            # Exclude archived enrollments for non-admin users
+            if not can_see_archived(self.request.user):
+                counts_queryset = counts_queryset.filter(is_archived=False)
         
         # Calculate status counts using date-based logic
         active_count = counts_queryset.filter(

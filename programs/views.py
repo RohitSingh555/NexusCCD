@@ -6,7 +6,7 @@ from django.db import models
 from django.db.models import Q, Exists, OuterRef
 from django.http import HttpResponse
 from core.models import Program, Department, ClientProgramEnrollment, ProgramManagerAssignment, Staff
-from core.views import jwt_required, ProgramManagerAccessMixin, AnalystAccessMixin, StaffAccessControlMixin
+from core.views import jwt_required, ProgramManagerAccessMixin, AnalystAccessMixin, StaffAccessControlMixin, can_see_archived
 from core.message_utils import success_message, error_message, warning_message, info_message, create_success, update_success, delete_success, validation_error, permission_error, not_found_error
 from django.utils.decorators import method_decorator
 import csv
@@ -44,10 +44,12 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
     def get_queryset(self):
         # First apply the ProgramManagerAccessMixin filtering
         queryset = super().get_queryset()
-        # Exclude archived programs by default
-        queryset = queryset.filter(is_archived=False)
-        # Exclude programs with archived departments
-        queryset = queryset.filter(department__is_archived=False)
+        # Exclude archived programs for non-admin users
+        if not can_see_archived(self.request.user):
+            queryset = queryset.filter(is_archived=False)
+        # Exclude programs with archived departments for non-admin users
+        if not can_see_archived(self.request.user):
+            queryset = queryset.filter(department__is_archived=False)
         # Exclude programs assigned to HASS department (deleted department)
         queryset = queryset.exclude(department__name__iexact='HASS')
         
@@ -192,10 +194,14 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
         # Calculate status card counts (assigned/unassigned/total)
         # Use base queryset with permission filters but without search/filter params
         today = timezone.now().date()
-        base_queryset = Program.objects.filter(
-            is_archived=False,
-            department__is_archived=False
-        ).exclude(
+        base_queryset = Program.objects.all()
+        # Exclude archived programs for non-admin users
+        if not can_see_archived(self.request.user):
+            base_queryset = base_queryset.filter(is_archived=False)
+        # Exclude programs with archived departments for non-admin users
+        if not can_see_archived(self.request.user):
+            base_queryset = base_queryset.filter(department__is_archived=False)
+        base_queryset = base_queryset.exclude(
             department__name__iexact='HASS'
         )
         
@@ -262,10 +268,11 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
         # Add filter options to context
         context['programs_with_capacity'] = programs_with_capacity
         context['total_filtered_count'] = total_filtered_count
-        # Exclude archived departments and HASS from department dropdown
-        context['departments'] = Department.objects.filter(
-            is_archived=False
-        ).exclude(
+        # Exclude archived departments and HASS from department dropdown (for non-admin users)
+        departments_queryset = Department.objects.all()
+        if not can_see_archived(self.request.user):
+            departments_queryset = departments_queryset.filter(is_archived=False)
+        context['departments'] = departments_queryset.exclude(
             name__iexact='HASS'
         ).order_by('name')
         context['status_choices'] = Program.STATUS_CHOICES
@@ -398,7 +405,11 @@ class ProgramDetailView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMana
             start_date__lte=timezone.now().date()
         ).filter(
             models.Q(end_date__isnull=True) | models.Q(end_date__gt=timezone.now().date())
-        ).select_related('client').order_by('-start_date')
+        )
+        # Exclude archived enrollments for non-admin users
+        if not can_see_archived(self.request.user):
+            current_enrollments_queryset = current_enrollments_queryset.filter(is_archived=False)
+        current_enrollments_queryset = current_enrollments_queryset.select_related('client').order_by('-start_date')
         
         # Get total count for display
         total_enrollments_count = current_enrollments_queryset.count()
@@ -425,7 +436,11 @@ class ProgramDetailView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMana
         from django.core.paginator import Paginator
         
         enrolled_client_ids = current_enrollments.values_list('client_id', flat=True)
-        available_clients_queryset = Client.objects.exclude(id__in=enrolled_client_ids).order_by('first_name', 'last_name')
+        available_clients_queryset = Client.objects.exclude(id__in=enrolled_client_ids)
+        # Exclude archived clients for non-admin users
+        if not can_see_archived(self.request.user):
+            available_clients_queryset = available_clients_queryset.filter(is_archived=False)
+        available_clients_queryset = available_clients_queryset.order_by('first_name', 'last_name')
         
         # Add pagination for available clients
         clients_per_page = self.request.GET.get('clients_per_page', '10')
@@ -494,10 +509,14 @@ class ProgramDetailView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMana
         from datetime import timedelta
         thirty_days_ago = timezone.now().date() - timedelta(days=30)
         try:
-            recent_enrollments = ClientProgramEnrollment.objects.filter(
+            recent_enrollments_queryset = ClientProgramEnrollment.objects.filter(
                 program=program,
                 start_date__gte=thirty_days_ago
-            ).select_related('client').order_by('-start_date')[:10]
+            )
+            # Exclude archived enrollments for non-admin users
+            if not can_see_archived(self.request.user):
+                recent_enrollments_queryset = recent_enrollments_queryset.filter(is_archived=False)
+            recent_enrollments = recent_enrollments_queryset.select_related('client').order_by('-start_date')[:10]
         except Exception:
             recent_enrollments = ClientProgramEnrollment.objects.none()
         
@@ -563,7 +582,11 @@ def fetch_enrollments_ajax(request, external_id):
             start_date__lte=timezone.now().date()
         ).filter(
             models.Q(end_date__isnull=True) | models.Q(end_date__gt=timezone.now().date())
-        ).select_related('client').order_by('-start_date')
+        )
+        # Exclude archived enrollments for non-admin users
+        if not can_see_archived(request.user):
+            enrollments_queryset = enrollments_queryset.filter(is_archived=False)
+        enrollments_queryset = enrollments_queryset.select_related('client').order_by('-start_date')
         
         total_count = enrollments_queryset.count()
         
@@ -1003,9 +1026,11 @@ class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
         """Filter out HASS from department dropdown"""
         form = super().get_form(form_class)
         if 'department' in form.fields:
-            form.fields['department'].queryset = Department.objects.filter(
-                is_archived=False
-            ).exclude(
+            departments_queryset = Department.objects.all()
+            # Exclude archived departments for non-admin users
+            if not can_see_archived(self.request.user):
+                departments_queryset = departments_queryset.filter(is_archived=False)
+            form.fields['department'].queryset = departments_queryset.exclude(
                 name__iexact='HASS'
             ).order_by('name')
         return form
@@ -1133,9 +1158,11 @@ class ProgramUpdateView(ProgramManagerAccessMixin, UpdateView):
         """Filter out HASS from department dropdown"""
         form = super().get_form(form_class)
         if 'department' in form.fields:
-            form.fields['department'].queryset = Department.objects.filter(
-                is_archived=False
-            ).exclude(
+            departments_queryset = Department.objects.all()
+            # Exclude archived departments for non-admin users
+            if not can_see_archived(self.request.user):
+                departments_queryset = departments_queryset.filter(is_archived=False)
+            form.fields['department'].queryset = departments_queryset.exclude(
                 name__iexact='HASS'
             ).order_by('name')
         return form
@@ -1313,10 +1340,12 @@ class ProgramCSVExportView(ProgramManagerAccessMixin, ListView):
     def get_queryset(self):
         # Use the same filtering logic as ProgramListView
         queryset = super().get_queryset()
-        # Exclude archived programs by default
-        queryset = queryset.filter(is_archived=False)
-        # Exclude programs with archived departments
-        queryset = queryset.filter(department__is_archived=False)
+        # Exclude archived programs for non-admin users
+        if not can_see_archived(self.request.user):
+            queryset = queryset.filter(is_archived=False)
+        # Exclude programs with archived departments for non-admin users
+        if not can_see_archived(self.request.user):
+            queryset = queryset.filter(department__is_archived=False)
         # Exclude programs assigned to HASS department (deleted department)
         queryset = queryset.exclude(department__name__iexact='HASS')
         
@@ -1407,10 +1436,13 @@ class ProgramCSVExportView(ProgramManagerAccessMixin, ListView):
         # Write data rows
         for program in programs:
             # Get current enrollments
-            current_enrollments = ClientProgramEnrollment.objects.filter(
-                program=program,
-                is_archived=False
-            ).select_related("client")
+            current_enrollments_queryset = ClientProgramEnrollment.objects.filter(
+                program=program
+            )
+            # Exclude archived enrollments for non-admin users
+            if not can_see_archived(self.request.user):
+                current_enrollments_queryset = current_enrollments_queryset.filter(is_archived=False)
+            current_enrollments = current_enrollments_queryset.select_related("client")
             
             # Get program staff/managers
             program_managers = ProgramManagerAssignment.objects.filter(

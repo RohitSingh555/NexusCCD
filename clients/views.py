@@ -13,7 +13,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import IntegrityError, transaction
 from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate, ClientUploadLog, ServiceRestrictionNotificationSubscription
 from datetime import datetime, date, timedelta
-from core.views import ProgramManagerAccessMixin, AnalystAccessMixin, jwt_required
+from core.views import ProgramManagerAccessMixin, AnalystAccessMixin, jwt_required, can_see_archived
 from core.fuzzy_matching import fuzzy_matcher
 from .forms import ClientForm
 import pandas as pd
@@ -130,23 +130,13 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         from django.db.models import Q, Count
         from datetime import date
         
-        # Check user roles to determine if they can see archived clients
-        can_see_archived = False
-        if self.request.user.is_authenticated:
-            try:
-                staff = self.request.user.staff_profile
-                user_roles = staff.staffrole_set.select_related('role').all()
-                role_names = [staff_role.role.name for staff_role in user_roles]
-                # Only SuperAdmin and Admin can see archived clients
-                can_see_archived = any(role in ['SuperAdmin', 'Admin'] for role in role_names)
-            except Exception:
-                pass
+        # Check if user can see archived clients (only SuperAdmin and Admin)
+        user_can_see_archived = can_see_archived(self.request.user)
         
-        # Start with base queryset - exclude archived clients by default
+        # Start with base queryset - exclude archived clients for non-admin users
         # Don't use ProgramManagerAccessMixin's get_queryset because it tries to select_related('program') 
         # which doesn't exist on Client model
-        # Manager and Leader cannot see archived clients
-        if not can_see_archived:
+        if not user_can_see_archived:
             queryset = Client.objects.filter(is_archived=False).order_by('-created_at')
         else:
             # SuperAdmin/Admin can see all clients (archived filter will be applied by status_filter if needed)
@@ -270,7 +260,7 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
             queryset = queryset.filter(is_inactive=True)
         elif status_filter == 'archived':
             # Only SuperAdmin/Admin can see archived clients
-            if can_see_archived:
+            if user_can_see_archived:
                 queryset = queryset.filter(is_archived=True)
             else:
                 # Manager/Leader cannot see archived - show empty
@@ -461,10 +451,14 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         )
         
         # Prefetch related objects to optimize queries
+        enrollment_queryset = ClientProgramEnrollment.objects.select_related('program', 'sub_program')
+        # Exclude archived enrollments for non-admin users
+        if not can_see_archived(self.request.user):
+            enrollment_queryset = enrollment_queryset.filter(is_archived=False)
         queryset = queryset.select_related('extended').prefetch_related(
             Prefetch(
                 'clientprogramenrollment_set',
-                queryset=ClientProgramEnrollment.objects.select_related('program', 'sub_program').filter(is_archived=False),
+                queryset=enrollment_queryset,
                 to_attr='active_enrollments'
             )
         )
@@ -595,7 +589,10 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         
         # Calculate maximum enrollment count for filter options
         # Get base queryset with same permission filters as get_queryset (but without other filters)
-        base_queryset_for_max = Client.objects.filter(is_archived=False)
+        base_queryset_for_max = Client.objects.all()
+        # Exclude archived clients for non-admin users
+        if not can_see_archived(self.request.user):
+            base_queryset_for_max = base_queryset_for_max.filter(is_archived=False)
         base_queryset_for_max = base_queryset_for_max.exclude(duplicate_of__status='pending')
         
         # Apply permission filters if needed
@@ -707,8 +704,10 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
         # Calculate client status counts for the cards
         # Get base queryset WITHOUT date filters or other GET parameter filters
         # This ensures counts show totals, not filtered results
-        # Start with all non-archived clients (regardless of is_inactive status)
-        base_queryset = Client.objects.filter(is_archived=False)
+        # Start with all clients (exclude archived for non-admin users)
+        base_queryset = Client.objects.all()
+        if not can_see_archived(self.request.user):
+            base_queryset = base_queryset.filter(is_archived=False)
         
         # Exclude clients marked as duplicates
         base_queryset = base_queryset.exclude(duplicate_of__status='pending')
@@ -1011,17 +1010,23 @@ class ClientDetailView(AnalystAccessMixin, DetailView):
         client = context['client']
         
         # Get enrollments with optimized queries, ordered by start_date ascending (chronologically)
-        # Exclude archived (soft-deleted) enrollments from the main view
-        enrollments = client.clientprogramenrollment_set.select_related(
+        # Exclude archived (soft-deleted) enrollments from the main view for non-admin users
+        enrollments_queryset = client.clientprogramenrollment_set.select_related(
             'program__department',
             'sub_program'
-        ).filter(is_archived=False).order_by('start_date', 'program__name')
+        )
+        if not can_see_archived(self.request.user):
+            enrollments_queryset = enrollments_queryset.filter(is_archived=False)
+        enrollments = enrollments_queryset.order_by('start_date', 'program__name')
         
-        # Also get archived enrollments for restore functionality
-        archived_enrollments = client.clientprogramenrollment_set.select_related(
-            'program__department',
-            'sub_program'
-        ).filter(is_archived=True).order_by('start_date', 'program__name')
+        # Also get archived enrollments for restore functionality (only for admin/superadmin)
+        if can_see_archived(self.request.user):
+            archived_enrollments = client.clientprogramenrollment_set.select_related(
+                'program__department',
+                'sub_program'
+            ).filter(is_archived=True).order_by('start_date', 'program__name')
+        else:
+            archived_enrollments = client.clientprogramenrollment_set.none()
         
         context['enrollments'] = enrollments
         context['archived_enrollments'] = archived_enrollments
@@ -1616,10 +1621,15 @@ class ClientDeleteView(DeleteView):
         context = super().get_context_data(**kwargs)
         client = context['client']
         
-        # Get counts of non-archived enrollments and restrictions
+        # Get counts of enrollments and restrictions (exclude archived for non-admin users)
         from core.models import ServiceRestriction
-        enrollment_count = ClientProgramEnrollment.objects.filter(client=client, is_archived=False).count()
-        restriction_count = ServiceRestriction.objects.filter(client=client, is_archived=False).count()
+        enrollment_queryset = ClientProgramEnrollment.objects.filter(client=client)
+        restriction_queryset = ServiceRestriction.objects.filter(client=client)
+        if not can_see_archived(self.request.user):
+            enrollment_queryset = enrollment_queryset.filter(is_archived=False)
+            restriction_queryset = restriction_queryset.filter(is_archived=False)
+        enrollment_count = enrollment_queryset.count()
+        restriction_count = restriction_queryset.count()
         
         context['enrollment_count'] = enrollment_count
         context['restriction_count'] = restriction_count
@@ -2250,7 +2260,10 @@ def upload_clients(request):
                         if column_mapping.get(col) == field_name:
                             value = row[col]
                             if pd.notna(value) and str(value).strip():
+                                logger.debug(f"Found {field_name} in column '{col}' with value: '{value}'")
                                 return str(value).strip()
+                    if field_name == 'intake_date':
+                        logger.warning(f"No column mapped to 'intake_date' for client {client.first_name} {client.last_name}. Available columns: {list(df_columns)}, Column mapping: {column_mapping}")
                     return default
                 
                 # Helper function to ensure proper defaults for optional fields (convert empty strings to None)
@@ -2412,18 +2425,21 @@ def upload_clients(request):
                 # Helper function to parse multi-line date values safely
                 def parse_multiline_dates(value, default=None):
                     """Parse multiple dates from a single cell (separated by newlines)"""
-                    if not value or value.strip() == '':
+                    if not value or (isinstance(value, str) and value.strip() == ''):
                         return [default] if default else []
                     
                     date_strings = [date.strip() for date in str(value).split('\n') if date.strip()]
                     parsed_dates = []
                     
                     for date_str in date_strings:
-                        try:
-                            parsed_dates.append(pd.to_datetime(date_str).date())
-                        except (ValueError, TypeError):
-                            if default:
-                                parsed_dates.append(default)
+                        # Use the robust parse_date function instead of pd.to_datetime
+                        parsed_date = parse_date(date_str)
+                        if parsed_date:
+                            parsed_dates.append(parsed_date)
+                        elif default:
+                            # Only use default if date_str was provided but couldn't be parsed
+                            logger.warning(f"Failed to parse date '{date_str}', using default: {default}")
+                            parsed_dates.append(default)
                     
                     return parsed_dates if parsed_dates else ([default] if default else [])
                 
@@ -2433,8 +2449,29 @@ def upload_clients(request):
                 
                 print(f"DEBUG: Program enrollment data - program_name: '{program_name}', source: '{source}'")
                 intake_date_value = get_field_data('intake_date')
-                # Set default intake date - will be overridden by split logic below
-                intake_date = datetime.now().date()
+                logger.debug(f"DEBUG: Raw intake_date_value for client {client.first_name} {client.last_name}: '{intake_date_value}' (type: {type(intake_date_value)})")
+                # Parse the intake date value first - only default to today if truly empty
+                parsed_intake_date = parse_date(intake_date_value)
+                logger.debug(f"DEBUG: Parsed intake_date for client {client.first_name} {client.last_name}: {parsed_intake_date}")
+                # Only use today's date as default if no date was provided at all
+                # If a date was provided but couldn't be parsed, we should log a warning
+                if not parsed_intake_date and intake_date_value:
+                    logger.warning(
+                        f"Failed to parse intake_date '{intake_date_value}' for client {client.first_name} {client.last_name}. "
+                        f"Using today's date as fallback. Please check the date format."
+                    )
+                    intake_date = datetime.now().date()
+                elif not parsed_intake_date:
+                    # No date provided at all - use today as default
+                    logger.info(
+                        f"No intake_date provided for client {client.first_name} {client.last_name}. "
+                        f"Using today's date as default."
+                    )
+                    intake_date = datetime.now().date()
+                else:
+                    # Successfully parsed date - use it
+                    intake_date = parsed_intake_date
+                
                 intake_database = get_field_data('intake_database', 'CCD')
                 referral_source = get_field_data('referral_source', source)
                 intake_housing_status = get_field_data('intake_housing_status', 'unknown')
@@ -2448,7 +2485,12 @@ def upload_clients(request):
                 print(f"DEBUG: Split program names: {program_names}")
                 
                 # Handle multiple dates in a single cell (separated by newlines)
-                intake_dates = parse_multiline_dates(intake_date_value, intake_date)
+                # Pass None as default so parse_multiline_dates can handle empty values properly
+                # We'll use intake_date only if no dates are found
+                intake_dates = parse_multiline_dates(intake_date_value, None)
+                # If no dates were parsed, use the single parsed intake_date
+                if not intake_dates:
+                    intake_dates = [intake_date]
                 
                 print(f"DEBUG: Split intake dates: {intake_dates}")
                 
@@ -2563,60 +2605,190 @@ def upload_clients(request):
                         logger.info(f"Intake record already exists for {client.first_name} {client.last_name} in {current_program_name}")
                     
                     # Check if enrollment exists for this client-program combination
-                    # Logic: Find client by ID, then check if enrollment exists for the program
-                    # If exists: update enrollment with discharge_date
-                    # If not exists: create new enrollment with discharge_date
+                    # NEW LOGIC: Find and merge overlapping/adjacent enrollments
+                    # Merge strategy:
+                    # 1. Find all enrollments that overlap or are adjacent to the new enrollment date range
+                    # 2. Merge them into one enrollment with earliest start_date and latest end_date
+                    # 3. Don't create duplicate enrollments
+                    
+                    from django.db.models import Q
+                    from datetime import timedelta
+                    from django.utils import timezone
+                    
+                    # Calculate the date range for the new enrollment
+                    new_start_date = current_intake_date
+                    new_end_date = discharge_date
+                    
+                    # Get all non-archived enrollments for this client and program
+                    # Also check the enrollment_cache for enrollments created in this same upload
+                    all_enrollments = list(ClientProgramEnrollment.objects.filter(
+                        client=client,
+                        program=program,
+                        is_archived=False
+                    ))
+                    
+                    # Add enrollments from cache that haven't been saved yet (same upload batch)
+                    for cache_key, cached_enrollment in enrollment_cache.items():
+                        if (cache_key[0] == client.id and cache_key[1] == program.id and 
+                            not cached_enrollment.is_archived and cached_enrollment not in all_enrollments):
+                            all_enrollments.append(cached_enrollment)
+                    
+                    # Helper function to check if two date ranges overlap or are adjacent
+                    def ranges_overlap_or_adjacent(start1, end1, start2, end2):
+                        """Check if two date ranges overlap or are adjacent (within 1 day)"""
+                        # If either range has no end date, they overlap if starts are compatible
+                        if end1 is None and end2 is None:
+                            return True  # Both open-ended, consider them overlapping
+                        if end1 is None:
+                            # Range 1 is open-ended (start1 to infinity)
+                            # Overlaps if: range 2 starts within range 1, OR range 2 ends after range 1 starts
+                            # Case 1: start2 >= start1 (range 2 starts within open-ended range)
+                            # Case 2: end2 and end2 >= start1 (range 2 extends into open-ended range)
+                            return start2 >= start1 or (end2 and end2 >= start1)
+                        if end2 is None:
+                            # Range 2 is open-ended (start2 to infinity)
+                            # Overlaps if: range 1 starts within range 2, OR range 1 ends after range 2 starts
+                            return start1 >= start2 or (end1 and end1 >= start2)
+                        
+                        # Both have end dates - check for overlap or adjacency
+                        # Overlap: start1 <= end2 AND start2 <= end1
+                        # Adjacent: end1 + 1 day = start2 OR end2 + 1 day = start1
+                        overlap = start1 <= end2 and start2 <= end1
+                        adjacent = (end1 and end1 + timedelta(days=1) == start2) or (end2 and end2 + timedelta(days=1) == start1)
+                        return overlap or adjacent
+                    
+                    # Find all overlapping/adjacent enrollments
+                    overlapping_enrollments = []
+                    for existing in all_enrollments:
+                        if ranges_overlap_or_adjacent(
+                            existing.start_date, existing.end_date,
+                            new_start_date, new_end_date
+                        ):
+                            overlapping_enrollments.append(existing)
+                    
+                    existing_enrollment = None
                     enrollment = None
                     created = False
+                    enrollment_was_just_merged = False  # Track if we just merged and saved
                     
-                    # Try to get existing enrollment first - look for enrollment with same program and start_date (admission date)
-                    # This prevents duplicate enrollments with the same admission date
-                    enrollment_cache_key = (client.id, program.id, current_intake_date)
-                    enrollment = enrollment_cache.get(enrollment_cache_key)
-                    
-                    if enrollment is None:
-                        # Check for existing enrollment with same program and start_date (admission date)
-                        existing_enrollment = ClientProgramEnrollment.objects.filter(
-                            client=client,
-                            program=program,
-                            start_date=current_intake_date
-                        ).order_by('-start_date').first()
+                    if overlapping_enrollments:
+                        # Merge all overlapping enrollments into one
+                        # Use the earliest start_date and latest end_date
+                        all_start_dates = [e.start_date for e in overlapping_enrollments] + [new_start_date]
+                        earliest_start = min(all_start_dates)
                         
-                        # If no exact match, check for overlapping enrollments (same program, overlapping dates)
-                        if not existing_enrollment:
-                            from django.db.models import Q
-                            existing_enrollment = ClientProgramEnrollment.objects.filter(
-                                client=client,
-                                program=program,
-                                is_archived=False
-                            ).filter(
-                                Q(start_date=current_intake_date) |
-                                Q(start_date__lte=current_intake_date, end_date__gte=current_intake_date) |
-                                Q(start_date__lte=current_intake_date, end_date__isnull=True)
-                            ).order_by('-start_date').first()
-                    else:
-                        existing_enrollment = enrollment
-                    
-                    if existing_enrollment:
-                        # Update existing enrollment
+                        # Collect all end dates (excluding None)
+                        all_end_dates = [e.end_date for e in overlapping_enrollments if e.end_date]
+                        if new_end_date:
+                            all_end_dates.append(new_end_date)
+                        latest_end = max(all_end_dates) if all_end_dates else None
+                        
+                        # Use the first overlapping enrollment as the base for merging
+                        existing_enrollment = overlapping_enrollments[0]
+                        
+                        logger.info(
+                            f"Found {len(overlapping_enrollments)} overlapping enrollment(s) for client {client.first_name} {client.last_name} "
+                            f"in program {program.name}. Merging: start_date={earliest_start}, end_date={latest_end}. "
+                            f"Existing enrollment ID: {existing_enrollment.id}"
+                        )
+                        
+                        # Update the existing enrollment with merged dates
+                        original_start = existing_enrollment.start_date
+                        original_end = existing_enrollment.end_date
+                        existing_enrollment.start_date = earliest_start
+                        existing_enrollment.end_date = latest_end
+                        
+                        # Save the merged enrollment immediately so it's visible to subsequent CSV records
+                        existing_enrollment.updated_by = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
+                        existing_enrollment.save()
+                        
+                        # Update cache with the merged enrollment
+                        enrollment_cache_key = (client.id, program.id, earliest_start)
+                        enrollment_cache[enrollment_cache_key] = existing_enrollment
+                        
+                        # Archive other overlapping enrollments (they're being merged)
+                        for other_enrollment in overlapping_enrollments[1:]:
+                            if not other_enrollment.is_archived:
+                                other_enrollment.is_archived = True
+                                other_enrollment.archived_at = timezone.now()
+                                other_enrollment.save()
+                                logger.info(
+                                    f"Archived duplicate enrollment (ID: {other_enrollment.id}, "
+                                    f"dates: {other_enrollment.start_date} to {other_enrollment.end_date}) "
+                                    f"for client {client.first_name} {client.last_name} "
+                                    f"in program {program.name} - merged into enrollment ID: {existing_enrollment.id}"
+                                )
+                        
+                        # Mark that we've already merged and saved
                         enrollment = existing_enrollment
                         created = False
+                        enrollment_was_just_merged = True  # Flag to skip duplicate save
+                    else:
+                        # No overlapping enrollments found - will create new enrollment below
+                        existing_enrollment = None
+                        enrollment_was_just_merged = False
+                    
+                    if existing_enrollment:
+                        # Update existing enrollment (may have been merged above)
+                        enrollment = existing_enrollment
+                        created = False
+                        
+                        # Cache the enrollment for potential future use in the same upload
+                        enrollment_cache_key = (client.id, program.id, enrollment.start_date)
                         enrollment_cache[enrollment_cache_key] = enrollment
                         
-                        # If discharge_date is present, update end_date and add discharge reason to notes
+                        # If we merged enrollments above, the dates are already updated and saved
+                        # We just need to ensure end_date is set if discharge_date is provided and it's later
                         if discharge_date:
-                            enrollment.end_date = discharge_date
+                            # Ensure end_date is the latest (merge logic already handled this, but double-check)
+                            if enrollment.end_date:
+                                enrollment.end_date = max(enrollment.end_date, discharge_date)
+                            else:
+                                enrollment.end_date = discharge_date
                             
                             # Ensure end_date >= start_date constraint is satisfied
-                            if enrollment.end_date < enrollment.start_date:
-                                # If discharge_date is before start_date, adjust start_date
+                            # Note: If we merged above, this should already be satisfied, but check anyway
+                            if enrollment.end_date and enrollment.end_date < enrollment.start_date:
+                                # If discharge_date is before start_date, we need to adjust
+                                # But preserve historical start_date if it's in the past and we have a valid admission date
+                                today = datetime.now().date()
+                                original_start_date = enrollment.start_date
+                                
                                 # If we have days_elapsed, calculate start_date from discharge_date
                                 if days_elapsed and days_elapsed > 0:
                                     from datetime import timedelta
-                                    enrollment.start_date = discharge_date - timedelta(days=days_elapsed)
+                                    calculated_start_date = discharge_date - timedelta(days=days_elapsed)
+                                    # Only update start_date if the calculated date makes sense
+                                    # Don't overwrite a historical start_date with today's date
+                                    if calculated_start_date < today or original_start_date == today:
+                                        enrollment.start_date = calculated_start_date
+                                        logger.info(
+                                            f"Updated enrollment start_date from {original_start_date} to {calculated_start_date} "
+                                            f"(calculated from discharge_date {discharge_date} - {days_elapsed} days) "
+                                            f"for client {client.first_name} {client.last_name}"
+                                        )
+                                    else:
+                                        logger.warning(
+                                            f"Preserving historical start_date {original_start_date} instead of using calculated date "
+                                            f"{calculated_start_date} for client {client.first_name} {client.last_name}"
+                                        )
                                 else:
                                     # No days_elapsed, use discharge_date as start_date (same-day enrollment/discharge)
-                                    enrollment.start_date = discharge_date
+                                    # But only if the original start_date is today (suggesting it was incorrectly set)
+                                    if original_start_date == today:
+                                        enrollment.start_date = discharge_date
+                                        logger.info(
+                                            f"Updated enrollment start_date from today ({today}) to discharge_date {discharge_date} "
+                                            f"(same-day enrollment/discharge) for client {client.first_name} {client.last_name}"
+                                        )
+                                    else:
+                                        # Preserve historical start_date, but ensure constraint is satisfied
+                                        if discharge_date < original_start_date:
+                                            logger.warning(
+                                                f"Discharge date {discharge_date} is before existing start_date {original_start_date} "
+                                                f"for client {client.first_name} {client.last_name}. Using discharge_date as start_date."
+                                            )
+                                            enrollment.start_date = discharge_date
                             
                             # Update status to 'completed' if discharge date is set and no specific status provided
                             if not program_status:
@@ -2641,7 +2813,9 @@ def upload_clients(request):
                                 enrollment.days_elapsed = days_elapsed
                             
                             enrollment.updated_by = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
-                            enrollment.save()
+                            # Only save if we didn't just merge (merge already saved above)
+                            if not enrollment_was_just_merged:
+                                enrollment.save()
                             logger.info(f"Updated enrollment end_date for {client.first_name} {client.last_name} in {program.name} with discharge date {discharge_date}")
                         else:
                             # No discharge date, just update other fields
@@ -2649,7 +2823,9 @@ def upload_clients(request):
                             if days_elapsed:
                                 enrollment.days_elapsed = days_elapsed
                             enrollment.updated_by = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
-                            enrollment.save()
+                            # Only save if we didn't just merge (merge already saved above)
+                            if not enrollment_was_just_merged:
+                                enrollment.save()
                     else:
                         # Create new enrollment - client is not enrolled in this program yet
                         # Build notes with additional information
@@ -2676,6 +2852,17 @@ def upload_clients(request):
                         
                         # Calculate proper start_date to ensure end_date >= start_date constraint
                         enrollment_start_date = current_intake_date
+                        
+                        # Warn if we're using today's date for a historical enrollment (discharge in the past)
+                        today = datetime.now().date()
+                        if enrollment_start_date == today and discharge_date and discharge_date < today:
+                            logger.warning(
+                                f"Using today's date ({today}) as enrollment start_date for client {client.first_name} {client.last_name} "
+                                f"in program {program.name}, but discharge_date is {discharge_date} (historical). "
+                                f"This suggests the admission date may not have been parsed correctly from the CSV. "
+                                f"Original intake_date_value: '{intake_date_value}'"
+                            )
+                        
                         if discharge_date:
                             # If discharge_date is before start_date, we need to adjust
                             if discharge_date < current_intake_date:
@@ -2683,12 +2870,24 @@ def upload_clients(request):
                                 if days_elapsed and days_elapsed > 0:
                                     from datetime import timedelta
                                     enrollment_start_date = discharge_date - timedelta(days=days_elapsed)
+                                    logger.info(
+                                        f"Calculated enrollment_start_date {enrollment_start_date} from discharge_date {discharge_date} "
+                                        f"minus {days_elapsed} days for client {client.first_name} {client.last_name}"
+                                    )
                                 else:
                                     # No days_elapsed, use discharge_date as start_date (same-day enrollment/discharge)
                                     enrollment_start_date = discharge_date
+                                    logger.info(
+                                        f"Using discharge_date {discharge_date} as enrollment_start_date (same-day enrollment/discharge) "
+                                        f"for client {client.first_name} {client.last_name}"
+                                    )
                             # Ensure start_date is not after end_date
                             if enrollment_start_date > discharge_date:
                                 enrollment_start_date = discharge_date
+                                logger.warning(
+                                    f"Adjusted enrollment_start_date to {discharge_date} (cannot be after end_date) "
+                                    f"for client {client.first_name} {client.last_name} in program {program.name}"
+                                )
                         
                         # Create new enrollment - check for duplicate with same start_date first
                         # Use start_date (admission date) as the key to prevent duplicates
@@ -2704,6 +2903,8 @@ def upload_clients(request):
                                 'created_by': request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
                             }
                         )
+                        # Cache the enrollment for potential future use in the same upload
+                        enrollment_cache_key = (client.id, program.id, enrollment_start_date)
                         enrollment_cache[enrollment_cache_key] = enrollment
                         
                         if not created:
@@ -4954,6 +5155,14 @@ class ClientDedupeView(TemplateView):
             'duplicate_client__external_id', 'duplicate_client__client_id'
         )
         
+        # For non-admin users, exclude duplicates where both clients are archived
+        # (but still show duplicates where at least one client is not archived)
+        if not can_see_archived(self.request.user):
+            base_query = base_query.exclude(
+                primary_client__is_archived=True,
+                duplicate_client__is_archived=True
+            )
+        
         # Filter by tab (all duplicates vs scanned duplicates)
         if tab_filter == 'scanned':
             base_query = base_query.filter(detection_source='scan')
@@ -5189,6 +5398,27 @@ def auto_merge_high_confidence_duplicate(primary_client, duplicate_client, simil
                     primary_value = getattr(merged_client, field_name, None)
                     duplicate_value = getattr(duplicate_client, field_name, None)
                     
+                    # Special handling for uid_external - check for uniqueness constraint
+                    if field_name == 'uid_external':
+                        # Only merge uid_external if primary doesn't have one and duplicate does
+                        if not primary_value and duplicate_value:
+                            # Check if this uid_external already exists on another client
+                            from core.models import Client
+                            existing_client_with_uid = Client.objects.filter(
+                                uid_external=duplicate_value
+                            ).exclude(id__in=[merged_client.id, duplicate_client.id]).first()
+                            
+                            if existing_client_with_uid:
+                                # uid_external already exists on another client, don't set it
+                                logger.warning(
+                                    f"Skipping uid_external merge: '{duplicate_value}' already exists on client {existing_client_with_uid.id}. "
+                                    f"Primary client: {merged_client.id}, Duplicate client: {duplicate_client.id}"
+                                )
+                                continue
+                        elif primary_value:
+                            # Primary already has uid_external, don't overwrite it
+                            continue
+                    
                     # Skip if both are None or empty
                     if not primary_value and duplicate_value:
                         # Primary is empty, use duplicate's value
@@ -5291,42 +5521,88 @@ def auto_merge_high_confidence_duplicate(primary_client, duplicate_client, simil
             migrated_enrollments_count = 0
             skipped_enrollments_count = 0
             
+            # Helper function to check if two date ranges overlap or are adjacent (same as CSV upload logic)
+            def ranges_overlap_or_adjacent(start1, end1, start2, end2):
+                """Check if two date ranges overlap or are adjacent (within 1 day)"""
+                from datetime import timedelta
+                # If either range has no end date, they overlap if starts are compatible
+                if end1 is None and end2 is None:
+                    return True  # Both open-ended, consider them overlapping
+                if end1 is None:
+                    # Range 1 is open-ended, overlaps if new range starts before or within the open-ended range
+                    return start2 >= start1 or (end2 and start1 <= end2)
+                if end2 is None:
+                    # Range 2 is open-ended, overlaps if range 1 starts before or within the open-ended range
+                    return start1 >= start2 or (end1 and start2 <= end1)
+                
+                # Both have end dates - check for overlap or adjacency
+                # Overlap: start1 <= end2 AND start2 <= end1
+                # Adjacent: end1 + 1 day = start2 OR end2 + 1 day = start1
+                overlap = start1 <= end2 and start2 <= end1
+                adjacent = (end1 and end1 + timedelta(days=1) == start2) or (end2 and end2 + timedelta(days=1) == start1)
+                return overlap or adjacent
+            
             for enrollment in duplicate_enrollments:
-                # Check if primary client already has an enrollment in the same program with same dates
-                # Only skip if it's an exact duplicate (same program, same start_date, same end_date, same sub_program)
-                # Handle NULL end_date properly using Q objects
-                enrollment_filter = Q(
+                # Check if primary client already has an overlapping enrollment in the same program
+                # Use the same overlap logic as CSV upload
+                existing_enrollments = ClientProgramEnrollment.objects.filter(
                     client=merged_client,
                     program=enrollment.program,
-                    start_date=enrollment.start_date,
-                    sub_program=enrollment.sub_program
+                    is_archived=False
                 )
                 
-                # Handle end_date - if NULL, check for NULL, otherwise check for exact match
-                if enrollment.end_date is None:
-                    enrollment_filter &= Q(end_date__isnull=True)
-                else:
-                    enrollment_filter &= Q(end_date=enrollment.end_date)
+                overlapping_enrollment = None
+                for existing in existing_enrollments:
+                    if ranges_overlap_or_adjacent(
+                        existing.start_date, existing.end_date,
+                        enrollment.start_date, enrollment.end_date
+                    ):
+                        overlapping_enrollment = existing
+                        break
                 
-                existing_enrollment = ClientProgramEnrollment.objects.filter(enrollment_filter).first()
-                
-                if not existing_enrollment:
-                    # No exact duplicate, migrate this enrollment (preserves enrollments from different sources/dates)
-                    enrollment.client = merged_client
-                    enrollment.save()
-                    migrated_enrollments_count += 1
-                else:
-                    # Exact duplicate exists, check if we should merge data or skip
-                    # If duplicate has additional data (notes, etc.), merge it
-                    if enrollment.notes and not existing_enrollment.notes:
-                        existing_enrollment.notes = enrollment.notes
-                        existing_enrollment.save()
-                    # Archive the duplicate enrollment instead of deleting (preserves data)
+                if overlapping_enrollment:
+                    # Found overlapping enrollment - merge them
+                    # Use earliest start_date and latest end_date
+                    all_start_dates = [overlapping_enrollment.start_date, enrollment.start_date]
+                    earliest_start = min(all_start_dates)
+                    
+                    # Collect all end dates (excluding None)
+                    all_end_dates = []
+                    if overlapping_enrollment.end_date:
+                        all_end_dates.append(overlapping_enrollment.end_date)
+                    if enrollment.end_date:
+                        all_end_dates.append(enrollment.end_date)
+                    latest_end = max(all_end_dates) if all_end_dates else None
+                    
+                    # Update the existing enrollment with merged dates
+                    overlapping_enrollment.start_date = earliest_start
+                    overlapping_enrollment.end_date = latest_end
+                    
+                    # Merge notes if duplicate has additional info
+                    if enrollment.notes and not overlapping_enrollment.notes:
+                        overlapping_enrollment.notes = enrollment.notes
+                    elif enrollment.notes and overlapping_enrollment.notes:
+                        # Both have notes, append duplicate's notes
+                        overlapping_enrollment.notes = f"{overlapping_enrollment.notes} | Merged from duplicate client: {enrollment.notes}"
+                    
+                    overlapping_enrollment.save()
+                    
+                    # Archive the duplicate enrollment
                     if not enrollment.is_archived:
                         enrollment.is_archived = True
                         enrollment.archived_at = timezone.now()
                         enrollment.save()
+                    
+                    logger.info(
+                        f"Merged overlapping enrollment for client {merged_client.first_name} {merged_client.last_name} "
+                        f"in program {enrollment.program.name}. Merged dates: start={earliest_start}, end={latest_end}"
+                    )
                     skipped_enrollments_count += 1
+                else:
+                    # No overlapping enrollment, migrate this enrollment
+                    enrollment.client = merged_client
+                    enrollment.save()
+                    migrated_enrollments_count += 1
             
             # 2. Migrate ServiceRestrictions
             from core.models import ServiceRestriction
@@ -5462,6 +5738,9 @@ def run_duplicate_scan(request):
         response_limit = scan_limit
     
     include_archived = bool(payload.get('include_archived', False))
+    # Only allow including archived if user is admin/superadmin
+    if include_archived and not can_see_archived(request.user):
+        include_archived = False
     source_filter = payload.get('source')
     if isinstance(source_filter, str):
         source_filter = source_filter.strip() or None
@@ -6207,11 +6486,21 @@ def client_duplicate_comparison(request, duplicate_id):
         duplicate_client = duplicate.duplicate_client
         
         # Get related data for both clients
+        # For duplicate detection, show all enrollments/restrictions including archived ones
+        # so admins can properly resolve duplicates
         primary_enrollments = primary_client.clientprogramenrollment_set.select_related('program', 'program__department').all()
         duplicate_enrollments = duplicate_client.clientprogramenrollment_set.select_related('program', 'program__department').all()
         
         primary_restrictions = primary_client.servicerestriction_set.all()
         duplicate_restrictions = duplicate_client.servicerestriction_set.all()
+        
+        # Filter archived items for non-admin users in the display
+        # But keep them in the queryset for admins to see
+        if not can_see_archived(request.user):
+            primary_enrollments = primary_enrollments.filter(is_archived=False)
+            duplicate_enrollments = duplicate_enrollments.filter(is_archived=False)
+            primary_restrictions = primary_restrictions.filter(is_archived=False)
+            duplicate_restrictions = duplicate_restrictions.filter(is_archived=False)
         
         context = {
             'duplicate': duplicate,
@@ -6937,50 +7226,81 @@ def merge_clients(request, duplicate_id):
         # Migrate related data from duplicate client to primary client BEFORE deleting
         # This ensures data integrity when deleting the duplicate client
         
-        # 1. Migrate ClientProgramEnrollments
+        # 1. Migrate ClientProgramEnrollments with overlap detection
         from core.models import ClientProgramEnrollment
+        from datetime import timedelta
         duplicate_enrollments = ClientProgramEnrollment.objects.filter(client=duplicate_client)
         migrated_enrollments_count = 0
         skipped_enrollments_count = 0
         
+        # Helper function to check if two date ranges overlap or are adjacent (same as CSV upload logic)
+        def ranges_overlap_or_adjacent(start1, end1, start2, end2):
+            """Check if two date ranges overlap or are adjacent (within 1 day)"""
+            if end1 is None and end2 is None:
+                return True  # Both open-ended, consider them overlapping
+            if end1 is None:
+                # Range 1 is open-ended (start1 to infinity)
+                return start2 >= start1 or (end2 and end2 >= start1)
+            if end2 is None:
+                # Range 2 is open-ended (start2 to infinity)
+                return start1 >= start2 or (end1 and end1 >= start2)
+            
+            # Both have end dates - check for overlap or adjacency
+            overlap = start1 <= end2 and start2 <= end1
+            adjacent = (end1 and end1 + timedelta(days=1) == start2) or (end2 and end2 + timedelta(days=1) == start1)
+            return overlap or adjacent
+        
         for enrollment in duplicate_enrollments:
-            # Check if primary client already has an enrollment in the same program with same dates
-            # Only skip if it's an exact duplicate (same program, same start_date, same end_date, same sub_program)
-            # Handle NULL end_date properly using Q objects
-            enrollment_filter = Q(
+            # Check if primary client already has an overlapping enrollment in the same program
+            existing_enrollments = ClientProgramEnrollment.objects.filter(
                 client=merged_client,
                 program=enrollment.program,
-                start_date=enrollment.start_date,
-                sub_program=enrollment.sub_program
+                is_archived=False
             )
             
-            # Handle end_date - if NULL, check for NULL, otherwise check for exact match
-            if enrollment.end_date is None:
-                enrollment_filter &= Q(end_date__isnull=True)
-            else:
-                enrollment_filter &= Q(end_date=enrollment.end_date)
+            overlapping_enrollment = None
+            for existing in existing_enrollments:
+                if ranges_overlap_or_adjacent(
+                    existing.start_date, existing.end_date,
+                    enrollment.start_date, enrollment.end_date
+                ):
+                    overlapping_enrollment = existing
+                    break
             
-            existing_enrollment = ClientProgramEnrollment.objects.filter(enrollment_filter).first()
-            
-            if not existing_enrollment:
-                # No exact duplicate, migrate this enrollment (preserves enrollments from different sources/dates like SMIS and EMHware)
-                enrollment.client = merged_client
-                enrollment.save()
-                migrated_enrollments_count += 1
-                print(f"Migrated enrollment: {enrollment.program.name} - {enrollment.start_date}")
-            else:
-                # Exact duplicate exists, check if we should merge data or skip
-                # If duplicate has additional data (notes, etc.), merge it
-                if enrollment.notes and not existing_enrollment.notes:
-                    existing_enrollment.notes = enrollment.notes
-                    existing_enrollment.save()
-                # Archive the duplicate enrollment instead of deleting (preserves data)
+            if overlapping_enrollment:
+                # Found overlapping enrollment - merge them
+                all_start_dates = [overlapping_enrollment.start_date, enrollment.start_date]
+                earliest_start = min(all_start_dates)
+                
+                all_end_dates = []
+                if overlapping_enrollment.end_date:
+                    all_end_dates.append(overlapping_enrollment.end_date)
+                if enrollment.end_date:
+                    all_end_dates.append(enrollment.end_date)
+                latest_end = max(all_end_dates) if all_end_dates else None
+                
+                overlapping_enrollment.start_date = earliest_start
+                overlapping_enrollment.end_date = latest_end
+                
+                if enrollment.notes and not overlapping_enrollment.notes:
+                    overlapping_enrollment.notes = enrollment.notes
+                elif enrollment.notes and overlapping_enrollment.notes:
+                    overlapping_enrollment.notes = f"{overlapping_enrollment.notes} | Merged from duplicate client: {enrollment.notes}"
+                
+                overlapping_enrollment.save()
+                
                 if not enrollment.is_archived:
                     enrollment.is_archived = True
                     enrollment.archived_at = timezone.now()
                     enrollment.save()
+                
                 skipped_enrollments_count += 1
-                print(f"Skipped duplicate enrollment: {enrollment.program.name} - {enrollment.start_date}")
+            else:
+                # No overlapping enrollment, migrate this enrollment (preserves enrollments from different sources/dates)
+                enrollment.client = merged_client
+                enrollment.save()
+                migrated_enrollments_count += 1
+                print(f"Migrated enrollment: {enrollment.program.name} - {enrollment.start_date}")
         
         # 2. Migrate ServiceRestrictions
         from core.models import ServiceRestriction

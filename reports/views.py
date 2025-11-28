@@ -7,6 +7,7 @@ from django.db.models import Q, Count, Sum
 from datetime import datetime, date
 import csv
 from core.models import Client, Program, ClientProgramEnrollment, Staff, Department
+from core.views import can_see_archived
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import PermissionDenied
 class ReportsAccessMixin(LoginRequiredMixin):
@@ -235,9 +236,10 @@ class ReportListView(ReportsAccessMixin, ListView):
             if parsed_end_date:
                 enrollment_filter &= Q(start_date__lte=parsed_end_date)
             
-            active_enrollments = ClientProgramEnrollment.objects.filter(
-                enrollment_filter
-            ).count()
+            # Exclude archived enrollments from capacity calculations
+            enrollment_filter &= Q(is_archived=False)
+            
+            active_enrollments = ClientProgramEnrollment.objects.filter(enrollment_filter).count()
         elif (is_program_manager or is_leader) and assigned_programs:
             # Program managers see only data for their assigned programs
             # Optimized: Use distinct() and select_related() to reduce queries
@@ -279,10 +281,13 @@ class ReportListView(ReportsAccessMixin, ListView):
             )
             
             if parsed_start_date:
-                enrollment_filter &= Q(start_date__gte=parsed_start_date)
+                    enrollment_filter &= Q(start_date__gte=parsed_start_date)
             if parsed_end_date:
-                enrollment_filter &= Q(start_date__lte=parsed_end_date)
-            
+                    enrollment_filter &= Q(start_date__lte=parsed_end_date)
+                
+            # Exclude archived enrollments from capacity calculations
+            enrollment_filter &= Q(is_archived=False)
+                
             active_enrollments = ClientProgramEnrollment.objects.filter(
                 enrollment_filter
             ).count()
@@ -332,6 +337,9 @@ class ReportListView(ReportsAccessMixin, ListView):
                 if parsed_end_date:
                     enrollment_filter &= Q(start_date__lte=parsed_end_date)
                 
+                # Exclude archived enrollments from capacity calculations
+                enrollment_filter &= Q(is_archived=False)
+                
                 active_enrollments = ClientProgramEnrollment.objects.filter(
                     enrollment_filter
                 ).count()
@@ -364,8 +372,9 @@ class ReportListView(ReportsAccessMixin, ListView):
                 total=Sum('capacity_current')
             )['total'] or 0
             
-            # Count active enrollments in a single optimized query
+            # Count active enrollments in a single optimized query (excluding archived enrollments)
             enrollment_filter = Q(
+                is_archived=False,  # Exclude archived enrollments from capacity calculations
                 start_date__lte=today
             ) & (
                 Q(end_date__isnull=True) | Q(end_date__gt=today)
@@ -631,9 +640,10 @@ class VacancyTrackerView(ReportsAccessMixin, TemplateView):
         
         program_data = []
         for program in programs:
-            # Get active enrollments as of the specified date
+            # Get active enrollments as of the specified date (excluding archived enrollments)
             active_enrollments = ClientProgramEnrollment.objects.filter(
                 program=program,
+                is_archived=False,  # Exclude archived enrollments from capacity calculations
                 start_date__lte=as_of_date
             ).filter(
                 models.Q(end_date__isnull=True) | models.Q(end_date__gt=as_of_date)
@@ -717,8 +727,10 @@ class ReportExportView(ReportsExportAccessMixin, TemplateView):
         
         # Write data rows
         for program in programs:
+            # Exclude archived enrollments from capacity calculations
             active_enrollments = ClientProgramEnrollment.objects.filter(
                 program=program,
+                is_archived=False,  # Exclude archived enrollments from capacity calculations
                 start_date__lte=as_of_date
             ).filter(
                 models.Q(end_date__isnull=True) | models.Q(end_date__gt=as_of_date)
@@ -1016,6 +1028,10 @@ class ClientEnrollmentHistoryView(ReportsAccessMixin, ListView):
         if parsed_end_date:
             queryset = queryset.filter(start_date__lte=parsed_end_date)
         
+        # Exclude archived enrollments for non-admin users
+        if not can_see_archived(self.request.user):
+            queryset = queryset.filter(is_archived=False)
+        
         return queryset.order_by('-start_date')
     
     def get_context_data(self, **kwargs):
@@ -1193,6 +1209,10 @@ class ClientEnrollmentHistoryExportView(ReportsExportAccessMixin, ListView):
             queryset = queryset.filter(start_date__gte=parsed_start_date)
         if parsed_end_date:
             queryset = queryset.filter(start_date__lte=parsed_end_date)
+        
+        # Exclude archived enrollments for non-admin users
+        if not can_see_archived(self.request.user):
+            queryset = queryset.filter(is_archived=False)
         
         return queryset.order_by('-start_date')
     
@@ -1382,9 +1402,10 @@ class ProgramCapacityView(ReportsAccessMixin, ListView):
         today = timezone.now().date()
         
         for program in programs:
-            # Get active enrollments using proper date-based logic
+            # Get active enrollments using proper date-based logic (excluding archived enrollments)
             active_enrollments = ClientProgramEnrollment.objects.filter(
                 program=program,
+                is_archived=False,  # Exclude archived enrollments from capacity calculations
                 start_date__lte=today
             ).filter(
                 models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
@@ -1443,9 +1464,10 @@ class ProgramCapacityExportView(ReportsExportAccessMixin, ListView):
         today = timezone.now().date()
         
         for program in programs:
-            # Get active enrollments using proper date-based logic
+            # Get active enrollments using proper date-based logic (excluding archived enrollments)
             active_enrollments = ClientProgramEnrollment.objects.filter(
                 program=program,
+                is_archived=False,  # Exclude archived enrollments from capacity calculations
                 start_date__lte=today
             ).filter(
                 models.Q(end_date__isnull=True) | models.Q(end_date__gt=today)
@@ -1554,6 +1576,9 @@ class ProgramPerformanceView(ReportsAccessMixin, ListView):
         for program in programs:
             # Get all enrollments for this program
             all_enrollments = ClientProgramEnrollment.objects.filter(program=program)
+            # Exclude archived enrollments for non-admin users
+            if not can_see_archived(self.request.user):
+                all_enrollments = all_enrollments.filter(is_archived=False)
             
             # Optimized: Use database queries instead of Python loop
             # Calculate active enrollments: start_date <= today AND (end_date is NULL OR end_date > today)
@@ -1624,6 +1649,9 @@ class ProgramPerformanceExportView(ReportsExportAccessMixin, ListView):
         for program in programs:
             # Get all enrollments for this program
             all_enrollments = ClientProgramEnrollment.objects.filter(program=program)
+            # Exclude archived enrollments for non-admin users
+            if not can_see_archived(self.request.user):
+                all_enrollments = all_enrollments.filter(is_archived=False)
             
             # Optimized: Use database queries instead of Python loop
             # Calculate active enrollments: start_date <= today AND (end_date is NULL OR end_date > today)
@@ -1737,7 +1765,11 @@ class DepartmentSummaryView(ReportsAccessMixin, TemplateView):
             
             total_enrollments = 0
             for program in programs:
-                total_enrollments += ClientProgramEnrollment.objects.filter(program=program).count()
+                # Exclude archived enrollments from capacity calculations
+                total_enrollments += ClientProgramEnrollment.objects.filter(
+                    program=program,
+                    is_archived=False  # Exclude archived enrollments from capacity calculations
+                ).count()
             
             department_data.append({
                 'department': dept,
@@ -2186,7 +2218,11 @@ class OrganizationalSummaryExportView(ReportsExportAccessMixin, TemplateView):
         writer.writerow(['Program Name', 'Department', 'Location', 'Capacity', 'Active Enrollments', 'Utilization %'])
         
         for program in programs:
-            program_enrollments = ClientProgramEnrollment.objects.filter(program=program)
+            # Exclude archived enrollments from capacity calculations
+            program_enrollments = ClientProgramEnrollment.objects.filter(
+                program=program,
+                is_archived=False  # Exclude archived enrollments from capacity calculations
+            )
             program_active = 0
             
             for enrollment in program_enrollments:
