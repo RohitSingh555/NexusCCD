@@ -12,6 +12,7 @@ from django.db.models import Q, Count, Exists, OuterRef, Max
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.db import IntegrityError, transaction
 from core.models import Client, Program, Department, Intake, ClientProgramEnrollment, ClientDuplicate, ClientUploadLog, ServiceRestrictionNotificationSubscription
+from core.upload_errors import UploadError, UPLOAD_ERROR_CODES, get_error_code_for_exception
 from datetime import datetime, date, timedelta
 from core.views import ProgramManagerAccessMixin, AnalystAccessMixin, jwt_required, can_see_archived
 from core.fuzzy_matching import fuzzy_matcher
@@ -1760,13 +1761,16 @@ class ClientUploadView(TemplateView):
 
 @csrf_exempt
 @require_http_methods(["POST"])
-@transaction.atomic
 def upload_clients(request):
-    """Handle CSV/Excel file upload and process client data"""
+    """
+    Handle CSV/Excel file upload and process client data with chunked processing.
+    Processes files in chunks to avoid timeouts and enable partial success.
+    """
     
     # Start timing the upload
     upload_start_time = timezone.now()
     upload_log = None
+    CHUNK_SIZE = 1000  # Process 1000 rows per chunk
     
     # Check for load test mode - skip database writes if X-Load-Test header is present
     is_load_test = request.headers.get('X-Load-Test', '').lower() == 'true'
@@ -1794,15 +1798,17 @@ def upload_clients(request):
     
     try:
         if 'file' not in request.FILES:
-            logger.error("Upload failed: No file in request.FILES")
-            return JsonResponse({'success': False, 'error': 'No file provided'}, status=400)
+            error = UploadError('UPLOAD_001', details={'reason': 'No file in request.FILES'})
+            logger.error(f"Upload failed: {error.message}")
+            return JsonResponse({'success': False, 'error': error.message, 'error_code': error.code}, status=400)
         
         # Get the source parameter
         source = request.POST.get('source', 'SMIS')  # Default to SMIS if not provided
         logger.info(f"Upload request - source: {source}, file: {request.FILES.get('file', {}).name if 'file' in request.FILES else 'None'}")
         if source not in ['SMIS', 'EMHware']:
-            logger.error(f"Upload failed: Invalid source '{source}'")
-            return JsonResponse({'success': False, 'error': 'Invalid source. Must be SMIS or EMHware.'}, status=400)
+            error = UploadError('UPLOAD_100', message=f'Invalid source: {source}. Must be SMIS or EMHware.')
+            logger.error(f"Upload failed: {error.message}")
+            return JsonResponse({'success': False, 'error': error.message, 'error_code': error.code}, status=400)
         
         file = request.FILES['file']
         file_extension = file.name.split('.')[-1].lower()
@@ -1832,7 +1838,34 @@ def upload_clients(request):
             upload_log = None
         
         if file_extension not in ['csv', 'xlsx', 'xls']:
-            return JsonResponse({'success': False, 'error': 'Invalid file format. Please upload CSV or Excel files.'}, status=400)
+            error = UploadError('UPLOAD_001', details={'file_extension': file_extension})
+            # Create audit log for early validation failure
+            if upload_log:
+                try:
+                    from core.models import create_audit_log
+                    upload_log.completed_at = timezone.now()
+                    upload_log.status = 'failed'
+                    upload_log.error_message = error.message
+                    upload_log.save()
+                    create_audit_log(
+                        entity_name='ClientUpload',
+                        entity_id=upload_log.external_id,
+                        action='import',
+                        changed_by=request.user if request.user.is_authenticated else None,
+                        diff_data={
+                            'file_name': file.name,
+                            'file_size': file.size,
+                            'source': source,
+                            'status': 'failed',
+                            'error_code': error.code,
+                            'error_message': error.message,
+                            'error_category': 'File Validation',
+                            'failure_stage': 'file_extension_validation'
+                        }
+                    )
+                except Exception as audit_error:
+                    logger.error(f"Failed to create audit log for early failure: {audit_error}")
+            return JsonResponse({'success': False, 'error': error.message, 'error_code': error.code}, status=400)
         
         # Read the file
         try:
@@ -1872,23 +1905,135 @@ def upload_clients(request):
                         string_io = io.StringIO(decoded_content)
                         df = pd.read_csv(string_io)
                     except Exception as e:
-                        return JsonResponse({'success': False, 'error': f'Could not read CSV file with any supported encoding. Last error: {last_error}. Fallback error: {str(e)}'}, status=400)
+                        error = UploadError('UPLOAD_004', details={'last_error': last_error, 'fallback_error': str(e)})
+                        # Create audit log for file reading failure
+                        if upload_log:
+                            try:
+                                from core.models import create_audit_log
+                                upload_log.completed_at = timezone.now()
+                                upload_log.status = 'failed'
+                                upload_log.error_message = error.message
+                                upload_log.save()
+                                create_audit_log(
+                                    entity_name='ClientUpload',
+                                    entity_id=upload_log.external_id,
+                                    action='import',
+                                    changed_by=request.user if request.user.is_authenticated else None,
+                                    diff_data={
+                                        'file_name': file.name,
+                                        'file_size': file.size,
+                                        'source': source,
+                                        'status': 'failed',
+                                        'error_code': error.code,
+                                        'error_message': error.message,
+                                        'error_category': 'File Processing',
+                                        'failure_stage': 'file_reading',
+                                        'last_error': last_error,
+                                        'fallback_error': str(e)
+                                    }
+                                )
+                            except Exception as audit_error:
+                                logger.error(f"Failed to create audit log for file reading failure: {audit_error}")
+                        return JsonResponse({'success': False, 'error': error.message, 'error_code': error.code}, status=400)
             
             else:
                 df = pd.read_excel(file)
         except Exception as e:
-            logger.error(f"Error reading file: {str(e)}")
-            return JsonResponse({'success': False, 'error': f'Error reading file: {str(e)}'}, status=400)
+            error_code = get_error_code_for_exception(e)
+            error = UploadError(error_code, raw_error=e, details={'file_extension': file_extension})
+            logger.error(f"Error reading file: {error.message}")
+            # Create audit log for file reading exception
+            if upload_log:
+                try:
+                    from core.models import create_audit_log
+                    upload_log.completed_at = timezone.now()
+                    upload_log.status = 'failed'
+                    upload_log.error_message = error.message
+                    upload_log.save()
+                    create_audit_log(
+                        entity_name='ClientUpload',
+                        entity_id=upload_log.external_id,
+                        action='import',
+                        changed_by=request.user if request.user.is_authenticated else None,
+                        diff_data={
+                            'file_name': file.name if hasattr(file, 'name') else 'Unknown',
+                            'file_size': file.size if hasattr(file, 'size') else 0,
+                            'source': source,
+                            'status': 'failed',
+                            'error_code': error.code,
+                            'error_message': error.message,
+                            'error_category': 'File Processing',
+                            'failure_stage': 'file_reading_exception',
+                            'error_type': type(e).__name__
+                        }
+                    )
+                except Exception as audit_error:
+                    logger.error(f"Failed to create audit log for file reading exception: {audit_error}")
+            return JsonResponse({'success': False, 'error': error.message, 'error_code': error.code}, status=400)
         
         # Check if dataframe is empty
         if df.empty:
-            logger.error("Upload failed: Dataframe is empty after reading file")
-            return JsonResponse({'success': False, 'error': 'The uploaded file is empty or contains no data.'}, status=400)
+            error = UploadError('UPLOAD_002')
+            logger.error(f"Upload failed: {error.message}")
+            # Create audit log for empty file
+            if upload_log:
+                try:
+                    from core.models import create_audit_log
+                    upload_log.completed_at = timezone.now()
+                    upload_log.status = 'failed'
+                    upload_log.error_message = error.message
+                    upload_log.save()
+                    create_audit_log(
+                        entity_name='ClientUpload',
+                        entity_id=upload_log.external_id,
+                        action='import',
+                        changed_by=request.user if request.user.is_authenticated else None,
+                        diff_data={
+                            'file_name': file.name,
+                            'file_size': file.size,
+                            'source': source,
+                            'status': 'failed',
+                            'error_code': error.code,
+                            'error_message': error.message,
+                            'error_category': 'File Validation',
+                            'failure_stage': 'empty_file'
+                        }
+                    )
+                except Exception as audit_error:
+                    logger.error(f"Failed to create audit log for empty file: {audit_error}")
+            return JsonResponse({'success': False, 'error': error.message, 'error_code': error.code}, status=400)
         
         # Check if dataframe has no columns
         if len(df.columns) == 0:
-            logger.error("Upload failed: Dataframe has no columns")
-            return JsonResponse({'success': False, 'error': 'The uploaded file has no columns. Please check the file format.'}, status=400)
+            error = UploadError('UPLOAD_003')
+            logger.error(f"Upload failed: {error.message}")
+            # Create audit log for no columns
+            if upload_log:
+                try:
+                    from core.models import create_audit_log
+                    upload_log.completed_at = timezone.now()
+                    upload_log.status = 'failed'
+                    upload_log.error_message = error.message
+                    upload_log.save()
+                    create_audit_log(
+                        entity_name='ClientUpload',
+                        entity_id=upload_log.external_id,
+                        action='import',
+                        changed_by=request.user if request.user.is_authenticated else None,
+                        diff_data={
+                            'file_name': file.name,
+                            'file_size': file.size,
+                            'source': source,
+                            'status': 'failed',
+                            'error_code': error.code,
+                            'error_message': error.message,
+                            'error_category': 'File Validation',
+                            'failure_stage': 'no_columns'
+                        }
+                    )
+                except Exception as audit_error:
+                    logger.error(f"Failed to create audit log for no columns: {audit_error}")
+            return JsonResponse({'success': False, 'error': error.message, 'error_code': error.code}, status=400)
         
         logger.info(f"Successfully read file with {len(df)} rows and {len(df.columns)} columns")
         
@@ -2027,10 +2172,13 @@ def upload_clients(request):
                 missing_fields.append(required_field)
         
         if missing_fields:
-            logger.error(f"Upload validation failed - Missing fields: {missing_fields}. Column mapping: {column_mapping}. DF columns: {list(df.columns)}")
+            error = UploadError('UPLOAD_020', details={'missing_fields': missing_fields, 'column_mapping': column_mapping})
+            logger.error(f"Upload validation failed - {error.message}")
             return JsonResponse({
                 'success': False, 
-                'error': f'Missing required columns. Please include columns for: {", ".join(missing_fields)}. Note: client_id is now required for all uploads.'
+                'error': error.message,
+                'error_code': error.code,
+                'details': {'missing_fields': missing_fields}
             }, status=400)
         
         # Phone and DOB are both optional - no requirement check needed
@@ -3173,1228 +3321,1290 @@ def upload_clients(request):
             
             return None, None
         
-        # Initialize lists for bulk operations
-        clients_to_create = []
-        clients_to_update = []  # NEW: List for bulk updates
-        extended_records_to_create = []
-        duplicate_relationships_to_create = []
+        # Initialize counters for entire upload
+        total_created_count = 0
+        total_updated_count = 0
+        total_skipped_count = 0
+        total_duplicates_flagged = 0
+        all_errors = []
+        all_duplicate_details = []
         
-        for index, row in df.iterrows():
-            try:
-                # Helper function to get data using field mapping
-                def get_field_data(field_name, default=''):
-                    """Get data from row using field mapping"""
-                    for col in df.columns:
-                        if column_mapping.get(col) == field_name:
-                            value = row[col]
-                            if pd.notna(value) and str(value).strip():
-                                return str(value).strip()
-                    return default
-                
-                # Helper function to ensure proper defaults for optional fields (convert empty strings to None)
-                def get_field_with_default(field_name, default=None):
-                    """Get field data and ensure empty strings become None for optional fields"""
-                    value = get_field_data(field_name, '')
-                    if value == '' or value is None:
-                        return default
-                    return value
-                
-                # Helper function to parse boolean values safely
-                def parse_boolean(value, default=False):
-                    """Parse boolean value from string, handling empty values"""
-                    if not value or value.strip() == '':
-                        return default
-                    return str(value).lower().strip() in ['true', '1', 'yes', 'y']
-                
-                # Helper function to parse integer values safely
-                def parse_integer(value, default=None):
-                    """Parse integer value from string, handling empty values"""
-                    if not value or value.strip() == '':
-                        return default
-                    try:
-                        return int(str(value).strip())
-                    except (ValueError, TypeError):
-                        return default
-                
-                # Helper function to parse date values safely
-                def parse_date(value, default=None):
-                    """Parse date value from string, handling empty values, multiple formats, Excel serial numbers, and various date formats"""
-                    if not value or (isinstance(value, str) and value.strip() == ''):
-                        return default
+        # Check file size and warn if very large
+        total_rows = len(df)
+        if total_rows > 10000:
+            logger.warning(f"Large file detected: {total_rows} rows. Processing in chunks within a single transaction.")
+        
+        # Process file in chunks but within a SINGLE transaction
+        # If ANY chunk fails, ALL database operations will rollback
+        chunk_start = 0
+        chunk_number = 0
+        
+        # Wrap ALL chunk processing in a single transaction
+        # This ensures that if any chunk fails, everything rolls back
+        try:
+            with transaction.atomic():
+                while chunk_start < total_rows:
+                    chunk_end = min(chunk_start + CHUNK_SIZE, total_rows)
+                    chunk_number += 1
+                    chunk_df = df.iloc[chunk_start:chunk_end]
                     
-                    # Handle pandas Timestamp or datetime objects directly
-                    if hasattr(value, 'date'):
-                        try:
-                            return value.date()
-                        except (AttributeError, TypeError):
-                            pass
+                    logger.info(f"Processing chunk {chunk_number}: rows {chunk_start + 1} to {chunk_end} of {total_rows}")
                     
-                    # Handle date objects directly
-                    if hasattr(value, 'year') and hasattr(value, 'month') and hasattr(value, 'day'):
+                    # Update progress in upload log (outside transaction for visibility)
+                    # Note: This won't persist if transaction rolls back, but gives user feedback
+                    if upload_log:
                         try:
-                            from datetime import date
-                            if isinstance(value, date):
+                            progress_percentage = int((chunk_start / total_rows) * 100) if total_rows > 0 else 0
+                            upload_log.upload_details = upload_log.upload_details or {}
+                            upload_log.upload_details['progress'] = {
+                                'processed': chunk_start,
+                                'total': total_rows,
+                                'percentage': progress_percentage,
+                                'current_chunk': chunk_number,
+                                'status': 'processing'
+                            }
+                            # Save outside transaction for progress visibility
+                            # Use save(update_fields=...) to avoid triggering signals
+                            upload_log.save(update_fields=['upload_details'])
+                        except Exception as e:
+                            logger.warning(f"Failed to update progress: {e}")
+                    
+                    # Initialize lists for this chunk
+                    clients_to_create = []
+                    clients_to_update = []
+                    extended_records_to_create = []
+                    duplicate_relationships_to_create = []
+                    chunk_errors = []
+                    chunk_duplicate_details = []
+                    chunk_created_count = 0
+                    chunk_updated_count = 0
+                    chunk_skipped_count = 0
+                    chunk_duplicates_flagged = 0
+                    
+                    # Process rows in this chunk
+                    for chunk_row_idx, (index, row) in enumerate(chunk_df.iterrows()):
+                        try:
+                            # Helper function to get data using field mapping
+                            def get_field_data(field_name, default=''):
+                                """Get data from row using field mapping"""
+                                for col in df.columns:
+                                    if column_mapping.get(col) == field_name:
+                                        value = row[col]
+                                        if pd.notna(value) and str(value).strip():
+                                            return str(value).strip()
+                                        return default
+                            # Helper function to ensure proper defaults for optional fields (convert empty strings to None)
+                            def get_field_with_default(field_name, default=None):
+                                """Get field data and ensure empty strings become None for optional fields"""
+                                value = get_field_data(field_name, '')
+                                if value == '' or value is None:
+                                    return default
                                 return value
-                        except (AttributeError, TypeError):
-                            pass
-                    
-                    try:
-                        # Check if it's an Excel serial number (numeric value between 1 and 1000000)
-                        # Excel dates are days since 1900-01-01 (but Excel incorrectly treats 1900 as a leap year)
-                        try:
-                            numeric_value = float(value)
-                            # Excel serial numbers for dates are typically between 1 (Jan 1, 1900) and ~45000+ (modern dates)
-                            if 1 <= numeric_value <= 1000000:
-                                from datetime import datetime, timedelta
-                                # Excel epoch is 1899-12-30 (not 1900-01-01 due to Excel's 1900 leap year bug)
-                                excel_epoch = datetime(1899, 12, 30)
-                                parsed_date = excel_epoch + timedelta(days=int(numeric_value))
-                                logger.debug(f"Converted Excel serial {numeric_value} to date: {parsed_date.date()}")
-                                return parsed_date.date()
-                        except (ValueError, TypeError):
-                            pass
-                        
-                        # Try pandas automatic parsing first (handles most standard formats)
-                        try:
-                            parsed = pd.to_datetime(value, errors='coerce', infer_datetime_format=True)
-                            if pd.notna(parsed):
-                                return parsed.date() if hasattr(parsed, 'date') else parsed
-                        except (ValueError, TypeError, OverflowError):
-                            pass
-                    except (ValueError, TypeError):
-                        pass
-                    
-                    # If pandas fails, try manual parsing for common formats
-                    try:
-                        from datetime import datetime
-                        value_str = str(value).strip()
-                        
-                        # Remove time components if present (e.g., "2024-12-05 00:00:00" -> "2024-12-05")
-                        if ' ' in value_str:
-                            value_str = value_str.split(' ')[0]
-                        
-                        # Try various date formats
-                        date_formats = [
-                            '%Y-%m-%d',           # 2024-12-05
-                            '%Y/%m/%d',           # 2024/12/05
-                            '%m/%d/%Y',           # 12/05/2024 (US format)
-                            '%d/%m/%Y',           # 05/12/2024 (European format)
-                            '%m-%d-%Y',           # 12-05-2024
-                            '%d-%m-%Y',           # 05-12-2024
-                            '%Y.%m.%d',           # 2024.12.05
-                            '%m.%d.%Y',           # 12.05.2024
-                            '%d.%m.%Y',           # 05.12.2024
-                            '%B %d, %Y',          # December 5, 2024
-                            '%b %d, %Y',          # Dec 5, 2024
-                            '%d %B %Y',           # 5 December 2024
-                            '%d %b %Y',           # 5 Dec 2024
-                            '%Y%m%d',             # 20241205
-                            '%m/%d/%y',           # 12/05/24 (2-digit year)
-                            '%d/%m/%y',           # 05/12/24 (2-digit year, European)
-                        ]
-                        
-                        for date_format in date_formats:
-                            try:
-                                parsed = datetime.strptime(value_str, date_format)
-                                return parsed.date()
-                            except (ValueError, TypeError):
-                                continue
-                        
-                        # Try parsing with slash separator (handle both MM/DD/YYYY and DD/MM/YYYY)
-                        if '/' in value_str:
-                            parts = value_str.split('/')
-                            if len(parts) == 3:
+                            
+                            # Helper function to parse boolean values safely
+                            def parse_boolean(value, default=False):
+                                """Parse boolean value from string, handling empty values"""
+                                if not value or value.strip() == '':
+                                    return default
+                                return str(value).lower().strip() in ['true', '1', 'yes', 'y']
+                            
+                            # Helper function to parse integer values safely
+                            def parse_integer(value, default=None):
+                                """Parse integer value from string, handling empty values"""
+                                if not value or value.strip() == '':
+                                    return default
                                 try:
-                                    # Try MM/DD/YYYY first (US format)
-                                    month, day, year = parts
-                                    if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                        return datetime(int(year), int(month), int(day)).date()
+                                    return int(str(value).strip())
                                 except (ValueError, TypeError):
+                                    return default
+                            
+                            # Helper function to parse date values safely
+                            def parse_date(value, default=None):
+                                """Parse date value from string, handling empty values, multiple formats, Excel serial numbers, and various date formats"""
+                                if not value or (isinstance(value, str) and value.strip() == ''):
+                                    return default
+                                
+                                # Handle pandas Timestamp or datetime objects directly
+                                if hasattr(value, 'date'):
                                     try:
-                                        # Try DD/MM/YYYY (European format)
-                                        day, month, year = parts
-                                        if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                            return datetime(int(year), int(month), int(day)).date()
+                                        return value.date()
+                                    except (AttributeError, TypeError):
+                                        pass
+                                
+                                # Handle date objects directly
+                                if hasattr(value, 'year') and hasattr(value, 'month') and hasattr(value, 'day'):
+                                    try:
+                                        from datetime import date
+                                        if isinstance(value, date):
+                                            return value
+                                    except (AttributeError, TypeError):
+                                        pass
+                                
+                                try:
+                                    # Check if it's an Excel serial number (numeric value between 1 and 1000000)
+                                    # Excel dates are days since 1900-01-01 (but Excel incorrectly treats 1900 as a leap year)
+                                    try:
+                                        numeric_value = float(value)
+                                        # Excel serial numbers for dates are typically between 1 (Jan 1, 1900) and ~45000+ (modern dates)
+                                        if 1 <= numeric_value <= 1000000:
+                                            from datetime import datetime, timedelta
+                                            # Excel epoch is 1899-12-30 (not 1900-01-01 due to Excel's 1900 leap year bug)
+                                            excel_epoch = datetime(1899, 12, 30)
+                                            parsed_date = excel_epoch + timedelta(days=int(numeric_value))
+                                            logger.debug(f"Converted Excel serial {numeric_value} to date: {parsed_date.date()}")
+                                            return parsed_date.date()
                                     except (ValueError, TypeError):
                                         pass
-                        
-                        # Try parsing with dash separator
-                        if '-' in value_str:
-                            parts = value_str.split('-')
-                            if len(parts) == 3:
-                                try:
-                                    # Try YYYY-MM-DD first (ISO format)
-                                    year, month, day = parts
-                                    if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                        return datetime(int(year), int(month), int(day)).date()
-                                except (ValueError, TypeError):
+                                    
+                                    # Try pandas automatic parsing first (handles most standard formats)
                                     try:
-                                        # Try MM-DD-YYYY (US format)
-                                        month, day, year = parts
-                                        if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                            return datetime(int(year), int(month), int(day)).date()
-                                    except (ValueError, TypeError):
-                                        try:
-                                            # Try DD-MM-YYYY (European format)
-                                            day, month, year = parts
-                                            if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                                return datetime(int(year), int(month), int(day)).date()
-                                        except (ValueError, TypeError):
-                                            pass
-                    except (ValueError, TypeError, AttributeError) as e:
-                        logger.debug(f"Failed to parse date '{value}': {e}")
-                        pass
-                    
-                    return default
-                
-                # Helper function to clean client_id and ensure it's a whole number string
-                def clean_client_id(value):
-                    """Clean client_id to ensure it's a whole number string without decimals"""
-                    # Check for pandas NaN/None/null values first
-                    if pd.isna(value) or value is None:
-                        return None
-                    
-                    # Convert to string and check if it's empty or 'nan'
-                    try:
-                        str_value = str(value).strip()
-                        if not str_value or str_value.lower() in ['nan', 'none', 'null', '']:
-                            return None
-                        
-                        # If it's a decimal number (like 2765.0), convert to integer then back to string
-                        if '.' in str_value:
-                            # Check if it's a whole number decimal (like 2765.0)
-                            float_val = float(str_value)
-                            if float_val.is_integer():
-                                return str(int(float_val))
-                            else:
-                                # If it has actual decimal places, keep as is
-                                return str_value
-                        else:
-                            # Already a whole number, return as string
-                            return str_value
-                    except (ValueError, TypeError):
-                        return None
-
-                # Clean and prepare data using field mapping
-                email = get_field_data('email')  # Now optional
-                phone = get_field_data('phone')
-                client_id = get_field_data('client_id')
-                
-                
-                # Handle date of birth - required for new clients, optional for updates
-                dob = None
-                try:
-                    dob_value = get_field_data('dob')
-                    if dob_value:
-                        # Check if the value looks like a valid date format
-                        dob_str = str(dob_value).strip().lower()
-                        
-                        # Skip values that are clearly not dates
-                        if dob_str in ['yes', 'no', 'y', 'n', 'true', 'false', '1', '0', '']:
-                            # These are not valid date values, treat as missing
-                            dob_value = None
-                        
-                        if dob_value:
-                            # Try to parse the date with multiple format attempts
-                            try:
-                                # First try pandas automatic parsing
-                                dob = pd.to_datetime(dob_value).date()
-                            except (ValueError, TypeError, OverflowError):
-                                # If that fails, try specific date formats
-                                dob_str = str(dob_value).strip()
-                                try:
-                                    # Try YYYY-MM-DD format
-                                    dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
+                                        parsed = pd.to_datetime(value, errors='coerce', infer_datetime_format=True)
+                                        if pd.notna(parsed):
+                                            return parsed.date() if hasattr(parsed, 'date') else parsed
+                                    except (ValueError, TypeError, OverflowError):
+                                        pass
                                 except (ValueError, TypeError):
-                                    # Try other common formats
-                                    try:
-                                        dob = datetime.strptime(dob_str, '%Y/%m/%d').date()
-                                    except (ValueError, TypeError):
+                                    pass
+                                
+                                # If pandas fails, try manual parsing for common formats
+                                try:
+                                    from datetime import datetime
+                                    value_str = str(value).strip()
+                                    
+                                    # Remove time components if present (e.g., "2024-12-05 00:00:00" -> "2024-12-05")
+                                    if ' ' in value_str:
+                                        value_str = value_str.split(' ')[0]
+                                    
+                                    # Try various date formats
+                                    date_formats = [
+                                        '%Y-%m-%d',           # 2024-12-05
+                                        '%Y/%m/%d',           # 2024/12/05
+                                        '%m/%d/%Y',           # 12/05/2024 (US format)
+                                        '%d/%m/%Y',           # 05/12/2024 (European format)
+                                        '%m-%d-%Y',           # 12-05-2024
+                                        '%d-%m-%Y',           # 05-12-2024
+                                        '%Y.%m.%d',           # 2024.12.05
+                                        '%m.%d.%Y',           # 12.05.2024
+                                        '%d.%m.%Y',           # 05.12.2024
+                                        '%B %d, %Y',          # December 5, 2024
+                                        '%b %d, %Y',          # Dec 5, 2024
+                                        '%d %B %Y',           # 5 December 2024
+                                        '%d %b %Y',           # 5 Dec 2024
+                                        '%Y%m%d',             # 20241205
+                                        '%m/%d/%y',           # 12/05/24 (2-digit year)
+                                        '%d/%m/%y',           # 05/12/24 (2-digit year, European)
+                                    ]
+                                    
+                                    for date_format in date_formats:
                                         try:
-                                            dob = datetime.strptime(dob_str, '%m/%d/%Y').date()
+                                            parsed = datetime.strptime(value_str, date_format)
+                                            return parsed.date()
                                         except (ValueError, TypeError):
+                                            continue
+                                    
+                                    # Try parsing with slash separator (handle both MM/DD/YYYY and DD/MM/YYYY)
+                                    if '/' in value_str:
+                                        parts = value_str.split('/')
+                                        if len(parts) == 3:
                                             try:
-                                                dob = datetime.strptime(dob_str, '%d/%m/%Y').date()
+                                                # Try MM/DD/YYYY first (US format)
+                                                month, day, year = parts
+                                                if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
+                                                    return datetime(int(year), int(month), int(day)).date()
                                             except (ValueError, TypeError):
-                                                # If all parsing attempts fail, raise the original error
-                                                raise ValueError(f"Unable to parse date: {dob_str}")
-                    else:
-                        # DOB is optional - no error needed
-                        pass
-                except Exception as e:
-                    # If date parsing fails, DOB is optional - just set to None
-                    dob = None
-                
-                client_data = {
-                    'first_name': get_field_data('first_name'),
-                    'last_name': get_field_data('last_name'),
-                    'middle_name': get_field_with_default('middle_name'),
-                    'dob': dob,
-                    'preferred_name': get_field_with_default('preferred_name'),
-                    'alias': get_field_with_default('alias'),
-                    'gender': get_field_with_default('gender'),
-                    'gender_identity': get_field_with_default('gender_identity'),
-                    'pronoun': get_field_with_default('pronoun'),
-                    'marital_status': get_field_with_default('marital_status'),
-                    'citizenship_status': get_field_with_default('citizenship_status'),
-                    'location_county': get_field_with_default('location_county'),
-                    'province': get_field_with_default('province'),
-                    'city': get_field_with_default('city'),
-                    'postal_code': get_field_with_default('postal_code'),
-                    'address': get_field_with_default('address'),
-                    'address_2': get_field_with_default('address_2'),
-                    'language': get_field_with_default('language'),
-                    'preferred_language': get_field_with_default('preferred_language'),
-                    'mother_tongue': get_field_with_default('mother_tongue'),
-                    'official_language': get_field_with_default('official_language'),
-                    'language_interpreter_required': parse_boolean(get_field_data('language_interpreter_required')),
-                    'self_identification_race_ethnicity': get_field_with_default('self_identification_race_ethnicity'),
-                    'indigenous_status': get_field_with_default('indigenous_status'),
-                    'lgbtq_status': get_field_with_default('lgbtq_status'),
-                    'highest_level_education': get_field_with_default('highest_level_education'),
-                    'children_home': parse_boolean(get_field_data('children_home')),
-                    'children_number': parse_integer(get_field_data('children_number')),
-                    'lhin': get_field_with_default('lhin'),
-                    'client_id': clean_client_id(get_field_data('client_id')),
-                    'phone': get_field_with_default('phone'),
-                    'email': email if email else None,  # Add email to direct field, None if empty
-                    'source': source,  # Add the source field from the form
-                    'level_of_support': get_field_with_default('level_of_support'),
-                    'client_type': get_field_with_default('client_type'),
-                    'referral_source': get_field_with_default('referral_source'),
-                    'phone_work': get_field_with_default('phone_work'),
-                    'phone_alt': get_field_with_default('phone_alt'),
-                    'permission_to_phone': parse_boolean(get_field_data('permission_to_phone')),
-                    'permission_to_email': parse_boolean(get_field_data('permission_to_email')),
-                    'medical_conditions': get_field_with_default('medical_conditions'),
-                    'primary_diagnosis': get_field_with_default('primary_diagnosis'),
-                    'family_doctor': get_field_with_default('family_doctor'),
-                    'health_card_number': get_field_with_default('health_card_number'),
-                    'health_card_version': get_field_with_default('health_card_version'),
-                    'health_card_exp_date': parse_date(get_field_data('health_card_exp_date')),
-                    'health_card_issuing_province': get_field_with_default('health_card_issuing_province'),
-                    'no_health_card_reason': get_field_with_default('no_health_card_reason'),
-                    'next_of_kin': get_field_with_default('next_of_kin'),
-                    'emergency_contact': get_field_with_default('emergency_contact'),
-                    'comments': get_field_with_default('comments'),
-                    'chart_number': get_field_with_default('chart_number'),
-                    'contact_information': {
-                        'email': email if email else None,
-                        'phone': phone if phone else None,
-                    },
-                    # Extended fields for ClientExtended model
-                    'indigenous_identity': get_field_with_default('indigenous_identity'),
-                    'military_status': get_field_with_default('military_status'),
-                    'refugee_status': get_field_with_default('refugee_status'),
-                    'household_size': parse_integer(get_field_data('household_size')),
-                    'family_head_client_no': get_field_with_default('family_head_client_no'),
-                    'relationship': get_field_with_default('relationship'),
-                    'primary_worker': get_field_with_default('primary_worker'),
-                    'chronically_homeless': parse_boolean(get_field_data('chronically_homeless')),
-                    'num_bednights_current_stay': parse_integer(get_field_data('num_bednights_current_stay')),
-                    'length_homeless_3yrs': parse_integer(get_field_data('length_homeless_3yrs')),
-                    'income_source': get_field_with_default('income_source'),
-                    'taxation_year_filed': get_field_with_default('taxation_year_filed'),
-                    'status_id': get_field_with_default('status_id'),
-                    'picture_id': get_field_with_default('picture_id'),
-                    'other_id': get_field_with_default('other_id'),
-                    'bnl_consent': parse_boolean(get_field_data('bnl_consent')),
-                    'allergies': get_field_with_default('allergies'),
-                    'harm_reduction_support': parse_boolean(get_field_data('harm_reduction_support')),
-                    'medication_support': parse_boolean(get_field_data('medication_support')),
-                    'pregnancy_support': parse_boolean(get_field_data('pregnancy_support')),
-                    'mental_health_support': parse_boolean(get_field_data('mental_health_support')),
-                    'physical_health_support': parse_boolean(get_field_data('physical_health_support')),
-                    'daily_activities_support': parse_boolean(get_field_data('daily_activities_support')),
-                    'other_health_supports': get_field_with_default('other_health_supports'),
-                    'cannot_use_stairs': parse_boolean(get_field_data('cannot_use_stairs')),
-                    'limited_mobility': parse_boolean(get_field_data('limited_mobility')),
-                    'wheelchair_accessibility': parse_boolean(get_field_data('wheelchair_accessibility')),
-                    'vision_hearing_speech_supports': get_field_with_default('vision_hearing_speech_supports'),
-                    'english_translator': parse_boolean(get_field_data('english_translator')),
-                    'reading_supports': parse_boolean(get_field_data('reading_supports')),
-                    'other_accessibility_supports': get_field_with_default('other_accessibility_supports'),
-                    'pet_owner': parse_boolean(get_field_data('pet_owner')),
-                    'legal_support': parse_boolean(get_field_data('legal_support')),
-                    'immigration_support': parse_boolean(get_field_data('immigration_support')),
-                    'religious_cultural_supports': get_field_with_default('religious_cultural_supports'),
-                    'safety_concerns': get_field_with_default('safety_concerns'),
-                    'intimate_partner_violence_support': parse_boolean(get_field_data('intimate_partner_violence_support')),
-                    'human_trafficking_support': parse_boolean(get_field_data('human_trafficking_support')),
-                    'other_supports': get_field_with_default('other_supports'),
-                    'access_to_housing_application': get_field_with_default('access_to_housing_application'),
-                    'access_to_housing_no': get_field_with_default('access_to_housing_no'),
-                    'access_point_application': get_field_with_default('access_point_application'),
-                    'access_point_no': get_field_with_default('access_point_no'),
-                    'cars': get_field_with_default('cars'),
-                    'cars_no': parse_integer(get_field_data('cars_no')),
-                    'discharge_disposition': get_field_with_default('discharge_disposition'),
-                    'intake_status': get_field_with_default('intake_status'),
-                    'lived_last_12_months': get_field_with_default('lived_last_12_months'),
-                    'reason_for_service': get_field_with_default('reason_for_service'),
-                    'intake_date': parse_date(get_field_data('intake_date')),
-                    'service_end_date': parse_date(get_field_data('service_end_date')),
-                    'rejection_date': parse_date(get_field_data('rejection_date')),
-                    'rejection_reason': get_field_with_default('rejection_reason'),
-                    'room': get_field_with_default('room'),
-                    'bed': get_field_with_default('bed'),
-                    'occupancy_status': get_field_with_default('occupancy_status'),
-                    'bed_nights_historical': parse_integer(get_field_data('bed_nights_historical')),
-                    'restriction_reason': get_field_with_default('restriction_reason'),
-                    'restriction_date': parse_date(get_field_data('restriction_date')),
-                    'restriction_duration_days': parse_integer(get_field_data('restriction_duration_days')),
-                    'restriction_status': get_field_with_default('restriction_status'),
-                    'early_termination_by': get_field_with_default('early_termination_by')
-                }
-                
-                # OPTIONAL: Check for combined client field (only if present) - MUST happen before validation
-                combined_client_value = None
-                client_id_from_separate_field = None
-                
-                # Look for combined client field via mapping first
-                for col in df.columns:
-                    if column_mapping.get(col) == 'client_combined':
-                        combined_client_value = row[col]
-                        break
-                
-                # If not found via mapping, check for "Client" or "client" column directly (case-insensitive)
-                if not combined_client_value or pd.isna(combined_client_value) or not str(combined_client_value).strip():
-                    for col in df.columns:
-                        col_lower = col.lower().strip()
-                        # Check if column name is "client" (but not already mapped to client_id or something else)
-                        if col_lower == 'client' and column_mapping.get(col) not in ['client_id', 'first_name', 'last_name']:
-                            combined_client_value = row[col]
-                            break
-                
-                # Look for separate client_id field via mapping
-                for col in df.columns:
-                    if column_mapping.get(col) == 'client_id':
-                        client_id_from_separate_field = row[col]
-                        break
-                
-                # If not found via mapping, check for "Client ID" or "client id" column directly (case-insensitive)
-                if not client_id_from_separate_field or pd.isna(client_id_from_separate_field) or (str(client_id_from_separate_field).strip() == '' or str(client_id_from_separate_field).strip().lower() in ['nan', 'none', '']):
-                    for col in df.columns:
-                        col_lower = col.lower().strip()
-                        # Check if column name contains "client" and "id" (like "Client ID", "client id", etc.)
-                        if ('client' in col_lower and 'id' in col_lower) and column_mapping.get(col) not in ['first_name', 'last_name', 'client_combined']:
-                            potential_client_id = row[col]
-                            if potential_client_id and not pd.isna(potential_client_id) and str(potential_client_id).strip() and str(potential_client_id).strip().lower() not in ['nan', 'none', '']:
-                                client_id_from_separate_field = potential_client_id
-                                break
-                
-                # Try to extract names and client_id from combined field
-                if combined_client_value and not pd.isna(combined_client_value) and str(combined_client_value).strip():
-                    parsed_first, parsed_last, parsed_client_id = parse_combined_client_field(
-                        combined_client_value, 
-                        client_id_from_separate_field
-                    )
-                    
-                    # Override names if parsing was successful
-                    if parsed_first and parsed_last:
-                        if not client_data.get('first_name') or (isinstance(client_data.get('first_name'), str) and client_data.get('first_name', '').strip() == ''):
-                            client_data['first_name'] = parsed_first
-                        if not client_data.get('last_name') or (isinstance(client_data.get('last_name'), str) and client_data.get('last_name', '').strip() == ''):
-                            client_data['last_name'] = parsed_last
-                        
-                        # Override client_id if we successfully parsed it and it's missing
-                        if parsed_client_id and (not client_data.get('client_id') or (isinstance(client_data.get('client_id'), str) and client_data.get('client_id', '').strip() == '')):
-                            client_data['client_id'] = clean_client_id(parsed_client_id)
-                
-                # If client_id is still missing, try to get it from Client ID column
-                client_id_value = client_data.get('client_id')
-                if (not client_id_value or (isinstance(client_id_value, str) and client_id_value.strip() == '')) and client_id_from_separate_field:
-                    try:
-                        if not pd.isna(client_id_from_separate_field):
-                            cleaned_id = clean_client_id(client_id_from_separate_field)
-                            if cleaned_id:
-                                client_data['client_id'] = cleaned_id
-                    except Exception:
-                        pass
-                
-                # If names are still missing, try to extract from a simple "name" column (First Last format)
-                first_name_val = client_data.get('first_name')
-                last_name_val = client_data.get('last_name')
-                first_name_empty = not first_name_val or (isinstance(first_name_val, str) and first_name_val.strip() == '')
-                last_name_empty = not last_name_val or (isinstance(last_name_val, str) and last_name_val.strip() == '')
-                
-                if first_name_empty or last_name_empty:
-                    # Check for a "name" column that might contain "First Last" format
-                    name_field_value = None
-                    for col in df.columns:
-                        col_lower = col.lower().strip()
-                        # Check if column is "name" (but not already mapped to something else)
-                        if col_lower in ['name'] and column_mapping.get(col) not in ['first_name', 'last_name', 'client_combined']:
-                            name_field_value = row[col]
-                            break
-                    
-                    if name_field_value and str(name_field_value).strip():
-                        name_str = str(name_field_value).strip()
-                        # Try to parse as "First Last" format (simple space-separated)
-                        # Only split if we have at least one space and the result has 2+ parts
-                        name_parts = name_str.split()
-                        if len(name_parts) >= 2:
-                            # First part is first name, rest is last name
-                            if first_name_empty:
-                                client_data['first_name'] = name_parts[0]
-                            if last_name_empty:
-                                client_data['last_name'] = ' '.join(name_parts[1:])
-                
-                # Handle languages_spoken (expect comma-separated string)
-                languages = get_field_data('language')
-                if languages:
-                    client_data['languages_spoken'] = [lang.strip() for lang in languages.split(',') if lang.strip()]
-                else:
-                    client_data['languages_spoken'] = []
-                
-                # Handle ethnicity (expect comma-separated string)
-                ethnicity = get_field_data('ethnicity')
-                if ethnicity:
-                    client_data['ethnicity'] = [eth.strip() for eth in ethnicity.split(',') if eth.strip()]
-                else:
-                    client_data['ethnicity'] = []
-                
-                # Handle support_workers (expect comma-separated string)
-                support_workers = get_field_data('support_workers')
-                if support_workers:
-                    client_data['support_workers'] = [worker.strip() for worker in support_workers.split(',') if worker.strip()]
-                # Don't set empty list if no support_workers column exists - this prevents overwriting existing data
-                
-                # Handle next_of_kin (expect JSON string or simple text)
-                next_of_kin = get_field_data('next_of_kin')
-                if next_of_kin:
-                    try:
-                        client_data['next_of_kin'] = json.loads(next_of_kin)
-                    except json.JSONDecodeError:
-                        # If JSON parsing fails, create a simple dict with the string
-                        client_data['next_of_kin'] = {'name': next_of_kin}
-                else:
-                    client_data['next_of_kin'] = {}
-                
-                # Handle emergency_contact (expect JSON string or simple text)
-                emergency_contact = get_field_data('emergency_contact')
-                if emergency_contact:
-                    try:
-                        client_data['emergency_contact'] = json.loads(emergency_contact)
-                    except json.JSONDecodeError:
-                        # If JSON parsing fails, create a simple dict with the string
-                        client_data['emergency_contact'] = {'name': emergency_contact}
-                else:
-                    client_data['emergency_contact'] = {}
-                
-                # Handle addresses (expect JSON string or individual address fields)
-                addresses = []
-                if 'addresses' in row and pd.notna(row['addresses']):
-                    try:
-                        addresses = json.loads(str(row['addresses']))
-                    except (json.JSONDecodeError, ValueError, TypeError):
-                        addresses = []
-                elif get_field_data('address'):
-                    address = {
-                        'type': get_field_data('address_type', 'Home'),
-                        'street': get_field_data('address'),
-                        'address_2': get_field_data('address_2'),
-                        'city': get_field_data('city'),
-                        'state': get_field_data('province'),
-                        'zip': get_field_data('postal_code'),
-                        'country': 'USA'  # Default country
-                    }
-                    if any(address.values()):
-                        addresses = [address]
-                
-                client_data['addresses'] = addresses
-                
-                # Early validation: Check if we have at least client_id, first_name, or last_name before processing
-                # This helps catch errors early and provide better error messages
-                def safe_check_field(field_value):
-                    """Safely check if a field has a non-empty value"""
-                    if field_value is None:
-                        return False
-                    if isinstance(field_value, str):
-                        return bool(field_value.strip())
-                    return bool(field_value)
-                
-                has_client_id = safe_check_field(client_data.get('client_id'))
-                has_first_name = safe_check_field(client_data.get('first_name'))
-                
-                # If we're missing all required fields, skip early with a clear error
-                if not has_client_id and not has_first_name:
-                    errors.append(f"Row {index + 2}: Missing all required fields (client_id, first_name). Row appears to be empty or invalid.")
-                    skipped_count += 1
-                    continue
-                
-                # Parse discharge_date and reason_discharge early to check if we should update instead of create
-                discharge_date_value = get_field_data('discharge_date')
-                discharge_date_parsed = parse_date(discharge_date_value)
-                reason_discharge_value = get_field_data('reason_discharge')
-                program_name = get_field_data('program_name')
-                
-                # Debug logging for discharge date parsing
-                if discharge_date_value:
-                    logger.info(f"Row {index + 2}: Found discharge_date_value: '{discharge_date_value}', parsed: {discharge_date_parsed}")
-                if reason_discharge_value:
-                    logger.info(f"Row {index + 2}: Found reason_discharge_value: '{reason_discharge_value}'")
-                
-                # Check if discharge_date is present - if so, we should update existing clients, not create new ones
-                has_discharge_date = discharge_date_parsed is not None
-                
-                if has_discharge_date:
-                    logger.info(f"Row {index + 2}: has_discharge_date=True, will update existing client")
-                
-                # Check for existing client_id first - this is the primary update mechanism (using batch lookup)
-                client = None
-                is_update = False
-                original_email = ''
-                original_phone = ''
-                original_client_id = ''
-                
-                if client_data.get('client_id'):
-                    try:
-                        # Use batch-loaded existing clients instead of querying
-                        client_id_to_find = client_data['client_id']
-                        existing_client = existing_clients_by_id.get(client_id_to_find)
-                        
-                        if existing_client:
-                            # Found existing client by Client ID + Source combination - UPDATE instead of CREATE
-                            client = existing_client
-                            is_update = True
-                            updated_count += 1
-                            
-                            # If discharge_date is present, ensure it's handled
-                            if has_discharge_date:
-                                # Check if program is specified
-                                if not program_name or not program_name.strip():
-                                    # No program specified - store at client level
-                                    client.discharge_date = discharge_date_parsed
-                                    if reason_discharge_value:
-                                        client.reason_discharge = reason_discharge_value
-                                    # Also add to client_data so it's included in filtered_data
-                                    client_data['discharge_date'] = discharge_date_parsed
-                                    if reason_discharge_value:
-                                        client_data['reason_discharge'] = reason_discharge_value
-                                    logger.info(f"Prepared client-level discharge update for {client.first_name} {client.last_name}")
-                                # If program is specified, we'll handle it later in enrollment processing
-                            
-                            # Collect update data instead of updating immediately
-                            # For updates, only include fields that are actually present in the CSV
-                            filtered_data = {}
-                            
-                            # Get all fields that are mapped from CSV columns
-                            csv_fields = set()
-                            for col in df.columns:
-                                field_name = column_mapping.get(col)
-                                if field_name:
-                                    csv_fields.add(field_name)
-                            
-                            # Only include fields that exist in the CSV and have non-empty values
-                            for field, value in client_data.items():
-                                # Skip if field is not in CSV
-                                if field not in csv_fields:
-                                    continue
+                                                try:
+                                                    # Try DD/MM/YYYY (European format)
+                                                    day, month, year = parts
+                                                    if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
+                                                        return datetime(int(year), int(month), int(day)).date()
+                                                except (ValueError, TypeError):
+                                                    pass
                                     
-                                # Skip if value is None, empty string, or empty dict
-                                if value is None:
-                                    continue
-                                if isinstance(value, str) and value.strip() == '':
-                                    continue
-                                if isinstance(value, dict) and not value:
-                                    continue
-                                    
-                                # Handle contact_information specially - only include if it has actual values
-                                if field == 'contact_information' and isinstance(value, dict):
-                                    has_values = False
-                                    for key, val in value.items():
-                                        if val and str(val).strip():
-                                            has_values = True
-                                            break
-                                    if not has_values:
-                                        continue
+                                    # Try parsing with dash separator
+                                    if '-' in value_str:
+                                        parts = value_str.split('-')
+                                        if len(parts) == 3:
+                                            try:
+                                                # Try YYYY-MM-DD first (ISO format)
+                                                year, month, day = parts
+                                                if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
+                                                    return datetime(int(year), int(month), int(day)).date()
+                                            except (ValueError, TypeError):
+                                                try:
+                                                    # Try MM-DD-YYYY (US format)
+                                                    month, day, year = parts
+                                                    if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
+                                                        return datetime(int(year), int(month), int(day)).date()
+                                                except (ValueError, TypeError):
+                                                    try:
+                                                        # Try DD-MM-YYYY (European format)
+                                                        day, month, year = parts
+                                                        if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
+                                                            return datetime(int(year), int(month), int(day)).date()
+                                                    except (ValueError, TypeError):
+                                                        pass
+                                except (ValueError, TypeError, AttributeError) as e:
+                                    logger.debug(f"Failed to parse date '{value}': {e}")
+                                    pass
                                 
-                                # Handle other dictionary fields (addresses, etc.) - only include if they have actual values
-                                if isinstance(value, dict) and field not in ['contact_information']:
-                                    has_values = False
-                                    for key, val in value.items():
-                                        if val and str(val).strip():
-                                            has_values = True
-                                            break
-                                    if not has_values:
-                                        continue
+                                return default
+                            
+                            # Helper function to clean client_id and ensure it's a whole number string
+                            def clean_client_id(value):
+                                """Clean client_id to ensure it's a whole number string without decimals"""
+                                # Check for pandas NaN/None/null values first
+                                if pd.isna(value) or value is None:
+                                    return None
                                 
-                                filtered_data[field] = value
-                            
-                            # Define extended fields list
-                            extended_fields_list = [
-                                'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
-                                'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
-                                'num_bednights_current_stay', 'length_homeless_3yrs', 'income_source',
-                                'taxation_year_filed', 'status_id', 'picture_id', 'other_id', 'bnl_consent',
-                                'allergies', 'harm_reduction_support', 'medication_support', 'pregnancy_support',
-                                'mental_health_support', 'physical_health_support', 'daily_activities_support',
-                                'other_health_supports', 'cannot_use_stairs', 'limited_mobility',
-                                'wheelchair_accessibility', 'vision_hearing_speech_supports', 'english_translator',
-                                'reading_supports', 'other_accessibility_supports', 'pet_owner', 'legal_support',
-                                'immigration_support', 'religious_cultural_supports', 'safety_concerns',
-                                'intimate_partner_violence_support', 'human_trafficking_support', 'other_supports',
-                                'access_to_housing_application', 'access_to_housing_no', 'access_point_application',
-                                'access_point_no', 'cars', 'cars_no', 'discharge_disposition', 'intake_status',
-                                'lived_last_12_months', 'reason_for_service', 'intake_date', 'service_end_date',
-                                'rejection_date', 'rejection_reason', 'room', 'bed', 'occupancy_status',
-                                'bed_nights_historical', 'restriction_reason', 'restriction_date',
-                                'restriction_duration_days', 'restriction_status', 'early_termination_by'
-                            ]
-                            
-                            # Apply filtered values to client object for bulk update
-                            for field, value in filtered_data.items():
-                                if hasattr(client, field) and field not in extended_fields_list:
-                                    setattr(client, field, value)
-                            
-                            # Copy client_id to emhware_id or smis_id based on source
-                            client_id_value = client_data.get('client_id')
-                            if source and client_id_value:
-                                if source == 'EMHware':
-                                    client.emhware_id = client_id_value
-                                elif source == 'SMIS':
-                                    client.smis_id = client_id_value
-                            
-                            # Ensure discharge_date and reason_discharge are set if they exist (even if not in filtered_data)
-                            # BUT only if NO program is specified - if program is present, discharge is enrollment-level only
-                            # Also add them to filtered_data so they're included in the update
-                            if has_discharge_date and discharge_date_parsed:
-                                # Only set client-level discharge if NO program is specified
-                                if not program_name or not program_name.strip():
-                                    client.discharge_date = discharge_date_parsed
-                                    # Add to filtered_data so it gets saved
-                                    if 'discharge_date' not in filtered_data:
-                                        filtered_data['discharge_date'] = discharge_date_parsed
-                            if reason_discharge_value:
-                                # Only set client-level discharge reason if NO program is specified
-                                if not program_name or not program_name.strip():
-                                    client.reason_discharge = reason_discharge_value
-                                    # Add to filtered_data so it gets saved
-                                    if 'reason_discharge' not in filtered_data:
-                                        filtered_data['reason_discharge'] = reason_discharge_value
-                            
-                            # Set updated_by field
-                            if request.user.is_authenticated:
-                                first_name = request.user.first_name or ''
-                                last_name = request.user.last_name or ''
-                                user_name = f"{first_name} {last_name}".strip()
-                                if not user_name or user_name == ' ':
-                                    user_name = request.user.username or request.user.email or 'System'
-                                client.updated_by = user_name
-                            else:
-                                client.updated_by = 'System'
-                            
-                            # Store client and extended data for bulk update
-                            extended_data = {}
-                            for field in extended_fields_list:
-                                if field in filtered_data:
-                                    value = filtered_data[field]
-                                    if value is not None and value != '':
-                                        if isinstance(value, str) and value.strip() != '':
-                                            extended_data[field] = value.strip()
-                                        elif not isinstance(value, str):
-                                            extended_data[field] = value
-                            
-                            # Ensure discharge_date and reason_discharge are preserved
-                            # BUT only if NO program is specified - if program is present, discharge is enrollment-level only
-                            if has_discharge_date and discharge_date_parsed:
-                                # Only set client-level discharge if NO program is specified
-                                if not program_name or not program_name.strip():
-                                    client.discharge_date = discharge_date_parsed
-                            if reason_discharge_value:
-                                # Only set client-level discharge reason if NO program is specified
-                                if not program_name or not program_name.strip():
-                                    client.reason_discharge = reason_discharge_value
-                            
-                            clients_to_update.append({
-                                'client': client,
-                                'extended_data': extended_data,
-                                'row_index': index
-                            })
-                            
-                            logger.info(f"Prepared update for client by Client ID {client_data['client_id']}: {client.first_name} {client.last_name}")
-                        else:
-                            # Client ID exists but with different source - CREATE new client
-                            is_update = False  # Reset to False since we're creating a new client
-                        
-                    except Exception as e:
-                        logger.error(f"Error updating client with ID {client_data['client_id']}: {e}")
-                        # Continue to create new client if update fails
-                
-                # If discharge_date is present but we haven't found a client yet, try to find existing client
-                # This ensures we update existing clients instead of creating new ones when discharge_date is present
-                if has_discharge_date and not is_update:
-                    # Try to find existing client by client_id first
-                    if client_data.get('client_id'):
-                        try:
-                            client_id_to_find = client_data['client_id']
-                            existing_client = existing_clients_by_id.get(client_id_to_find)
-                            if existing_client:
-                                client = existing_client
-                                is_update = True
-                                updated_count += 1
-                                logger.info(f"Found existing client by Client ID for discharge update: {client_data['client_id']}")
-                        except Exception as e:
-                            logger.error(f"Error finding client by ID for discharge: {e}")
-                    
-                    # If still not found, try to find by name + DOB matching
-                    first_name_val = client_data.get('first_name')
-                    last_name_val = client_data.get('last_name')
-                    if not is_update and first_name_val and last_name_val:
-                        try:
-                            first_name = first_name_val.strip() if isinstance(first_name_val, str) else str(first_name_val or '')
-                            last_name = last_name_val.strip() if isinstance(last_name_val, str) else str(last_name_val or '')
-                            dob = client_data.get('dob')
-                            
-                            # Search for matching client
-                            query = Client.objects.filter(
-                                first_name__iexact=first_name,
-                                last_name__iexact=last_name
-                            )
-                            if dob:
-                                query = query.filter(dob=dob)
-                            
-                            existing_client = query.first()
-                            if existing_client:
-                                client = existing_client
-                                is_update = True
-                                updated_count += 1
-                                logger.info(f"Found existing client by name+DOB for discharge update: {first_name} {last_name}")
-                        except Exception as e:
-                            logger.error(f"Error finding client by name+DOB for discharge: {e}")
-                    
-                    # If we found a client for discharge update, prepare the update data
-                    if is_update and client:
-                        # Prepare discharge data
-                        if not program_name or not program_name.strip():
-                            # No program specified - store at client level
-                            client.discharge_date = discharge_date_parsed
-                            if reason_discharge_value:
-                                client.reason_discharge = reason_discharge_value
-                            logger.info(f"Prepared client-level discharge update for {client.first_name} {client.last_name}")
-                        # If program is specified, we'll handle it later in the enrollment processing
-                        # Only add discharge_date and reason_discharge to client_data if NO program is specified
-                        # (If program is present, discharge is enrollment-level only, not client-level)
-                        if not program_name or not program_name.strip():
-                            if discharge_date_parsed:
-                                client_data['discharge_date'] = discharge_date_parsed
-                            if reason_discharge_value:
-                                client_data['reason_discharge'] = reason_discharge_value
-                
-                # Validate required fields for all rows (client_id is now required for all uploads)
-                if not is_update:
-                    # If discharge_date is present BUT NO program is specified, we must have found an existing client
-                    # (You can't create a new client that's already discharged at the client level)
-                    # However, if a program IS present, discharge_date is enrollment-level only, so creating a new client is fine
-                    if has_discharge_date and (not program_name or not program_name.strip()):
-                        error_msg = f"Row {index + 2}: Discharge date present (without program) but no existing client found. Cannot create new client with client-level discharge date."
-                        errors.append(error_msg)
-                        skipped_count += 1
-                        continue
-                    
-                    # For new client creation, validate required fields.
-                    # client_id is optional for new records (blank IDs should create fresh clients),
-                    # but first_name is still required.
-                    required_fields = ['first_name']
-                    missing_required = []
-                    
-                    for field in required_fields:
-                        value = client_data.get(field)
-                        if not value or (isinstance(value, str) and value.strip() == '') or value is None:
-                            missing_required.append(field)
-                    
-                    # Phone and DOB are both optional - no requirement check needed
-                    
-                    if missing_required:
-                        error_msg = f"Row {index + 2}: Missing required fields for client creation: {', '.join(missing_required)}"
-                        errors.append(error_msg)
-                        skipped_count += 1
-                        continue
-                    
-                    # For SMIS and EMHware sources: Check for name-based duplicates if no ID match found
-                    duplicate_client = None
-                    match_type = None
-                    name_duplicate_similarity = None
-                    
-                    if source in ['SMIS', 'EMHware']:
-                        # Check for name-based duplicates using fuzzy matching
-                        first_name_str = str(client_data.get('first_name') or '')
-                        last_name_str = str(client_data.get('last_name') or '')
-                        client_name = f"{first_name_str} {last_name_str}".strip()
-                        
-                        if client_name:
-                            # Get all existing clients (excluding those from the same source to avoid cross-source duplicates)
-                            # We want to check against clients from other sources or no source
-                            existing_clients = Client.objects.exclude(id=client_data.get('id', -1)).exclude(source=source)
-                            
-                            logger.debug(f"Checking for duplicates for {client_name} from source {source}. Checking against {existing_clients.count()} clients from other sources.")
-                            
-                            # Use fuzzy_matcher to find potential duplicates by name
-                            potential_duplicates = fuzzy_matcher.find_potential_duplicates(
-                                client_data, existing_clients, similarity_threshold=0.9
-                            )
-                            
-                            if potential_duplicates:
-                                # Found name-based duplicate - mark it for duplicate record creation
-                                # Only mark as duplicate if similarity is >= 0.9 (90%)
-                                duplicate_client, match_type, similarity = potential_duplicates[0]  # Take the first/highest match
-                                if similarity >= 0.9:
-                                    name_duplicate_similarity = similarity
-                                    duplicates_flagged += 1
+                                # Convert to string and check if it's empty or 'nan'
+                                try:
+                                    str_value = str(value).strip()
+                                    if not str_value or str_value.lower() in ['nan', 'none', 'null', '']:
+                                        return None
                                     
-                                    logger.info(f"Name duplicate found for {client_name} (similarity: {similarity:.2f}). Will mark as duplicate after client creation.")
-                                else:
-                                    # Similarity below 90%, don't mark as duplicate
-                                    duplicate_client = None
-                                    match_type = None
-                                    logger.info(f"Name similarity found for {client_name} (similarity: {similarity:.2f}) but below 90% threshold, not marking as duplicate.")
-                    
-                    # If no name duplicate found, check for other types of duplicates using optimized batch function
-                    if not duplicate_client:
-                        duplicate_client, match_type = find_duplicate_client_optimized(client_data, index)
-                    
-                    # Store original values for duplicate relationship creation
-                    original_email = ''
-                    original_phone = ''
-                    original_client_id = ''
-                    
-                    if duplicate_client:
-                        original_email = client_data.get('contact_information', {}).get('email', '')
-                        original_phone = client_data.get('contact_information', {}).get('phone', '')
-                        original_client_id = client_data.get('client_id', '')
-                        
-                        # Don't modify email/phone - keep original values
-                        # The client will be created with original contact information
-                        # Duplicate detection will be handled through the ClientDuplicate relationship
-                        
-                        # If this was a name-based duplicate, use the similarity score from fuzzy matching
-                        if name_duplicate_similarity is not None:
-                            # Store the similarity for use when creating ClientDuplicate record
-                            match_type = f"name_similarity_{name_duplicate_similarity:.2f}"
-                    
-                    # Separate client fields from extended fields for new client creation
-                    client_fields = {}
-                    extended_fields_list = [
-                        'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
-                        'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
-                        'num_bednights_current_stay', 'length_homeless_3yrs', 'income_source',
-                        'taxation_year_filed', 'status_id', 'picture_id', 'other_id', 'bnl_consent',
-                        'allergies', 'harm_reduction_support', 'medication_support', 'pregnancy_support',
-                        'mental_health_support', 'physical_health_support', 'daily_activities_support',
-                        'other_health_supports', 'cannot_use_stairs', 'limited_mobility',
-                        'wheelchair_accessibility', 'vision_hearing_speech_supports', 'english_translator',
-                        'reading_supports', 'other_accessibility_supports', 'pet_owner', 'legal_support',
-                        'immigration_support', 'religious_cultural_supports', 'safety_concerns',
-                        'intimate_partner_violence_support', 'human_trafficking_support', 'other_supports',
-                        'access_to_housing_application', 'access_to_housing_no', 'access_point_application',
-                        'access_point_no', 'cars', 'cars_no', 'discharge_disposition', 'intake_status',
-                        'lived_last_12_months', 'reason_for_service', 'intake_date', 'service_end_date',
-                        'rejection_date', 'rejection_reason', 'room', 'bed', 'occupancy_status',
-                        'bed_nights_historical', 'restriction_reason', 'restriction_date',
-                        'restriction_duration_days', 'restriction_status', 'early_termination_by'
-                    ]
-                    
-                    # Filter out extended fields from client_data
-                    for field, value in client_data.items():
-                        if field not in extended_fields_list:
-                            client_fields[field] = value
-                    
-                    # Set user fields for created_by and updated_by
-                    if request.user.is_authenticated:
-                        # Try to get user's full name
-                        first_name = request.user.first_name or ''
-                        last_name = request.user.last_name or ''
-                        user_name = f"{first_name} {last_name}".strip()
-                        
-                        # If no full name, fall back to username or email
-                        if not user_name or user_name == ' ':
-                            user_name = request.user.username or request.user.email or 'System'
-                        
-                        client_fields['created_by'] = user_name
-                        client_fields['updated_by'] = user_name
-                    else:
-                        client_fields['created_by'] = 'System'
-                        client_fields['updated_by'] = 'System'
-                    
-                    # Copy client_id to emhware_id or smis_id based on source
-                    client_id_value = client_data.get('client_id')
-                    if source and client_id_value:
-                        if source == 'EMHware':
-                            client_fields['emhware_id'] = client_id_value
-                        elif source == 'SMIS':
-                            client_fields['smis_id'] = client_id_value
-                    
-                    # Add client to bulk create list instead of creating immediately
-                    clients_to_create.append({
-                        'client_fields': client_fields,
-                        'extended_data': {},
-                        'duplicate_info': {
-                            'is_duplicate': duplicate_client is not None,
-                            'duplicate_client': duplicate_client,
-                            'match_type': match_type,
-                            'similarity_score': name_duplicate_similarity if name_duplicate_similarity is not None else None,
-                            'original_email': original_email,
-                            'original_phone': original_phone,
-                            'original_client_id': original_client_id,
-                            'client_data': client_data
-                        },
-                        'row_index': index
-                    })
-                    
-                    # Extract extended fields from original client_data
-                    for field in extended_fields_list:
-                        if field in client_data:
-                            value = client_data[field]
-                            if value is not None and value != '':
-                                if isinstance(value, str) and value.strip() != '':
-                                    clients_to_create[-1]['extended_data'][field] = value.strip()
-                                elif not isinstance(value, str):
-                                    clients_to_create[-1]['extended_data'][field] = value
-                
-                # Note: Duplicate relationships and intake data will be created after bulk client creation
-                    
-            except Exception as e:
-                error_message = str(e)
-                import traceback
-                error_traceback = traceback.format_exc()
-                
-                # Log full error details for debugging
-                logger.error(f"Error processing row {index + 2}: {error_message}")
-                logger.debug(f"Full traceback for row {index + 2}:\n{error_traceback}")
-                
-                # Handle specific types of errors with more detailed messages
-                if "NOT NULL constraint" in error_message:
-                    # Extract field name from error if possible
-                    field_match = None
-                    if "column" in error_message.lower():
-                        import re
-                        field_match = re.search(r"column ['\"]?(\w+)['\"]?", error_message, re.IGNORECASE)
-                    if field_match:
-                        field_name = field_match.group(1)
-                        errors.append(f"Row {index + 2}: Required field '{field_name}' is missing. Please ensure this field is filled.")
-                    else:
-                        errors.append(f"Row {index + 2}: Required information is missing. Please ensure all required fields are filled.")
-                elif "invalid input syntax" in error_message or "invalid literal" in error_message:
-                    errors.append(f"Row {index + 2}: Invalid data format. Please check the data in this row.")
-                elif "duplicate key" in error_message.lower() or "unique constraint" in error_message.lower():
-                    errors.append(f"Row {index + 2}: Duplicate entry detected. This client may already exist in the system.")
-                elif "foreign key constraint" in error_message.lower():
-                    errors.append(f"Row {index + 2}: Invalid reference. Please check related data (program, department, etc.).")
-                elif "value too long" in error_message.lower() or "string too long" in error_message.lower():
-                    errors.append(f"Row {index + 2}: Data value is too long. Please shorten the value.")
-                elif "missing required" in error_message.lower() or "required field" in error_message.lower():
-                    errors.append(f"Row {index + 2}: {error_message}")
-                else:
-                    # Show actual error message but make it user-friendly
-                    # Truncate very long error messages
-                    if len(error_message) > 200:
-                        error_message = error_message[:200] + "..."
-                    errors.append(f"Row {index + 2}: {error_message}")
-        
-        # Bulk update existing clients first
-        if clients_to_update:
-            try:
-                logger.info(f"Bulk updating {len(clients_to_update)} clients")
-                clients_to_bulk_update = [update_data['client'] for update_data in clients_to_update]
-                
-                # Define fields that can be bulk updated
-                # Note: updated_at is auto-managed by Django, don't include it
-                update_fields = [
-                    'first_name', 'last_name', 'middle_name', 'dob', 'preferred_name', 'alias',
-                    'gender', 'gender_identity', 'pronoun', 'marital_status', 'citizenship_status',
-                    'location_county', 'province', 'city', 'postal_code', 'address', 'address_2',
-                    'language', 'preferred_language', 'mother_tongue', 'official_language',
-                    'language_interpreter_required', 'self_identification_race_ethnicity', 'lgbtq_status',
-                    'highest_level_education', 'children_home', 'children_number', 'lhin',
-                    'email', 'phone', 'source', 'level_of_support', 'client_type', 'referral_source',
-                    'phone_work', 'phone_alt', 'permission_to_phone', 'permission_to_email',
-                    'medical_conditions', 'primary_diagnosis', 'family_doctor', 'health_card_number',
-                    'health_card_version', 'health_card_exp_date', 'health_card_issuing_province',
-                    'no_health_card_reason', 'next_of_kin', 'emergency_contact', 'comments',
-                    'chart_number', 'contact_information', 'addresses', 'languages_spoken',
-                    'ethnicity', 'support_workers', 'discharge_date', 'reason_discharge', 'updated_by',
-                    'emhware_id', 'smis_id'
-                ]
-                
-                # Use bulk_update - Django will only update fields that are set on the objects
-                # We've already set the fields we want to update on each client object above
-                Client.objects.bulk_update(clients_to_bulk_update, update_fields, batch_size=1000)
-                logger.info(f"Bulk updated {len(clients_to_bulk_update)} clients successfully")
-                
-                # Update or create ClientExtended records
-                from core.models import ClientExtended
-                for update_data in clients_to_update:
-                    client = update_data['client']
-                    extended_data = update_data['extended_data']
-                    
-                    if extended_data:
-                        extended_record, created = ClientExtended.objects.get_or_create(
-                            client=client,
-                            defaults=extended_data
-                        )
-                        if not created:
-                            # Update existing record
-                            for field, value in extended_data.items():
-                                setattr(extended_record, field, value)
-                            extended_record.save()
-                            logger.info(f"Updated ClientExtended record for client {client.client_id}")
-                        else:
-                            logger.info(f"Created ClientExtended record for client {client.client_id}")
-                
-                # Process intake data for updated clients (optimized with pre-loaded caches)
-                if has_intake_data:
-                    for update_data in clients_to_update:
-                        try:
-                            client = update_data['client']
-                            row_index = update_data['row_index']
-                            row = df.iloc[row_index]
-                            # Pass pre-loaded caches to avoid repeated database queries
-                            process_intake_data(
-                                client,
-                                row,
-                                row_index,
-                                column_mapping,
-                                df.columns,
-                                departments_cache,
-                                program_lookup_by_name,
-                                all_programs_list,
-                                program_fuzzy_cache,
-                                enrollment_cache,
-                                intake_cache,
-                            )
-                        except Exception as e:
-                            logger.error(f"Error processing intake data for updated client {update_data['client'].client_id}: {str(e)}")
-                            errors.append(f"Row {update_data['row_index'] + 2}: Error processing intake data - {str(e)}")
-                
-            except Exception as e:
-                logger.error(f"Error in bulk update: {str(e)}")
-                raise
-        
-        # Bulk create all clients
-        created_clients = []  # Initialize outside the if block to track created clients
-        if clients_to_create:
-            try:
-                # Extract just the client fields for bulk creation
-                client_objects = []
-                for client_data in clients_to_create:
-                    client_objects.append(Client(**client_data['client_fields']))
-                
-                # Bulk create clients
-                created_clients = Client.objects.bulk_create(client_objects, batch_size=1000)
-                created_count = len(created_clients)
-                
-                # Create ClientExtended records
-                from core.models import ClientExtended
-                extended_objects = []
-                for i, client_data in enumerate(clients_to_create):
-                    if client_data['extended_data']:
-                        extended_data = client_data['extended_data'].copy()
-                        extended_data['client'] = created_clients[i]
-                        extended_objects.append(ClientExtended(**extended_data))
-                
-                if extended_objects:
-                    ClientExtended.objects.bulk_create(extended_objects, batch_size=1000)
-                
-                # Create duplicate relationships
-                from core.models import ClientDuplicate
-                duplicate_objects = []
-                for i, client_data in enumerate(clients_to_create):
-                    duplicate_info = client_data['duplicate_info']
-                    if duplicate_info['is_duplicate'] and not is_update:
-                        duplicate_client = duplicate_info['duplicate_client']
-                        match_type = duplicate_info['match_type']
-                        client = created_clients[i]
-                        
-                        # Use stored similarity score if available (from name-based matching), otherwise calculate
-                        if duplicate_info.get('similarity_score') is not None:
-                            similarity = duplicate_info['similarity_score']
-                        elif match_type in ["exact_email", "exact_phone", "email_phone"]:
-                            similarity = 1.0
-                        elif match_type and match_type.startswith('name_similarity_'):
-                            # Extract similarity from match_type string like "name_similarity_0.85"
+                                    # If it's a decimal number (like 2765.0), convert to integer then back to string
+                                    if '.' in str_value:
+                                        # Check if it's a whole number decimal (like 2765.0)
+                                        float_val = float(str_value)
+                                        if float_val.is_integer():
+                                            return str(int(float_val))
+                                        else:
+                                            # If it has actual decimal places, keep as is
+                                            return str_value
+                                    else:
+                                        # Already a whole number, return as string
+                                        return str_value
+                                except (ValueError, TypeError):
+                                    return None
+
+                            # Clean and prepare data using field mapping
+                            email = get_field_data('email')  # Now optional
+                            phone = get_field_data('phone')
+                            client_id = get_field_data('client_id')
+                            
+                            
+                            # Handle date of birth - required for new clients, optional for updates
+                            dob = None
                             try:
-                                similarity = float(match_type.replace('name_similarity_', ''))
-                                # Only mark as duplicate if similarity >= 0.9 (90%)
-                                if similarity < 0.9:
-                                    # Skip creating duplicate record if similarity is below 90%
-                                    continue
-                            except (ValueError, AttributeError):
-                                # Default similarity below threshold, skip duplicate creation
-                                continue
-                        else:
-                            # Default similarity below threshold, skip duplicate creation
-                            continue
-                        
-                        confidence_level = fuzzy_matcher.get_duplicate_confidence_level(similarity)
-                        
-                        duplicate_objects.append(ClientDuplicate(
-                            primary_client=duplicate_client,
-                            duplicate_client=client,
-                            similarity_score=similarity,
-                            match_type=match_type,
-                            confidence_level=confidence_level,
-                            match_details={
-                                'primary_name': f"{duplicate_client.first_name} {duplicate_client.last_name}",
-                                'duplicate_name': f"{client.first_name} {client.last_name}",
-                                'primary_email': duplicate_client.email,
-                                'primary_phone': duplicate_client.phone,
-                                'primary_client_id': duplicate_client.client_id,
-                                'duplicate_original_email': duplicate_info['original_email'],
-                                'duplicate_original_phone': duplicate_info['original_phone'],
-                                'duplicate_original_client_id': duplicate_info['original_client_id'],
-                            }
-                        ))
-                        
-                        # Add to duplicate details for response
-                        client_name = f"{duplicate_info['client_data'].get('first_name', '')} {duplicate_info['client_data'].get('last_name', '')}".strip()
-                        existing_name = f"{duplicate_client.first_name} {duplicate_client.last_name}".strip()
-                        
-                        duplicate_details.append({
-                            'type': 'created_with_duplicate',
-                            'reason': f'{match_type.replace("_", " ").title()} match - created with duplicate flag for review',
-                            'client_name': client_name,
-                            'existing_name': existing_name,
-                            'match_field': f"Match: {match_type}"
-                        })
-                
-                if duplicate_objects:
-                    ClientDuplicate.objects.bulk_create(duplicate_objects, batch_size=1000)
-                
-                logger.info(f"Bulk created {created_count} clients successfully")
-                
-                # Process intake data for all created clients (optimized with pre-loaded caches)
-                if has_intake_data and created_clients:
-                    logger.info(f"Processing intake data for {len(created_clients)} created clients")
-                    for i, client in enumerate(created_clients):
-                        try:
-                            # Get the original row data for this client
-                            client_data = clients_to_create[i]
-                            row_index = client_data['row_index']
-                            row = df.iloc[row_index]
+                                dob_value = get_field_data('dob')
+                                if dob_value:
+                                    # Check if the value looks like a valid date format
+                                    dob_str = str(dob_value).strip().lower()
+                                    
+                                    # Skip values that are clearly not dates
+                                    if dob_str in ['yes', 'no', 'y', 'n', 'true', 'false', '1', '0', '']:
+                                        # These are not valid date values, treat as missing
+                                        dob_value = None
+                                    
+                                    if dob_value:
+                                        # Try to parse the date with multiple format attempts
+                                        try:
+                                            # First try pandas automatic parsing
+                                            dob = pd.to_datetime(dob_value).date()
+                                        except (ValueError, TypeError, OverflowError):
+                                            # If that fails, try specific date formats
+                                            dob_str = str(dob_value).strip()
+                                            try:
+                                                # Try YYYY-MM-DD format
+                                                dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
+                                            except (ValueError, TypeError):
+                                                # Try other common formats
+                                                try:
+                                                    dob = datetime.strptime(dob_str, '%Y/%m/%d').date()
+                                                except (ValueError, TypeError):
+                                                    try:
+                                                        dob = datetime.strptime(dob_str, '%m/%d/%Y').date()
+                                                    except (ValueError, TypeError):
+                                                        try:
+                                                            dob = datetime.strptime(dob_str, '%d/%m/%Y').date()
+                                                        except (ValueError, TypeError):
+                                                            # If all parsing attempts fail, raise the original error
+                                                            raise ValueError(f"Unable to parse date: {dob_str}")
+                                else:
+                                    # DOB is optional - no error needed
+                                    pass
+                            except Exception as e:
+                                # If date parsing fails, DOB is optional - just set to None
+                                dob = None
                             
-                            # Pass pre-loaded caches to avoid repeated database queries
-                            process_intake_data(
-                                client,
-                                row,
-                                row_index,
-                                column_mapping,
-                                df.columns,
-                                departments_cache,
-                                program_lookup_by_name,
-                                all_programs_list,
-                                program_fuzzy_cache,
-                                enrollment_cache,
-                                intake_cache,
-                            )
+                            client_data = {
+                                'first_name': get_field_data('first_name'),
+                                'last_name': get_field_data('last_name'),
+                                'middle_name': get_field_with_default('middle_name'),
+                                'dob': dob,
+                                'preferred_name': get_field_with_default('preferred_name'),
+                                'alias': get_field_with_default('alias'),
+                                'gender': get_field_with_default('gender'),
+                                'gender_identity': get_field_with_default('gender_identity'),
+                                'pronoun': get_field_with_default('pronoun'),
+                                'marital_status': get_field_with_default('marital_status'),
+                                'citizenship_status': get_field_with_default('citizenship_status'),
+                                'location_county': get_field_with_default('location_county'),
+                                'province': get_field_with_default('province'),
+                                'city': get_field_with_default('city'),
+                                'postal_code': get_field_with_default('postal_code'),
+                                'address': get_field_with_default('address'),
+                                'address_2': get_field_with_default('address_2'),
+                                'language': get_field_with_default('language'),
+                                'preferred_language': get_field_with_default('preferred_language'),
+                                'mother_tongue': get_field_with_default('mother_tongue'),
+                                'official_language': get_field_with_default('official_language'),
+                                'language_interpreter_required': parse_boolean(get_field_data('language_interpreter_required')),
+                                'self_identification_race_ethnicity': get_field_with_default('self_identification_race_ethnicity'),
+                                'indigenous_status': get_field_with_default('indigenous_status'),
+                                'lgbtq_status': get_field_with_default('lgbtq_status'),
+                                'highest_level_education': get_field_with_default('highest_level_education'),
+                                'children_home': parse_boolean(get_field_data('children_home')),
+                                'children_number': parse_integer(get_field_data('children_number')),
+                                'lhin': get_field_with_default('lhin'),
+                                'client_id': clean_client_id(get_field_data('client_id')),
+                                'phone': get_field_with_default('phone'),
+                                'email': email if email else None,  # Add email to direct field, None if empty
+                                'source': source,  # Add the source field from the form
+                                'level_of_support': get_field_with_default('level_of_support'),
+                                'client_type': get_field_with_default('client_type'),
+                                'referral_source': get_field_with_default('referral_source'),
+                                'phone_work': get_field_with_default('phone_work'),
+                                'phone_alt': get_field_with_default('phone_alt'),
+                                'permission_to_phone': parse_boolean(get_field_data('permission_to_phone')),
+                                'permission_to_email': parse_boolean(get_field_data('permission_to_email')),
+                                'medical_conditions': get_field_with_default('medical_conditions'),
+                                'primary_diagnosis': get_field_with_default('primary_diagnosis'),
+                                'family_doctor': get_field_with_default('family_doctor'),
+                                'health_card_number': get_field_with_default('health_card_number'),
+                                'health_card_version': get_field_with_default('health_card_version'),
+                                'health_card_exp_date': parse_date(get_field_data('health_card_exp_date')),
+                                'health_card_issuing_province': get_field_with_default('health_card_issuing_province'),
+                                'no_health_card_reason': get_field_with_default('no_health_card_reason'),
+                                'next_of_kin': get_field_with_default('next_of_kin'),
+                                'emergency_contact': get_field_with_default('emergency_contact'),
+                                'comments': get_field_with_default('comments'),
+                                'chart_number': get_field_with_default('chart_number'),
+                                'contact_information': {
+                                    'email': email if email else None,
+                                    'phone': phone if phone else None,
+                                },
+                                # Extended fields for ClientExtended model
+                                'indigenous_identity': get_field_with_default('indigenous_identity'),
+                                'military_status': get_field_with_default('military_status'),
+                                'refugee_status': get_field_with_default('refugee_status'),
+                                'household_size': parse_integer(get_field_data('household_size')),
+                                'family_head_client_no': get_field_with_default('family_head_client_no'),
+                                'relationship': get_field_with_default('relationship'),
+                                'primary_worker': get_field_with_default('primary_worker'),
+                                'chronically_homeless': parse_boolean(get_field_data('chronically_homeless')),
+                                'num_bednights_current_stay': parse_integer(get_field_data('num_bednights_current_stay')),
+                                'length_homeless_3yrs': parse_integer(get_field_data('length_homeless_3yrs')),
+                                'income_source': get_field_with_default('income_source'),
+                                'taxation_year_filed': get_field_with_default('taxation_year_filed'),
+                                'status_id': get_field_with_default('status_id'),
+                                'picture_id': get_field_with_default('picture_id'),
+                                'other_id': get_field_with_default('other_id'),
+                                'bnl_consent': parse_boolean(get_field_data('bnl_consent')),
+                                'allergies': get_field_with_default('allergies'),
+                                'harm_reduction_support': parse_boolean(get_field_data('harm_reduction_support')),
+                                'medication_support': parse_boolean(get_field_data('medication_support')),
+                                'pregnancy_support': parse_boolean(get_field_data('pregnancy_support')),
+                                'mental_health_support': parse_boolean(get_field_data('mental_health_support')),
+                                'physical_health_support': parse_boolean(get_field_data('physical_health_support')),
+                                'daily_activities_support': parse_boolean(get_field_data('daily_activities_support')),
+                                'other_health_supports': get_field_with_default('other_health_supports'),
+                                'cannot_use_stairs': parse_boolean(get_field_data('cannot_use_stairs')),
+                                'limited_mobility': parse_boolean(get_field_data('limited_mobility')),
+                                'wheelchair_accessibility': parse_boolean(get_field_data('wheelchair_accessibility')),
+                                'vision_hearing_speech_supports': get_field_with_default('vision_hearing_speech_supports'),
+                                'english_translator': parse_boolean(get_field_data('english_translator')),
+                                'reading_supports': parse_boolean(get_field_data('reading_supports')),
+                                'other_accessibility_supports': get_field_with_default('other_accessibility_supports'),
+                                'pet_owner': parse_boolean(get_field_data('pet_owner')),
+                                'legal_support': parse_boolean(get_field_data('legal_support')),
+                                'immigration_support': parse_boolean(get_field_data('immigration_support')),
+                                'religious_cultural_supports': get_field_with_default('religious_cultural_supports'),
+                                'safety_concerns': get_field_with_default('safety_concerns'),
+                                'intimate_partner_violence_support': parse_boolean(get_field_data('intimate_partner_violence_support')),
+                                'human_trafficking_support': parse_boolean(get_field_data('human_trafficking_support')),
+                                'other_supports': get_field_with_default('other_supports'),
+                                'access_to_housing_application': get_field_with_default('access_to_housing_application'),
+                                'access_to_housing_no': get_field_with_default('access_to_housing_no'),
+                                'access_point_application': get_field_with_default('access_point_application'),
+                                'access_point_no': get_field_with_default('access_point_no'),
+                                'cars': get_field_with_default('cars'),
+                                'cars_no': parse_integer(get_field_data('cars_no')),
+                                'discharge_disposition': get_field_with_default('discharge_disposition'),
+                                'intake_status': get_field_with_default('intake_status'),
+                                'lived_last_12_months': get_field_with_default('lived_last_12_months'),
+                                'reason_for_service': get_field_with_default('reason_for_service'),
+                                'intake_date': parse_date(get_field_data('intake_date')),
+                                'service_end_date': parse_date(get_field_data('service_end_date')),
+                                'rejection_date': parse_date(get_field_data('rejection_date')),
+                                'rejection_reason': get_field_with_default('rejection_reason'),
+                                'room': get_field_with_default('room'),
+                                'bed': get_field_with_default('bed'),
+                                'occupancy_status': get_field_with_default('occupancy_status'),
+                                'bed_nights_historical': parse_integer(get_field_data('bed_nights_historical')),
+                                'restriction_reason': get_field_with_default('restriction_reason'),
+                                'restriction_date': parse_date(get_field_data('restriction_date')),
+                                'restriction_duration_days': parse_integer(get_field_data('restriction_duration_days')),
+                                'restriction_status': get_field_with_default('restriction_status'),
+                                'early_termination_by': get_field_with_default('early_termination_by')
+                            }
+                    
+                            # OPTIONAL: Check for combined client field (only if present) - MUST happen before validation
+                            combined_client_value = None
+                            client_id_from_separate_field = None
+                            
+                            # Look for combined client field via mapping first
+                            for col in df.columns:
+                                if column_mapping.get(col) == 'client_combined':
+                                    combined_client_value = row[col]
+                                    break
+                            
+                            # If not found via mapping, check for "Client" or "client" column directly (case-insensitive)
+                            if not combined_client_value or pd.isna(combined_client_value) or not str(combined_client_value).strip():
+                                for col in df.columns:
+                                    col_lower = col.lower().strip()
+                                    # Check if column name is "client" (but not already mapped to client_id or something else)
+                                    if col_lower == 'client' and column_mapping.get(col) not in ['client_id', 'first_name', 'last_name']:
+                                        combined_client_value = row[col]
+                                        break
+                            
+                            # Look for separate client_id field via mapping
+                            for col in df.columns:
+                                if column_mapping.get(col) == 'client_id':
+                                    client_id_from_separate_field = row[col]
+                                    break
+                            
+                            # If not found via mapping, check for "Client ID" or "client id" column directly (case-insensitive)
+                            if not client_id_from_separate_field or pd.isna(client_id_from_separate_field) or (str(client_id_from_separate_field).strip() == '' or str(client_id_from_separate_field).strip().lower() in ['nan', 'none', '']):
+                                for col in df.columns:
+                                    col_lower = col.lower().strip()
+                                    # Check if column name contains "client" and "id" (like "Client ID", "client id", etc.)
+                                    if ('client' in col_lower and 'id' in col_lower) and column_mapping.get(col) not in ['first_name', 'last_name', 'client_combined']:
+                                        potential_client_id = row[col]
+                                        if potential_client_id and not pd.isna(potential_client_id) and str(potential_client_id).strip() and str(potential_client_id).strip().lower() not in ['nan', 'none', '']:
+                                            client_id_from_separate_field = potential_client_id
+                                            break
+                            
+                            # Try to extract names and client_id from combined field
+                            if combined_client_value and not pd.isna(combined_client_value) and str(combined_client_value).strip():
+                                parsed_first, parsed_last, parsed_client_id = parse_combined_client_field(
+                                    combined_client_value, 
+                                    client_id_from_separate_field
+                                )
+                                
+                                # Override names if parsing was successful
+                                if parsed_first and parsed_last:
+                                    if not client_data.get('first_name') or (isinstance(client_data.get('first_name'), str) and client_data.get('first_name', '').strip() == ''):
+                                        client_data['first_name'] = parsed_first
+                                    if not client_data.get('last_name') or (isinstance(client_data.get('last_name'), str) and client_data.get('last_name', '').strip() == ''):
+                                        client_data['last_name'] = parsed_last
+                                    
+                                    # Override client_id if we successfully parsed it and it's missing
+                                    if parsed_client_id and (not client_data.get('client_id') or (isinstance(client_data.get('client_id'), str) and client_data.get('client_id', '').strip() == '')):
+                                        client_data['client_id'] = clean_client_id(parsed_client_id)
+                            
+                            # If client_id is still missing, try to get it from Client ID column
+                            client_id_value = client_data.get('client_id')
+                            if (not client_id_value or (isinstance(client_id_value, str) and client_id_value.strip() == '')) and client_id_from_separate_field:
+                                try:
+                                    if not pd.isna(client_id_from_separate_field):
+                                        cleaned_id = clean_client_id(client_id_from_separate_field)
+                                        if cleaned_id:
+                                            client_data['client_id'] = cleaned_id
+                                except Exception:
+                                    pass
+                            
+                            # If names are still missing, try to extract from a simple "name" column (First Last format)
+                            first_name_val = client_data.get('first_name')
+                            last_name_val = client_data.get('last_name')
+                            first_name_empty = not first_name_val or (isinstance(first_name_val, str) and first_name_val.strip() == '')
+                            last_name_empty = not last_name_val or (isinstance(last_name_val, str) and last_name_val.strip() == '')
+                            
+                            if first_name_empty or last_name_empty:
+                                # Check for a "name" column that might contain "First Last" format
+                                name_field_value = None
+                                for col in df.columns:
+                                    col_lower = col.lower().strip()
+                                    # Check if column is "name" (but not already mapped to something else)
+                                    if col_lower in ['name'] and column_mapping.get(col) not in ['first_name', 'last_name', 'client_combined']:
+                                        name_field_value = row[col]
+                                        break
+                                
+                                if name_field_value and str(name_field_value).strip():
+                                    name_str = str(name_field_value).strip()
+                                    # Try to parse as "First Last" format (simple space-separated)
+                                    # Only split if we have at least one space and the result has 2+ parts
+                                    name_parts = name_str.split()
+                                    if len(name_parts) >= 2:
+                                        # First part is first name, rest is last name
+                                        if first_name_empty:
+                                            client_data['first_name'] = name_parts[0]
+                                        if last_name_empty:
+                                            client_data['last_name'] = ' '.join(name_parts[1:])
+                            
+                            # Handle languages_spoken (expect comma-separated string)
+                            languages = get_field_data('language')
+                            if languages:
+                                client_data['languages_spoken'] = [lang.strip() for lang in languages.split(',') if lang.strip()]
+                            else:
+                                client_data['languages_spoken'] = []
+                            
+                            # Handle ethnicity (expect comma-separated string)
+                            ethnicity = get_field_data('ethnicity')
+                            if ethnicity:
+                                client_data['ethnicity'] = [eth.strip() for eth in ethnicity.split(',') if eth.strip()]
+                            else:
+                                client_data['ethnicity'] = []
+                            
+                            # Handle support_workers (expect comma-separated string)
+                            support_workers = get_field_data('support_workers')
+                            if support_workers:
+                                client_data['support_workers'] = [worker.strip() for worker in support_workers.split(',') if worker.strip()]
+                            # Don't set empty list if no support_workers column exists - this prevents overwriting existing data
+                            
+                            # Handle next_of_kin (expect JSON string or simple text)
+                            next_of_kin = get_field_data('next_of_kin')
+                            if next_of_kin:
+                                try:
+                                    client_data['next_of_kin'] = json.loads(next_of_kin)
+                                except json.JSONDecodeError:
+                                    # If JSON parsing fails, create a simple dict with the string
+                                    client_data['next_of_kin'] = {'name': next_of_kin}
+                            else:
+                                client_data['next_of_kin'] = {}
+                            
+                            # Handle emergency_contact (expect JSON string or simple text)
+                            emergency_contact = get_field_data('emergency_contact')
+                            if emergency_contact:
+                                try:
+                                    client_data['emergency_contact'] = json.loads(emergency_contact)
+                                except json.JSONDecodeError:
+                                    # If JSON parsing fails, create a simple dict with the string
+                                    client_data['emergency_contact'] = {'name': emergency_contact}
+                            else:
+                                client_data['emergency_contact'] = {}
+                            
+                            # Handle addresses (expect JSON string or individual address fields)
+                            addresses = []
+                            if 'addresses' in row and pd.notna(row['addresses']):
+                                try:
+                                    addresses = json.loads(str(row['addresses']))
+                                except (json.JSONDecodeError, ValueError, TypeError):
+                                    addresses = []
+                            elif get_field_data('address'):
+                                address = {
+                                    'type': get_field_data('address_type', 'Home'),
+                                    'street': get_field_data('address'),
+                                    'address_2': get_field_data('address_2'),
+                                    'city': get_field_data('city'),
+                                    'state': get_field_data('province'),
+                                    'zip': get_field_data('postal_code'),
+                                    'country': 'USA'  # Default country
+                                }
+                                if any(address.values()):
+                                    addresses = [address]
+                            
+                            client_data['addresses'] = addresses
+                            
+                            # Early validation: Check if we have at least client_id, first_name, or last_name before processing
+                            # This helps catch errors early and provide better error messages
+                            def safe_check_field(field_value):
+                                """Safely check if a field has a non-empty value"""
+                                if field_value is None:
+                                    return False
+                                if isinstance(field_value, str):
+                                    return bool(field_value.strip())
+                                return bool(field_value)
+                            
+                            has_client_id = safe_check_field(client_data.get('client_id'))
+                            has_first_name = safe_check_field(client_data.get('first_name'))
+                            
+                            # If we're missing all required fields, skip early with a clear error
+                            if not has_client_id and not has_first_name:
+                                chunk_errors.append(f"Row {index + 2}: Missing all required fields (client_id, first_name). Row appears to be empty or invalid.")
+                                chunk_skipped_count += 1
+                                continue
+                            
+                            # Parse discharge_date and reason_discharge early to check if we should update instead of create
+                            discharge_date_value = get_field_data('discharge_date')
+                            discharge_date_parsed = parse_date(discharge_date_value)
+                            reason_discharge_value = get_field_data('reason_discharge')
+                            program_name = get_field_data('program_name')
+                            
+                            # Debug logging for discharge date parsing
+                            if discharge_date_value:
+                                logger.info(f"Row {index + 2}: Found discharge_date_value: '{discharge_date_value}', parsed: {discharge_date_parsed}")
+                            if reason_discharge_value:
+                                logger.info(f"Row {index + 2}: Found reason_discharge_value: '{reason_discharge_value}'")
+                            
+                            # Check if discharge_date is present - if so, we should update existing clients, not create new ones
+                            has_discharge_date = discharge_date_parsed is not None
+                            
+                            if has_discharge_date:
+                                logger.info(f"Row {index + 2}: has_discharge_date=True, will update existing client")
+                            
+                            # Check for existing client_id first - this is the primary update mechanism (using batch lookup)
+                            client = None
+                            is_update = False
+                            original_email = ''
+                            original_phone = ''
+                            original_client_id = ''
+                            
+                            if client_data.get('client_id'):
+                                try:
+                                    # Use batch-loaded existing clients instead of querying
+                                    client_id_to_find = client_data['client_id']
+                                    existing_client = existing_clients_by_id.get(client_id_to_find)
+                                    
+                                    if existing_client:
+                                        # Found existing client by Client ID + Source combination - UPDATE instead of CREATE
+                                        client = existing_client
+                                        is_update = True
+                                        updated_count += 1
+                                        
+                                        # If discharge_date is present, ensure it's handled
+                                        if has_discharge_date:
+                                            # Check if program is specified
+                                            if not program_name or not program_name.strip():
+                                                # No program specified - store at client level
+                                                client.discharge_date = discharge_date_parsed
+                                                if reason_discharge_value:
+                                                    client.reason_discharge = reason_discharge_value
+                                                # Also add to client_data so it's included in filtered_data
+                                                client_data['discharge_date'] = discharge_date_parsed
+                                                if reason_discharge_value:
+                                                    client_data['reason_discharge'] = reason_discharge_value
+                                                logger.info(f"Prepared client-level discharge update for {client.first_name} {client.last_name}")
+                                            # If program is specified, we'll handle it later in enrollment processing
+                                        
+                                        # Collect update data instead of updating immediately
+                                        # For updates, only include fields that are actually present in the CSV
+                                        filtered_data = {}
+                                        
+                                        # Get all fields that are mapped from CSV columns
+                                        csv_fields = set()
+                                        for col in df.columns:
+                                            field_name = column_mapping.get(col)
+                                            if field_name:
+                                                csv_fields.add(field_name)
+                                        
+                                        # Only include fields that exist in the CSV and have non-empty values
+                                        for field, value in client_data.items():
+                                            # Skip if field is not in CSV
+                                            if field not in csv_fields:
+                                                continue
+                                                
+                                            # Skip if value is None, empty string, or empty dict
+                                            if value is None:
+                                                continue
+                                            if isinstance(value, str) and value.strip() == '':
+                                                continue
+                                            if isinstance(value, dict) and not value:
+                                                continue
+                                                
+                                            # Handle contact_information specially - only include if it has actual values
+                                            if field == 'contact_information' and isinstance(value, dict):
+                                                has_values = False
+                                                for key, val in value.items():
+                                                    if val and str(val).strip():
+                                                        has_values = True
+                                                        break
+                                                if not has_values:
+                                                    continue
+                                            
+                                            # Handle other dictionary fields (addresses, etc.) - only include if they have actual values
+                                            if isinstance(value, dict) and field not in ['contact_information']:
+                                                has_values = False
+                                                for key, val in value.items():
+                                                    if val and str(val).strip():
+                                                        has_values = True
+                                                        break
+                                                if not has_values:
+                                                    continue
+                                            
+                                            filtered_data[field] = value
+                                        
+                                        # Define extended fields list
+                                        extended_fields_list = [
+                                            'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
+                                            'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
+                                            'num_bednights_current_stay', 'length_homeless_3yrs', 'income_source',
+                                            'taxation_year_filed', 'status_id', 'picture_id', 'other_id', 'bnl_consent',
+                                            'allergies', 'harm_reduction_support', 'medication_support', 'pregnancy_support',
+                                            'mental_health_support', 'physical_health_support', 'daily_activities_support',
+                                            'other_health_supports', 'cannot_use_stairs', 'limited_mobility',
+                                            'wheelchair_accessibility', 'vision_hearing_speech_supports', 'english_translator',
+                                            'reading_supports', 'other_accessibility_supports', 'pet_owner', 'legal_support',
+                                            'immigration_support', 'religious_cultural_supports', 'safety_concerns',
+                                            'intimate_partner_violence_support', 'human_trafficking_support', 'other_supports',
+                                            'access_to_housing_application', 'access_to_housing_no', 'access_point_application',
+                                            'access_point_no', 'cars', 'cars_no', 'discharge_disposition', 'intake_status',
+                                            'lived_last_12_months', 'reason_for_service', 'intake_date', 'service_end_date',
+                                            'rejection_date', 'rejection_reason', 'room', 'bed', 'occupancy_status',
+                                            'bed_nights_historical', 'restriction_reason', 'restriction_date',
+                                            'restriction_duration_days', 'restriction_status', 'early_termination_by'
+                                        ]
+                                        
+                                        # Apply filtered values to client object for bulk update
+                                        for field, value in filtered_data.items():
+                                            if hasattr(client, field) and field not in extended_fields_list:
+                                                setattr(client, field, value)
+                                        
+                                        # Copy client_id to emhware_id or smis_id based on source
+                                        client_id_value = client_data.get('client_id')
+                                        if source and client_id_value:
+                                            if source == 'EMHware':
+                                                client.emhware_id = client_id_value
+                                            elif source == 'SMIS':
+                                                client.smis_id = client_id_value
+                                        
+                                        # Ensure discharge_date and reason_discharge are set if they exist (even if not in filtered_data)
+                                        # BUT only if NO program is specified - if program is present, discharge is enrollment-level only
+                                        # Also add them to filtered_data so they're included in the update
+                                        if has_discharge_date and discharge_date_parsed:
+                                            # Only set client-level discharge if NO program is specified
+                                            if not program_name or not program_name.strip():
+                                                client.discharge_date = discharge_date_parsed
+                                                # Add to filtered_data so it gets saved
+                                                if 'discharge_date' not in filtered_data:
+                                                    filtered_data['discharge_date'] = discharge_date_parsed
+                                        if reason_discharge_value:
+                                            # Only set client-level discharge reason if NO program is specified
+                                            if not program_name or not program_name.strip():
+                                                client.reason_discharge = reason_discharge_value
+                                                # Add to filtered_data so it gets saved
+                                                if 'reason_discharge' not in filtered_data:
+                                                    filtered_data['reason_discharge'] = reason_discharge_value
+                                        
+                                        # Set updated_by field
+                                        if request.user.is_authenticated:
+                                            first_name = request.user.first_name or ''
+                                            last_name = request.user.last_name or ''
+                                            user_name = f"{first_name} {last_name}".strip()
+                                            if not user_name or user_name == ' ':
+                                                user_name = request.user.username or request.user.email or 'System'
+                                            client.updated_by = user_name
+                                        else:
+                                            client.updated_by = 'System'
+                                        
+                                        # Store client and extended data for bulk update
+                                        extended_data = {}
+                                        for field in extended_fields_list:
+                                            if field in filtered_data:
+                                                value = filtered_data[field]
+                                                if value is not None and value != '':
+                                                    if isinstance(value, str) and value.strip() != '':
+                                                        extended_data[field] = value.strip()
+                                                    elif not isinstance(value, str):
+                                                        extended_data[field] = value
+                                        
+                                        # Ensure discharge_date and reason_discharge are preserved
+                                        # BUT only if NO program is specified - if program is present, discharge is enrollment-level only
+                                        if has_discharge_date and discharge_date_parsed:
+                                            # Only set client-level discharge if NO program is specified
+                                            if not program_name or not program_name.strip():
+                                                client.discharge_date = discharge_date_parsed
+                                        if reason_discharge_value:
+                                            # Only set client-level discharge reason if NO program is specified
+                                            if not program_name or not program_name.strip():
+                                                client.reason_discharge = reason_discharge_value
+                                        
+                                        clients_to_update.append({
+                                            'client': client,
+                                            'extended_data': extended_data,
+                                            'row_index': index
+                                        })
+                                        
+                                        logger.info(f"Prepared update for client by Client ID {client_data['client_id']}: {client.first_name} {client.last_name}")
+                                    else:
+                                        # Client ID exists but with different source - CREATE new client
+                                        is_update = False  # Reset to False since we're creating a new client
+                                    
+                                except Exception as e:
+                                    logger.error(f"Error updating client with ID {client_data['client_id']}: {e}")
+                                    # Continue to create new client if update fails
+                            
+                            # If discharge_date is present but we haven't found a client yet, try to find existing client
+                            # This ensures we update existing clients instead of creating new ones when discharge_date is present
+                            if has_discharge_date and not is_update:
+                                # Try to find existing client by client_id first
+                                if client_data.get('client_id'):
+                                    try:
+                                        client_id_to_find = client_data['client_id']
+                                        existing_client = existing_clients_by_id.get(client_id_to_find)
+                                        if existing_client:
+                                            client = existing_client
+                                            is_update = True
+                                            updated_count += 1
+                                            logger.info(f"Found existing client by Client ID for discharge update: {client_data['client_id']}")
+                                    except Exception as e:
+                                        logger.error(f"Error finding client by ID for discharge: {e}")
+                                
+                                # If still not found, try to find by name + DOB matching
+                                first_name_val = client_data.get('first_name')
+                                last_name_val = client_data.get('last_name')
+                                if not is_update and first_name_val and last_name_val:
+                                    try:
+                                        first_name = first_name_val.strip() if isinstance(first_name_val, str) else str(first_name_val or '')
+                                        last_name = last_name_val.strip() if isinstance(last_name_val, str) else str(last_name_val or '')
+                                        dob = client_data.get('dob')
+                                        
+                                        # Search for matching client
+                                        query = Client.objects.filter(
+                                            first_name__iexact=first_name,
+                                            last_name__iexact=last_name
+                                        )
+                                        if dob:
+                                            query = query.filter(dob=dob)
+                                        
+                                        existing_client = query.first()
+                                        if existing_client:
+                                            client = existing_client
+                                            is_update = True
+                                            updated_count += 1
+                                            logger.info(f"Found existing client by name+DOB for discharge update: {first_name} {last_name}")
+                                    except Exception as e:
+                                        logger.error(f"Error finding client by name+DOB for discharge: {e}")
+                                
+                                # If we found a client for discharge update, prepare the update data
+                                if is_update and client:
+                                    # Prepare discharge data
+                                    if not program_name or not program_name.strip():
+                                        # No program specified - store at client level
+                                        client.discharge_date = discharge_date_parsed
+                                        if reason_discharge_value:
+                                            client.reason_discharge = reason_discharge_value
+                                        logger.info(f"Prepared client-level discharge update for {client.first_name} {client.last_name}")
+                                    # If program is specified, we'll handle it later in the enrollment processing
+                                    # Only add discharge_date and reason_discharge to client_data if NO program is specified
+                                    # (If program is present, discharge is enrollment-level only, not client-level)
+                                    if not program_name or not program_name.strip():
+                                        if discharge_date_parsed:
+                                            client_data['discharge_date'] = discharge_date_parsed
+                                        if reason_discharge_value:
+                                            client_data['reason_discharge'] = reason_discharge_value
+                            
+                            # Validate required fields for all rows (client_id is now required for all uploads)
+                            if not is_update:
+                                # If discharge_date is present BUT NO program is specified, we must have found an existing client
+                                # (You can't create a new client that's already discharged at the client level)
+                                # However, if a program IS present, discharge_date is enrollment-level only, so creating a new client is fine
+                                if has_discharge_date and (not program_name or not program_name.strip()):
+                                    error_msg = f"Row {index + 2}: Discharge date present (without program) but no existing client found. Cannot create new client with client-level discharge date."
+                                    chunk_errors.append(error_msg)
+                                    chunk_skipped_count += 1
+                                    continue
+                                
+                                # For new client creation, validate required fields.
+                                # client_id is optional for new records (blank IDs should create fresh clients),
+                                # but first_name is still required.
+                                required_fields = ['first_name']
+                                missing_required = []
+                                
+                                for field in required_fields:
+                                    value = client_data.get(field)
+                                    if not value or (isinstance(value, str) and value.strip() == '') or value is None:
+                                        missing_required.append(field)
+                                
+                                # Phone and DOB are both optional - no requirement check needed
+                                
+                                if missing_required:
+                                    error_msg = f"Row {index + 2}: Missing required fields for client creation: {', '.join(missing_required)}"
+                                    chunk_errors.append(error_msg)
+                                    chunk_skipped_count += 1
+                                    continue
+                                
+                                # For SMIS and EMHware sources: Check for name-based duplicates if no ID match found
+                                duplicate_client = None
+                                match_type = None
+                                name_duplicate_similarity = None
+                                
+                                if source in ['SMIS', 'EMHware']:
+                                    # Check for name-based duplicates using fuzzy matching
+                                    first_name_str = str(client_data.get('first_name') or '')
+                                    last_name_str = str(client_data.get('last_name') or '')
+                                    client_name = f"{first_name_str} {last_name_str}".strip()
+                                    
+                                    if client_name:
+                                        # Get all existing clients (excluding those from the same source to avoid cross-source duplicates)
+                                        # We want to check against clients from other sources or no source
+                                        existing_clients = Client.objects.exclude(id=client_data.get('id', -1)).exclude(source=source)
+                                        
+                                        logger.debug(f"Checking for duplicates for {client_name} from source {source}. Checking against {existing_clients.count()} clients from other sources.")
+                                        
+                                        # Use fuzzy_matcher to find potential duplicates by name
+                                        potential_duplicates = fuzzy_matcher.find_potential_duplicates(
+                                            client_data, existing_clients, similarity_threshold=0.9
+                                        )
+                                        
+                                        if potential_duplicates:
+                                            # Found name-based duplicate - mark it for duplicate record creation
+                                            # Only mark as duplicate if similarity is >= 0.9 (90%)
+                                            duplicate_client, match_type, similarity = potential_duplicates[0]  # Take the first/highest match
+                                            if similarity >= 0.9:
+                                                name_duplicate_similarity = similarity
+                                                duplicates_flagged += 1
+                                                
+                                                logger.info(f"Name duplicate found for {client_name} (similarity: {similarity:.2f}). Will mark as duplicate after client creation.")
+                                            else:
+                                                # Similarity below 90%, don't mark as duplicate
+                                                duplicate_client = None
+                                                match_type = None
+                                                logger.info(f"Name similarity found for {client_name} (similarity: {similarity:.2f}) but below 90% threshold, not marking as duplicate.")
+                                
+                                # If no name duplicate found, check for other types of duplicates using optimized batch function
+                                if not duplicate_client:
+                                    duplicate_client, match_type = find_duplicate_client_optimized(client_data, index)
+                                
+                                # Store original values for duplicate relationship creation
+                                original_email = ''
+                                original_phone = ''
+                                original_client_id = ''
+                                
+                                if duplicate_client:
+                                    original_email = client_data.get('contact_information', {}).get('email', '')
+                                    original_phone = client_data.get('contact_information', {}).get('phone', '')
+                                    original_client_id = client_data.get('client_id', '')
+                                    
+                                    # Don't modify email/phone - keep original values
+                                    # The client will be created with original contact information
+                                    # Duplicate detection will be handled through the ClientDuplicate relationship
+                                    
+                                    # If this was a name-based duplicate, use the similarity score from fuzzy matching
+                                    if name_duplicate_similarity is not None:
+                                        # Store the similarity for use when creating ClientDuplicate record
+                                        match_type = f"name_similarity_{name_duplicate_similarity:.2f}"
+                                
+                                # Separate client fields from extended fields for new client creation
+                                client_fields = {}
+                                extended_fields_list = [
+                                    'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
+                                    'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
+                                    'num_bednights_current_stay', 'length_homeless_3yrs', 'income_source',
+                                    'taxation_year_filed', 'status_id', 'picture_id', 'other_id', 'bnl_consent',
+                                    'allergies', 'harm_reduction_support', 'medication_support', 'pregnancy_support',
+                                    'mental_health_support', 'physical_health_support', 'daily_activities_support',
+                                    'other_health_supports', 'cannot_use_stairs', 'limited_mobility',
+                                    'wheelchair_accessibility', 'vision_hearing_speech_supports', 'english_translator',
+                                    'reading_supports', 'other_accessibility_supports', 'pet_owner', 'legal_support',
+                                    'immigration_support', 'religious_cultural_supports', 'safety_concerns',
+                                    'intimate_partner_violence_support', 'human_trafficking_support', 'other_supports',
+                                    'access_to_housing_application', 'access_to_housing_no', 'access_point_application',
+                                    'access_point_no', 'cars', 'cars_no', 'discharge_disposition', 'intake_status',
+                                    'lived_last_12_months', 'reason_for_service', 'intake_date', 'service_end_date',
+                                    'rejection_date', 'rejection_reason', 'room', 'bed', 'occupancy_status',
+                                    'bed_nights_historical', 'restriction_reason', 'restriction_date',
+                                    'restriction_duration_days', 'restriction_status', 'early_termination_by'
+                                ]
+                                
+                                # Filter out extended fields from client_data
+                                for field, value in client_data.items():
+                                    if field not in extended_fields_list:
+                                        client_fields[field] = value
+                                
+                                # Set user fields for created_by and updated_by
+                                if request.user.is_authenticated:
+                                    # Try to get user's full name
+                                    first_name = request.user.first_name or ''
+                                    last_name = request.user.last_name or ''
+                                    user_name = f"{first_name} {last_name}".strip()
+                                    
+                                    # If no full name, fall back to username or email
+                                    if not user_name or user_name == ' ':
+                                        user_name = request.user.username or request.user.email or 'System'
+                                    
+                                    client_fields['created_by'] = user_name
+                                    client_fields['updated_by'] = user_name
+                                else:
+                                    client_fields['created_by'] = 'System'
+                                    client_fields['updated_by'] = 'System'
+                                
+                                # Copy client_id to emhware_id or smis_id based on source
+                                client_id_value = client_data.get('client_id')
+                                if source and client_id_value:
+                                    if source == 'EMHware':
+                                        client_fields['emhware_id'] = client_id_value
+                                    elif source == 'SMIS':
+                                        client_fields['smis_id'] = client_id_value
+                                
+                                # Add client to bulk create list instead of creating immediately
+                                clients_to_create.append({
+                                    'client_fields': client_fields,
+                                    'extended_data': {},
+                                    'duplicate_info': {
+                                        'is_duplicate': duplicate_client is not None,
+                                        'duplicate_client': duplicate_client,
+                                        'match_type': match_type,
+                                        'similarity_score': name_duplicate_similarity if name_duplicate_similarity is not None else None,
+                                        'original_email': original_email,
+                                        'original_phone': original_phone,
+                                        'original_client_id': original_client_id,
+                                        'client_data': client_data
+                                    },
+                                    'row_index': index
+                                })
+                                
+                                # Extract extended fields from original client_data
+                                for field in extended_fields_list:
+                                    if field in client_data:
+                                        value = client_data[field]
+                                        if value is not None and value != '':
+                                            if isinstance(value, str) and value.strip() != '':
+                                                clients_to_create[-1]['extended_data'][field] = value.strip()
+                                            elif not isinstance(value, str):
+                                                clients_to_create[-1]['extended_data'][field] = value
+                            
+                            # Note: Duplicate relationships and intake data will be created after bulk client creation
+                    
                         except Exception as e:
-                            logger.error(f"Error processing intake data for client {client.first_name} {client.last_name}: {str(e)}")
-                            errors.append(f"Row {row_index + 2}: Error processing intake data - {str(e)}")
+                            error_message = str(e)
+                            import traceback
+                            error_traceback = traceback.format_exc()
+                            
+                            # Log full error details for debugging
+                            logger.error(f"Error processing row {index + 2}: {error_message}")
+                            logger.debug(f"Full traceback for row {index + 2}:\n{error_traceback}")
+                            
+                            # Handle specific types of errors with more detailed messages
+                            if "NOT NULL constraint" in error_message:
+                                # Extract field name from error if possible
+                                field_match = None
+                                if "column" in error_message.lower():
+                                    import re
+                                    field_match = re.search(r"column ['\"]?(\w+)['\"]?", error_message, re.IGNORECASE)
+                                if field_match:
+                                    field_name = field_match.group(1)
+                                    chunk_errors.append(f"Row {index + 2}: Required field '{field_name}' is missing. Please ensure this field is filled.")
+                                else:
+                                    chunk_errors.append(f"Row {index + 2}: Required information is missing. Please ensure all required fields are filled.")
+                            elif "invalid input syntax" in error_message or "invalid literal" in error_message:
+                                chunk_errors.append(f"Row {index + 2}: Invalid data format. Please check the data in this row.")
+                            elif "duplicate key" in error_message.lower() or "unique constraint" in error_message.lower():
+                                chunk_errors.append(f"Row {index + 2}: Duplicate entry detected. This client may already exist in the system.")
+                            elif "foreign key constraint" in error_message.lower():
+                                chunk_errors.append(f"Row {index + 2}: Invalid reference. Please check related data (program, department, etc.).")
+                            elif "value too long" in error_message.lower() or "string too long" in error_message.lower():
+                                chunk_errors.append(f"Row {index + 2}: Data value is too long. Please shorten the value.")
+                            elif "missing required" in error_message.lower() or "required field" in error_message.lower():
+                                chunk_errors.append(f"Row {index + 2}: {error_message}")
+                            else:
+                                # Show actual error message but make it user-friendly
+                                # Truncate very long error messages
+                                if len(error_message) > 200:
+                                    error_message = error_message[:200] + "..."
+                                chunk_errors.append(f"Row {index + 2}: {error_message}")
+                    
+                    # Bulk update existing clients first for this chunk (AFTER processing all rows)
+                    if clients_to_update:
+                        logger.info(f"Bulk updating {len(clients_to_update)} clients in chunk {chunk_number}")
+                        clients_to_bulk_update = [update_data['client'] for update_data in clients_to_update]
+                        
+                        # Define fields that can be bulk updated
+                        update_fields = [
+                            'first_name', 'last_name', 'middle_name', 'dob', 'preferred_name', 'alias',
+                            'gender', 'gender_identity', 'pronoun', 'marital_status', 'citizenship_status',
+                            'location_county', 'province', 'city', 'postal_code', 'address', 'address_2',
+                            'language', 'preferred_language', 'mother_tongue', 'official_language',
+                            'language_interpreter_required', 'self_identification_race_ethnicity', 'lgbtq_status',
+                            'highest_level_education', 'children_home', 'children_number', 'lhin',
+                            'email', 'phone', 'source', 'level_of_support', 'client_type', 'referral_source',
+                            'phone_work', 'phone_alt', 'permission_to_phone', 'permission_to_email',
+                            'medical_conditions', 'primary_diagnosis', 'family_doctor', 'health_card_number',
+                            'health_card_version', 'health_card_exp_date', 'health_card_issuing_province',
+                            'no_health_card_reason', 'next_of_kin', 'emergency_contact', 'comments',
+                            'chart_number', 'contact_information', 'addresses', 'languages_spoken',
+                            'ethnicity', 'support_workers', 'discharge_date', 'reason_discharge', 'updated_by',
+                            'emhware_id', 'smis_id'
+                        ]
+                        
+                        # Use bulk_update - Django will only update fields that are set on the objects
+                        Client.objects.bulk_update(clients_to_bulk_update, update_fields, batch_size=1000)
+                        logger.info(f"Bulk updated {len(clients_to_bulk_update)} clients successfully")
+                        
+                        # Update or create ClientExtended records
+                        from core.models import ClientExtended
+                        for update_data in clients_to_update:
+                            client = update_data['client']
+                            extended_data = update_data['extended_data']
+                            
+                            if extended_data:
+                                extended_record, created = ClientExtended.objects.get_or_create(
+                                    client=client,
+                                    defaults=extended_data
+                                )
+                                if not created:
+                                    # Update existing record
+                                    for field, value in extended_data.items():
+                                        setattr(extended_record, field, value)
+                                    extended_record.save()
+                        
+                        # Process intake data for updated clients
+                        if has_intake_data:
+                            for update_data in clients_to_update:
+                                try:
+                                    client = update_data['client']
+                                    row_index = update_data['row_index']
+                                    row = df.iloc[row_index]
+                                    process_intake_data(
+                                        client,
+                                        row,
+                                        row_index,
+                                        column_mapping,
+                                        df.columns,
+                                        departments_cache,
+                                        program_lookup_by_name,
+                                        all_programs_list,
+                                        program_fuzzy_cache,
+                                        enrollment_cache,
+                                        intake_cache,
+                                    )
+                                except Exception as e:
+                                    logger.error(f"Error processing intake data for updated client {update_data['client'].client_id}: {str(e)}")
+                                    chunk_errors.append(f"Row {update_data['row_index'] + 2}: Error processing intake data - {str(e)}")
+                    
+                    chunk_updated_count = len(clients_to_update)
+                    
+                    # Bulk create all clients for this chunk
+                    created_clients = []
+                    if clients_to_create:
+                        # Extract just the client fields for bulk creation
+                        client_objects = []
+                        for client_data in clients_to_create:
+                            client_objects.append(Client(**client_data['client_fields']))
+                        
+                        # Bulk create clients
+                        created_clients = Client.objects.bulk_create(client_objects, batch_size=1000)
+                        chunk_created_count = len(created_clients)
+                        
+                        # Create ClientExtended records
+                        from core.models import ClientExtended
+                        extended_objects = []
+                        for i, client_data in enumerate(clients_to_create):
+                            if client_data['extended_data']:
+                                extended_data = client_data['extended_data'].copy()
+                                extended_data['client'] = created_clients[i]
+                                extended_objects.append(ClientExtended(**extended_data))
+                        
+                        if extended_objects:
+                            ClientExtended.objects.bulk_create(extended_objects, batch_size=1000)
+                        
+                        # Create duplicate relationships
+                        from core.models import ClientDuplicate
+                        duplicate_objects = []
+                        for i, client_data in enumerate(clients_to_create):
+                            duplicate_info = client_data['duplicate_info']
+                            # All items in clients_to_create are new (not updates), so we can create duplicates
+                            if duplicate_info['is_duplicate']:
+                                duplicate_client = duplicate_info['duplicate_client']
+                                match_type = duplicate_info['match_type']
+                                client = created_clients[i]
+                                
+                                # Use stored similarity score if available
+                                if duplicate_info.get('similarity_score') is not None:
+                                    similarity = duplicate_info['similarity_score']
+                                elif match_type in ["exact_email", "exact_phone", "email_phone"]:
+                                    similarity = 1.0
+                                elif match_type and match_type.startswith('name_similarity_'):
+                                    try:
+                                        similarity = float(match_type.replace('name_similarity_', ''))
+                                        if similarity < 0.9:
+                                            continue
+                                    except (ValueError, AttributeError):
+                                        continue
+                                else:
+                                    continue
+                                
+                                confidence_level = fuzzy_matcher.get_duplicate_confidence_level(similarity)
+                                
+                                duplicate_objects.append(ClientDuplicate(
+                                    primary_client=duplicate_client,
+                                    duplicate_client=client,
+                                    similarity_score=similarity,
+                                    match_type=match_type,
+                                    confidence_level=confidence_level,
+                                    match_details={
+                                        'primary_name': f"{duplicate_client.first_name} {duplicate_client.last_name}",
+                                        'duplicate_name': f"{client.first_name} {client.last_name}",
+                                        'primary_email': duplicate_client.email,
+                                        'primary_phone': duplicate_client.phone,
+                                        'primary_client_id': duplicate_client.client_id,
+                                        'duplicate_original_email': duplicate_info['original_email'],
+                                        'duplicate_original_phone': duplicate_info['original_phone'],
+                                        'duplicate_original_client_id': duplicate_info['original_client_id'],
+                                    }
+                                ))
+                                
+                                # Add to duplicate details for response
+                                client_name = f"{duplicate_info['client_data'].get('first_name', '')} {duplicate_info['client_data'].get('last_name', '')}".strip()
+                                existing_name = f"{duplicate_client.first_name} {duplicate_client.last_name}".strip()
+                                
+                                chunk_duplicate_details.append({
+                                    'type': 'created_with_duplicate',
+                                    'reason': f'{match_type.replace("_", " ").title()} match - created with duplicate flag for review',
+                                    'client_name': client_name,
+                                    'existing_name': existing_name,
+                                    'match_field': f"Match: {match_type}"
+                                })
+                        
+                        if duplicate_objects:
+                            ClientDuplicate.objects.bulk_create(duplicate_objects, batch_size=1000)
+                        
+                        logger.info(f"Bulk created {chunk_created_count} clients successfully in chunk {chunk_number}")
+                        
+                        # Process intake data for all created clients
+                        if has_intake_data and created_clients:
+                            logger.info(f"Processing intake data for {len(created_clients)} created clients in chunk {chunk_number}")
+                            for i, client in enumerate(created_clients):
+                                try:
+                                    # Get the original row data for this client
+                                    client_data = clients_to_create[i]
+                                    row_index = client_data['row_index']
+                                    row = df.iloc[row_index]
+                                    
+                                    # Pass pre-loaded caches to avoid repeated database queries
+                                    process_intake_data(
+                                        client,
+                                        row,
+                                        row_index,
+                                        column_mapping,
+                                        df.columns,
+                                        departments_cache,
+                                        program_lookup_by_name,
+                                        all_programs_list,
+                                        program_fuzzy_cache,
+                                        enrollment_cache,
+                                        intake_cache,
+                                    )
+                                except Exception as e:
+                                    logger.error(f"Error processing intake data for client {client.first_name} {client.last_name}: {str(e)}")
+                                    chunk_errors.append(f"Row {row_index + 2}: Error processing intake data - {str(e)}")
+                    
+                    # Aggregate chunk results
+                    chunk_duplicates_flagged = len([d for d in chunk_duplicate_details if d['type'] == 'created_with_duplicate'])
+                    
+                    total_created_count += chunk_created_count
+                    total_updated_count += chunk_updated_count
+                    total_skipped_count += chunk_skipped_count
+                    total_duplicates_flagged += chunk_duplicates_flagged
+                    all_errors.extend(chunk_errors)
+                    all_duplicate_details.extend(chunk_duplicate_details)
+                    
+                    logger.info(f"Chunk {chunk_number} completed: {chunk_created_count} created, {chunk_updated_count} updated, {len(chunk_errors)} errors")
+                    
+                    # Move to next chunk
+                    chunk_start = chunk_end
                 
-            except Exception as e:
-                logger.error(f"Error in bulk creation: {str(e)}")
-                # Force rollback of the entire upload by raising the error to the outer handler
-                raise
+                # All chunks processed successfully - transaction will commit
+                logger.info(f"All {chunk_number} chunks processed successfully. Transaction will commit.")
+                            
+        except Exception as e:
+            # If ANY chunk fails, the entire transaction rolls back
+            error_code = get_error_code_for_exception(e)
+            upload_error = UploadError(error_code, raw_error=e, details={'chunk': chunk_number, 'chunk_start': chunk_start, 'chunk_end': chunk_end})
+            logger.error(f"Error processing chunk {chunk_number}: {upload_error.message}. ALL database operations will rollback.")
+            all_errors.append(f"Chunk {chunk_number} (rows {chunk_start + 1}-{chunk_end}): {upload_error.message}")
+            # Re-raise to trigger transaction rollback
+            raise upload_error
         
         # Update inactive status for all processed clients based on active enrollments
         # This is done after all clients and enrollments have been processed
@@ -4444,66 +4654,167 @@ def upload_clients(request):
         
         # Calculate completion time and update upload log
         upload_completed_time = timezone.now()
-        duplicate_created_count = len([d for d in duplicate_details if d['type'] == 'created_with_duplicate'])
         
-        # Determine status
-        if len(errors) > 0 and (created_count == 0 and updated_count == 0):
+        # Determine status based on aggregated results
+        if len(all_errors) > 0 and (total_created_count == 0 and total_updated_count == 0):
             status = 'failed'
-        elif len(errors) > 0:
+        elif len(all_errors) > 0:
             status = 'partial'
         else:
             status = 'success'
         
-        # Update upload log
+        # Update upload log with final results
         if upload_log:
             try:
                 upload_log.completed_at = upload_completed_time
-                upload_log.total_rows = len(df)
-                upload_log.records_created = created_count
-                upload_log.records_updated = updated_count
-                upload_log.records_skipped = skipped_count
-                upload_log.duplicates_flagged = duplicate_created_count
-                upload_log.errors_count = len(errors)
+                upload_log.total_rows = total_rows
+                upload_log.records_created = total_created_count
+                upload_log.records_updated = total_updated_count
+                upload_log.records_skipped = total_skipped_count
+                upload_log.duplicates_flagged = total_duplicates_flagged
+                upload_log.errors_count = len(all_errors)
                 upload_log.status = status
-                upload_log.error_details = errors[:50]  # Store first 50 errors
+                
+                # Store error details with structure
+                error_details_list = []
+                for error in all_errors[:100]:  # Store first 100 errors
+                    if isinstance(error, str):
+                        error_details_list.append({'message': error})
+                    else:
+                        error_details_list.append(error)
+                
+                upload_log.error_details = error_details_list
                 upload_log.upload_details = {
                     'has_intake_data': has_intake_data,
                     'source': source,
-                    'file_extension': file_extension
+                    'file_extension': file_extension,
+                    'chunks_processed': chunk_number,
+                    'chunk_size': CHUNK_SIZE,
+                    'progress': {
+                        'processed': total_rows,
+                        'total': total_rows,
+                        'percentage': 100,
+                        'status': 'completed'
+                    }
                 }
                 upload_log.save()
                 logger.info(f"Upload log updated: {upload_log.id} - Duration: {upload_log.duration_seconds:.2f}s")
+                
+                # Create audit log entry for bulk upload operation
+                try:
+                    from core.models import create_audit_log
+                    create_audit_log(
+                        entity_name='ClientUpload',
+                        entity_id=upload_log.external_id,
+                        action='import',
+                        changed_by=request.user if request.user.is_authenticated else None,
+                        diff_data={
+                            'file_name': upload_log.file_name,
+                            'file_size': upload_log.file_size,
+                            'source': upload_log.source,
+                            'status': status,
+                            'total_rows': total_rows,
+                            'records_created': total_created_count,
+                            'records_updated': total_updated_count,
+                            'records_skipped': total_skipped_count,
+                            'duplicates_flagged': total_duplicates_flagged,
+                            'errors_count': len(all_errors),
+                            'duration_seconds': upload_log.duration_seconds,
+                            'chunks_processed': chunk_number,
+                            'chunk_size': CHUNK_SIZE,
+                            'started_at': str(upload_log.started_at),
+                            'completed_at': str(upload_log.completed_at),
+                            'error_summary': all_errors[:10] if all_errors else []  # First 10 errors for quick reference
+                        }
+                    )
+                    logger.info(f"Audit log created for upload: {upload_log.external_id}")
+                except Exception as audit_error:
+                    logger.error(f"Failed to create audit log for upload: {audit_error}")
             except Exception as e:
                 logger.error(f"Failed to update upload log: {e}")
         
         response_data = {
             'success': True,
-            'message': f'Upload completed successfully! {created_count} clients created, {updated_count} clients updated.',
+            'message': f'Upload completed! {total_created_count} clients created, {total_updated_count} clients updated.',
             'stats': {
-                'total_rows': len(df),
-                'created': created_count,
-                'updated': updated_count,
-                'skipped': skipped_count,
-                'duplicates_flagged': duplicate_created_count,
-                'errors': len(errors),
-                'duration_seconds': upload_log.duration_seconds if upload_log else None
+                'total_rows': total_rows,
+                'created': total_created_count,
+                'updated': total_updated_count,
+                'skipped': total_skipped_count,
+                'duplicates_flagged': total_duplicates_flagged,
+                'errors': len(all_errors),
+                'duration_seconds': upload_log.duration_seconds if upload_log else None,
+                'chunks_processed': chunk_number
             },
-            'duplicate_details': duplicate_details[:20],  # Limit to first 20 duplicates for display
-            'errors': errors[:10] if errors else [],  # Limit to first 10 errors
+            'duplicate_details': all_duplicate_details[:20],  # Limit to first 20 duplicates for display
+            'errors': all_errors[:10] if all_errors else [],  # Limit to first 10 errors
             'debug_info': debug_info,  # Add debug information
             'notes': [
                 'Existing clients with matching Client ID were updated with new information',
                 'New clients were created for records without existing Client ID matches',
                 'Missing date of birth values were set to 1900-01-01',
                 'Missing gender values were set to null',
-                f'{duplicate_created_count} clients were created with potential duplicate flags for review',
+                f'{total_duplicates_flagged} clients were created with potential duplicate flags for review',
                 'Review flagged duplicates in the "Probable Duplicate Clients" section'
-            ] if created_count > 0 or updated_count > 0 or duplicate_created_count > 0 else []
+            ] if total_created_count > 0 or total_updated_count > 0 or total_duplicates_flagged > 0 else []
         }
         
         return JsonResponse(response_data)
         
+    except UploadError as e:
+        # Handle structured upload errors
+        logger.error(f"Upload error [{e.code}]: {e.message}")
+        
+        # Update upload log with structured error
+        if upload_log:
+            try:
+                upload_log.completed_at = timezone.now()
+                upload_log.status = 'failed'
+                upload_log.error_message = e.message
+                upload_log.error_details = e.to_log_dict()
+                if 'file' in locals():
+                    upload_log.file_name = file.name if hasattr(file, 'name') else 'Unknown'
+                    upload_log.file_size = file.size if hasattr(file, 'size') else 0
+                upload_log.save()
+                
+                # Create audit log entry for failed upload
+                try:
+                    from core.models import create_audit_log
+                    create_audit_log(
+                        entity_name='ClientUpload',
+                        entity_id=upload_log.external_id,
+                        action='import',
+                        changed_by=request.user if request.user.is_authenticated else None,
+                        diff_data={
+                            'file_name': upload_log.file_name if hasattr(upload_log, 'file_name') else 'Unknown',
+                            'file_size': upload_log.file_size if hasattr(upload_log, 'file_size') else 0,
+                            'source': source if 'source' in locals() else 'Unknown',
+                            'status': 'failed',
+                            'error_code': e.code,
+                            'error_message': e.message,
+                            'error_category': e.category,
+                            'error_details': e.details,
+                            'started_at': str(upload_log.started_at) if hasattr(upload_log, 'started_at') else None,
+                            'completed_at': str(upload_log.completed_at) if hasattr(upload_log, 'completed_at') else None
+                        }
+                    )
+                    logger.info(f"Audit log created for failed upload: {upload_log.external_id}")
+                except Exception as audit_error:
+                    logger.error(f"Failed to create audit log for failed upload: {audit_error}")
+            except Exception as log_error:
+                logger.error(f"Failed to update upload log with error: {log_error}")
+        
+        return JsonResponse({
+            'success': False,
+            'error': e.message,
+            'error_code': e.code,
+            'error_category': e.category,
+            'user_action': e.user_action,
+            'details': e.details
+        }, status=500)
+        
     except Exception as e:
+        # Handle unexpected errors
         logger.error(f"Upload error: {str(e)}")
         
         # Log the full error with traceback for debugging
@@ -4511,50 +4822,61 @@ def upload_clients(request):
         error_traceback = traceback.format_exc()
         logger.error(f"Upload failed with exception: {str(e)}\nTraceback:\n{error_traceback}")
         
+        # Get error code for this exception
+        error_code = get_error_code_for_exception(e)
+        upload_error = UploadError(
+            code=error_code,
+            raw_error=e,
+            details={'traceback': error_traceback, 'error_type': type(e).__name__}
+        )
+        
         # Update upload log with error
         if upload_log:
             try:
                 upload_log.completed_at = timezone.now()
                 upload_log.status = 'failed'
-                upload_log.error_message = str(e)
-                # Store error details in error_details JSON field
-                # error_details is a JSONField that can store dict or list
-                upload_log.error_details = {
-                    'error': str(e),
-                    'error_type': type(e).__name__,
-                    'traceback': error_traceback
-                }
+                upload_log.error_message = upload_error.message
+                upload_log.error_details = upload_error.to_log_dict()
                 if 'file' in locals():
                     upload_log.file_name = file.name if hasattr(file, 'name') else 'Unknown'
                     upload_log.file_size = file.size if hasattr(file, 'size') else 0
                 upload_log.save()
+                
+                # Create audit log entry for failed upload (unexpected error)
+                try:
+                    from core.models import create_audit_log
+                    create_audit_log(
+                        entity_name='ClientUpload',
+                        entity_id=upload_log.external_id,
+                        action='import',
+                        changed_by=request.user if request.user.is_authenticated else None,
+                        diff_data={
+                            'file_name': upload_log.file_name if hasattr(upload_log, 'file_name') else 'Unknown',
+                            'file_size': upload_log.file_size if hasattr(upload_log, 'file_size') else 0,
+                            'source': source if 'source' in locals() else 'Unknown',
+                            'status': 'failed',
+                            'error_code': upload_error.code,
+                            'error_message': upload_error.message,
+                            'error_category': upload_error.category,
+                            'error_type': type(e).__name__,
+                            'error_traceback': error_traceback if 'error_traceback' in locals() else None,
+                            'started_at': str(upload_log.started_at) if hasattr(upload_log, 'started_at') else None,
+                            'completed_at': str(upload_log.completed_at) if hasattr(upload_log, 'completed_at') else None
+                        }
+                    )
+                    logger.info(f"Audit log created for failed upload (unexpected error): {upload_log.external_id}")
+                except Exception as audit_error:
+                    logger.error(f"Failed to create audit log for failed upload: {audit_error}")
             except Exception as log_error:
                 logger.error(f"Failed to update upload log with error: {log_error}")
         
-        # Provide more detailed error message based on error type
-        error_message = 'Upload failed. Please check your file format and try again. If the problem persists, contact your system administrator.'
-        
-        # Provide more specific error messages for common issues
-        error_str = str(e).lower()
-        if 'database' in error_str or 'connection' in error_str:
-            error_message = 'Database connection error. Please try again in a moment. If the problem persists, contact your system administrator.'
-        elif 'memory' in error_str or 'out of memory' in error_str:
-            error_message = 'File is too large to process. Please try uploading a smaller file or split it into multiple files.'
-        elif 'permission' in error_str or 'access' in error_str:
-            error_message = 'Permission denied. You do not have access to upload clients.'
-        elif 'validation' in error_str or 'invalid' in error_str:
-            error_message = f'Validation error: {str(e)}. Please check your file format and data.'
-        elif 'timeout' in error_str:
-            error_message = 'Upload timed out. The file may be too large. Please try a smaller file.'
-        else:
-            # Include the actual error in development mode for debugging
-            if settings.DEBUG:
-                error_message = f'Upload failed: {str(e)}. Check server logs for details.'
-        
         return JsonResponse({
-            'success': False, 
-            'error': error_message,
-            'error_type': type(e).__name__ if settings.DEBUG else None
+            'success': False,
+            'error': upload_error.message,
+            'error_code': upload_error.code,
+            'error_category': upload_error.category,
+            'user_action': upload_error.user_action,
+            'details': upload_error.details if settings.DEBUG else {}
         }, status=500)
 
 @require_http_methods(["GET"])
