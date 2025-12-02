@@ -1822,6 +1822,8 @@ def upload_clients(request):
                 pass
         
         # Create upload log entry
+        # Generate a temporary UUID for audit log in case upload_log creation fails
+        temp_upload_id = uuid.uuid4()
         try:
             upload_log = ClientUploadLog.objects.create(
                 file_name=file.name,
@@ -1833,38 +1835,78 @@ def upload_clients(request):
                 status='success',
                 upload_details={}
             )
+            temp_upload_id = upload_log.external_id  # Use the actual upload log ID
         except Exception as e:
             logger.warning(f"Failed to create upload log: {e}")
             upload_log = None
+            # Create audit log even if upload_log creation failed
+            try:
+                from core.models import create_audit_log
+                create_audit_log(
+                    entity_name='ClientUpload',
+                    entity_id=temp_upload_id,
+                    action='import',
+                    changed_by=request.user if request.user.is_authenticated else None,
+                    diff_data={
+                        'file_name': file.name if hasattr(file, 'name') else 'Unknown',
+                        'file_size': file.size if hasattr(file, 'size') else 0,
+                        'source': source,
+                        'status': 'failed',
+                        'error_message': f'Failed to create upload log: {str(e)}',
+                        'error_category': 'System Error',
+                        'failure_stage': 'upload_log_creation',
+                        'started_at': str(upload_start_time)
+                    }
+                )
+                logger.info(f"Audit log created for failed upload_log creation: {temp_upload_id}")
+            except Exception as audit_error:
+                logger.error(f"Failed to create audit log for upload_log creation failure: {audit_error}")
         
         if file_extension not in ['csv', 'xlsx', 'xls']:
-            error = UploadError('UPLOAD_001', details={'file_extension': file_extension})
-            # Create audit log for early validation failure
-            if upload_log:
-                try:
-                    from core.models import create_audit_log
+            import traceback
+            error_traceback = traceback.format_exc()
+            error = UploadError('UPLOAD_001', details={'file_extension': file_extension, 'traceback': error_traceback})
+            # Create audit log for early validation failure (always create, even if upload_log is None)
+            try:
+                from core.models import create_audit_log
+                if upload_log:
                     upload_log.completed_at = timezone.now()
                     upload_log.status = 'failed'
-                    upload_log.error_message = error.message
+                    upload_log.error_message = f"{error.message}\n\nTraceback:\n{error_traceback}"
+                    upload_log.error_details = [{
+                        'error_code': error.code,
+                        'error_message': error.message,
+                        'error_category': error.category,
+                        'traceback': error_traceback,
+                        'failure_stage': 'file_extension_validation'
+                    }]
                     upload_log.save()
-                    create_audit_log(
-                        entity_name='ClientUpload',
-                        entity_id=upload_log.external_id,
-                        action='import',
-                        changed_by=request.user if request.user.is_authenticated else None,
-                        diff_data={
-                            'file_name': file.name,
-                            'file_size': file.size,
-                            'source': source,
-                            'status': 'failed',
-                            'error_code': error.code,
-                            'error_message': error.message,
-                            'error_category': 'File Validation',
-                            'failure_stage': 'file_extension_validation'
-                        }
-                    )
-                except Exception as audit_error:
-                    logger.error(f"Failed to create audit log for early failure: {audit_error}")
+                    entity_id = upload_log.external_id
+                else:
+                    entity_id = temp_upload_id
+                
+                create_audit_log(
+                    entity_name='ClientUpload',
+                    entity_id=entity_id,
+                    action='import',
+                    changed_by=request.user if request.user.is_authenticated else None,
+                    diff_data={
+                        'file_name': file.name if hasattr(file, 'name') else 'Unknown',
+                        'file_size': file.size if hasattr(file, 'size') else 0,
+                        'source': source,
+                        'status': 'failed',
+                        'error_code': error.code,
+                        'error_message': error.message,
+                        'error_category': 'File Validation',
+                        'failure_stage': 'file_extension_validation',
+                        'error_traceback': error_traceback,
+                        'started_at': str(upload_start_time),
+                        'completed_at': str(timezone.now())
+                    }
+                )
+                logger.info(f"Audit log created for file extension validation failure: {entity_id}")
+            except Exception as audit_error:
+                logger.error(f"Failed to create audit log for file extension validation: {audit_error}")
             return JsonResponse({'success': False, 'error': error.message, 'error_code': error.code}, status=400)
         
         # Read the file
@@ -1905,134 +1947,208 @@ def upload_clients(request):
                         string_io = io.StringIO(decoded_content)
                         df = pd.read_csv(string_io)
                     except Exception as e:
-                        error = UploadError('UPLOAD_004', details={'last_error': last_error, 'fallback_error': str(e)})
-                        # Create audit log for file reading failure
-                        if upload_log:
-                            try:
-                                from core.models import create_audit_log
+                        import traceback
+                        error_traceback = traceback.format_exc()
+                        error = UploadError('UPLOAD_004', details={'last_error': last_error, 'fallback_error': str(e), 'traceback': error_traceback})
+                        # Create audit log for file reading failure (always create, even if upload_log is None)
+                        try:
+                            from core.models import create_audit_log
+                            if upload_log:
                                 upload_log.completed_at = timezone.now()
                                 upload_log.status = 'failed'
-                                upload_log.error_message = error.message
+                                upload_log.error_message = f"{error.message}\n\nTraceback:\n{error_traceback}"
+                                upload_log.error_details = [{
+                                    'error_code': error.code,
+                                    'error_message': error.message,
+                                    'error_category': error.category,
+                                    'traceback': error_traceback,
+                                    'failure_stage': 'file_reading',
+                                    'last_error': last_error,
+                                    'fallback_error': str(e)
+                                }]
                                 upload_log.save()
-                                create_audit_log(
-                                    entity_name='ClientUpload',
-                                    entity_id=upload_log.external_id,
-                                    action='import',
-                                    changed_by=request.user if request.user.is_authenticated else None,
-                                    diff_data={
-                                        'file_name': file.name,
-                                        'file_size': file.size,
-                                        'source': source,
-                                        'status': 'failed',
-                                        'error_code': error.code,
-                                        'error_message': error.message,
-                                        'error_category': 'File Processing',
-                                        'failure_stage': 'file_reading',
-                                        'last_error': last_error,
-                                        'fallback_error': str(e)
-                                    }
-                                )
-                            except Exception as audit_error:
-                                logger.error(f"Failed to create audit log for file reading failure: {audit_error}")
+                                entity_id = upload_log.external_id
+                            else:
+                                entity_id = temp_upload_id
+                            
+                            create_audit_log(
+                                entity_name='ClientUpload',
+                                entity_id=entity_id,
+                                action='import',
+                                changed_by=request.user if request.user.is_authenticated else None,
+                                diff_data={
+                                    'file_name': file.name if hasattr(file, 'name') else 'Unknown',
+                                    'file_size': file.size if hasattr(file, 'size') else 0,
+                                    'source': source,
+                                    'status': 'failed',
+                                    'error_code': error.code,
+                                    'error_message': error.message,
+                                    'error_category': 'File Processing',
+                                    'failure_stage': 'file_reading',
+                                    'last_error': last_error,
+                                    'fallback_error': str(e),
+                                    'error_traceback': error_traceback,
+                                    'started_at': str(upload_start_time),
+                                    'completed_at': str(timezone.now())
+                                }
+                            )
+                            logger.info(f"Audit log created for file reading failure: {entity_id}")
+                        except Exception as audit_error:
+                            logger.error(f"Failed to create audit log for file reading failure: {audit_error}")
                         return JsonResponse({'success': False, 'error': error.message, 'error_code': error.code}, status=400)
             
             else:
                 df = pd.read_excel(file)
         except Exception as e:
+            import traceback
+            error_traceback = traceback.format_exc()
             error_code = get_error_code_for_exception(e)
-            error = UploadError(error_code, raw_error=e, details={'file_extension': file_extension})
-            logger.error(f"Error reading file: {error.message}")
-            # Create audit log for file reading exception
-            if upload_log:
-                try:
-                    from core.models import create_audit_log
+            error = UploadError(error_code, raw_error=e, details={'file_extension': file_extension, 'traceback': error_traceback, 'error_type': type(e).__name__})
+            logger.error(f"Error reading file: {error.message}\nTraceback:\n{error_traceback}")
+            # Create audit log for file reading exception (always create, even if upload_log is None)
+            try:
+                from core.models import create_audit_log
+                if upload_log:
                     upload_log.completed_at = timezone.now()
                     upload_log.status = 'failed'
-                    upload_log.error_message = error.message
+                    upload_log.error_message = f"{error.message}\n\nTraceback:\n{error_traceback}"
+                    upload_log.error_details = [{
+                        'error_code': error.code,
+                        'error_message': error.message,
+                        'error_category': error.category,
+                        'traceback': error_traceback,
+                        'failure_stage': 'file_reading_exception',
+                        'error_type': type(e).__name__,
+                        'raw_error': str(e)
+                    }]
                     upload_log.save()
-                    create_audit_log(
-                        entity_name='ClientUpload',
-                        entity_id=upload_log.external_id,
-                        action='import',
-                        changed_by=request.user if request.user.is_authenticated else None,
-                        diff_data={
-                            'file_name': file.name if hasattr(file, 'name') else 'Unknown',
-                            'file_size': file.size if hasattr(file, 'size') else 0,
-                            'source': source,
-                            'status': 'failed',
-                            'error_code': error.code,
-                            'error_message': error.message,
-                            'error_category': 'File Processing',
-                            'failure_stage': 'file_reading_exception',
-                            'error_type': type(e).__name__
-                        }
-                    )
-                except Exception as audit_error:
-                    logger.error(f"Failed to create audit log for file reading exception: {audit_error}")
+                    entity_id = upload_log.external_id
+                else:
+                    entity_id = temp_upload_id
+                
+                create_audit_log(
+                    entity_name='ClientUpload',
+                    entity_id=entity_id,
+                    action='import',
+                    changed_by=request.user if request.user.is_authenticated else None,
+                    diff_data={
+                        'file_name': file.name if hasattr(file, 'name') else 'Unknown',
+                        'file_size': file.size if hasattr(file, 'size') else 0,
+                        'source': source,
+                        'status': 'failed',
+                        'error_code': error.code,
+                        'error_message': error.message,
+                        'error_category': 'File Processing',
+                        'failure_stage': 'file_reading_exception',
+                        'error_type': type(e).__name__,
+                        'error_traceback': error_traceback,
+                        'raw_error': str(e),
+                        'started_at': str(upload_start_time),
+                        'completed_at': str(timezone.now())
+                    }
+                )
+                logger.info(f"Audit log created for file reading exception: {entity_id}")
+            except Exception as audit_error:
+                audit_traceback = traceback.format_exc()
+                logger.error(f"Failed to create audit log for file reading exception: {audit_error}\nTraceback:\n{audit_traceback}")
             return JsonResponse({'success': False, 'error': error.message, 'error_code': error.code}, status=400)
         
         # Check if dataframe is empty
         if df.empty:
-            error = UploadError('UPLOAD_002')
-            logger.error(f"Upload failed: {error.message}")
-            # Create audit log for empty file
-            if upload_log:
-                try:
-                    from core.models import create_audit_log
+            import traceback
+            error_traceback = traceback.format_exc()
+            error = UploadError('UPLOAD_002', details={'traceback': error_traceback})
+            logger.error(f"Upload failed: {error.message}\nTraceback:\n{error_traceback}")
+            # Create audit log for empty file (always create, even if upload_log is None)
+            try:
+                from core.models import create_audit_log
+                if upload_log:
                     upload_log.completed_at = timezone.now()
                     upload_log.status = 'failed'
-                    upload_log.error_message = error.message
+                    upload_log.error_message = f"{error.message}\n\nTraceback:\n{error_traceback}"
+                    upload_log.error_details = [{
+                        'error_code': error.code,
+                        'error_message': error.message,
+                        'error_category': error.category,
+                        'traceback': error_traceback,
+                        'failure_stage': 'empty_file'
+                    }]
                     upload_log.save()
-                    create_audit_log(
-                        entity_name='ClientUpload',
-                        entity_id=upload_log.external_id,
-                        action='import',
-                        changed_by=request.user if request.user.is_authenticated else None,
-                        diff_data={
-                            'file_name': file.name,
-                            'file_size': file.size,
-                            'source': source,
-                            'status': 'failed',
-                            'error_code': error.code,
-                            'error_message': error.message,
-                            'error_category': 'File Validation',
-                            'failure_stage': 'empty_file'
-                        }
-                    )
-                except Exception as audit_error:
-                    logger.error(f"Failed to create audit log for empty file: {audit_error}")
+                    entity_id = upload_log.external_id
+                else:
+                    entity_id = temp_upload_id
+                
+                create_audit_log(
+                    entity_name='ClientUpload',
+                    entity_id=entity_id,
+                    action='import',
+                    changed_by=request.user if request.user.is_authenticated else None,
+                    diff_data={
+                        'file_name': file.name if hasattr(file, 'name') else 'Unknown',
+                        'file_size': file.size if hasattr(file, 'size') else 0,
+                        'source': source,
+                        'status': 'failed',
+                        'error_code': error.code,
+                        'error_message': error.message,
+                        'error_category': 'File Validation',
+                        'failure_stage': 'empty_file',
+                        'error_traceback': error_traceback,
+                        'started_at': str(upload_start_time),
+                        'completed_at': str(timezone.now())
+                    }
+                )
+                logger.info(f"Audit log created for empty file: {entity_id}")
+            except Exception as audit_error:
+                logger.error(f"Failed to create audit log for empty file: {audit_error}")
             return JsonResponse({'success': False, 'error': error.message, 'error_code': error.code}, status=400)
         
         # Check if dataframe has no columns
         if len(df.columns) == 0:
-            error = UploadError('UPLOAD_003')
-            logger.error(f"Upload failed: {error.message}")
-            # Create audit log for no columns
-            if upload_log:
-                try:
-                    from core.models import create_audit_log
+            import traceback
+            error_traceback = traceback.format_exc()
+            error = UploadError('UPLOAD_003', details={'traceback': error_traceback})
+            logger.error(f"Upload failed: {error.message}\nTraceback:\n{error_traceback}")
+            # Create audit log for no columns (always create, even if upload_log is None)
+            try:
+                from core.models import create_audit_log
+                if upload_log:
                     upload_log.completed_at = timezone.now()
                     upload_log.status = 'failed'
-                    upload_log.error_message = error.message
+                    upload_log.error_message = f"{error.message}\n\nTraceback:\n{error_traceback}"
+                    upload_log.error_details = [{
+                        'error_code': error.code,
+                        'error_message': error.message,
+                        'error_category': error.category,
+                        'traceback': error_traceback,
+                        'failure_stage': 'no_columns'
+                    }]
                     upload_log.save()
-                    create_audit_log(
-                        entity_name='ClientUpload',
-                        entity_id=upload_log.external_id,
-                        action='import',
-                        changed_by=request.user if request.user.is_authenticated else None,
-                        diff_data={
-                            'file_name': file.name,
-                            'file_size': file.size,
-                            'source': source,
-                            'status': 'failed',
-                            'error_code': error.code,
-                            'error_message': error.message,
-                            'error_category': 'File Validation',
-                            'failure_stage': 'no_columns'
-                        }
-                    )
-                except Exception as audit_error:
-                    logger.error(f"Failed to create audit log for no columns: {audit_error}")
+                    entity_id = upload_log.external_id
+                else:
+                    entity_id = temp_upload_id
+                
+                create_audit_log(
+                    entity_name='ClientUpload',
+                    entity_id=entity_id,
+                    action='import',
+                    changed_by=request.user if request.user.is_authenticated else None,
+                    diff_data={
+                        'file_name': file.name if hasattr(file, 'name') else 'Unknown',
+                        'file_size': file.size if hasattr(file, 'size') else 0,
+                        'source': source,
+                        'status': 'failed',
+                        'error_code': error.code,
+                        'error_message': error.message,
+                        'error_category': 'File Validation',
+                        'failure_stage': 'no_columns',
+                        'error_traceback': error_traceback,
+                        'started_at': str(upload_start_time),
+                        'completed_at': str(timezone.now())
+                    }
+                )
+                logger.info(f"Audit log created for no columns: {entity_id}")
+            except Exception as audit_error:
+                logger.error(f"Failed to create audit log for no columns: {audit_error}")
             return JsonResponse({'success': False, 'error': error.message, 'error_code': error.code}, status=400)
         
         logger.info(f"Successfully read file with {len(df)} rows and {len(df.columns)} columns")
@@ -4497,10 +4613,11 @@ def upload_clients(request):
                             error_traceback = traceback.format_exc()
                             
                             # Log full error details for debugging
-                            logger.error(f"Error processing row {index + 2}: {error_message}")
+                            logger.error(f"Error processing row {index + 2}: {error_message}\nTraceback:\n{error_traceback}")
                             logger.debug(f"Full traceback for row {index + 2}:\n{error_traceback}")
                             
                             # Handle specific types of errors with more detailed messages
+                            user_friendly_message = None
                             if "NOT NULL constraint" in error_message:
                                 # Extract field name from error if possible
                                 field_match = None
@@ -4509,25 +4626,58 @@ def upload_clients(request):
                                     field_match = re.search(r"column ['\"]?(\w+)['\"]?", error_message, re.IGNORECASE)
                                 if field_match:
                                     field_name = field_match.group(1)
-                                    chunk_errors.append(f"Row {index + 2}: Required field '{field_name}' is missing. Please ensure this field is filled.")
+                                    user_friendly_message = f"Row {index + 2}: Required field '{field_name}' is missing. Please ensure this field is filled."
                                 else:
-                                    chunk_errors.append(f"Row {index + 2}: Required information is missing. Please ensure all required fields are filled.")
+                                    user_friendly_message = f"Row {index + 2}: Required information is missing. Please ensure all required fields are filled."
                             elif "invalid input syntax" in error_message or "invalid literal" in error_message:
-                                chunk_errors.append(f"Row {index + 2}: Invalid data format. Please check the data in this row.")
+                                user_friendly_message = f"Row {index + 2}: Invalid data format. Please check the data in this row."
                             elif "duplicate key" in error_message.lower() or "unique constraint" in error_message.lower():
-                                chunk_errors.append(f"Row {index + 2}: Duplicate entry detected. This client may already exist in the system.")
+                                user_friendly_message = f"Row {index + 2}: Duplicate entry detected. This client may already exist in the system."
                             elif "foreign key constraint" in error_message.lower():
-                                chunk_errors.append(f"Row {index + 2}: Invalid reference. Please check related data (program, department, etc.).")
+                                user_friendly_message = f"Row {index + 2}: Invalid reference. Please check related data (program, department, etc.)."
                             elif "value too long" in error_message.lower() or "string too long" in error_message.lower():
-                                chunk_errors.append(f"Row {index + 2}: Data value is too long. Please shorten the value.")
+                                user_friendly_message = f"Row {index + 2}: Data value is too long. Please shorten the value."
                             elif "missing required" in error_message.lower() or "required field" in error_message.lower():
-                                chunk_errors.append(f"Row {index + 2}: {error_message}")
+                                user_friendly_message = f"Row {index + 2}: {error_message}"
                             else:
                                 # Show actual error message but make it user-friendly
+                                user_friendly_message = f"Row {index + 2}: {error_message}"
+                            
+                            # Store both user-friendly message and full error with traceback
+                            chunk_errors.append(user_friendly_message)
+                            
+                            # Also store structured error with traceback for debugging
+                            chunk_errors.append({
+                                'row': index + 2,
+                                'error_message': error_message,
+                                'user_friendly_message': user_friendly_message,
+                                'error_type': type(e).__name__,
+                                'traceback': error_traceback,
+                                'timestamp': str(timezone.now())
+                            })
+                            
+                            # Continue with original logic if needed
+                            if False:  # This block is now handled above
                                 # Truncate very long error messages
-                                if len(error_message) > 200:
-                                    error_message = error_message[:200] + "..."
-                                chunk_errors.append(f"Row {index + 2}: {error_message}")
+                                # Include traceback in error message for better debugging
+                                full_error_message = f"Row {index + 2}: {error_message}"
+                                if error_traceback:
+                                    full_error_message += f"\nTraceback:\n{error_traceback}"
+                                
+                                # Truncate if too long, but preserve traceback
+                                if len(full_error_message) > 1000:
+                                    full_error_message = full_error_message[:1000] + "...\n[Truncated]"
+                                
+                                chunk_errors.append(full_error_message)
+                                
+                                # Also store structured error with traceback
+                                chunk_errors.append({
+                                    'row': index + 2,
+                                    'error_message': error_message,
+                                    'error_type': type(e).__name__,
+                                    'traceback': error_traceback,
+                                    'timestamp': str(timezone.now())
+                                })
                     
                     # Bulk update existing clients first for this chunk (AFTER processing all rows)
                     if clients_to_update:
@@ -4838,15 +4988,37 @@ def upload_clients(request):
                 upload_log.errors_count = len(all_errors)
                 upload_log.status = status
                 
-                # Store error details with structure
+                # Store error details with structure (include tracebacks if available)
                 error_details_list = []
                 for error in all_errors[:100]:  # Store first 100 errors
                     if isinstance(error, str):
-                        error_details_list.append({'message': error})
+                        error_details_list.append({
+                            'message': error,
+                            'error_type': 'string',
+                            'timestamp': str(timezone.now())
+                        })
+                    elif isinstance(error, dict):
+                        # Ensure traceback is included as string if present
+                        error_dict = error.copy()
+                        if 'traceback' in error_dict and error_dict['traceback']:
+                            error_dict['traceback'] = str(error_dict['traceback'])
+                        error_details_list.append(error_dict)
                     else:
-                        error_details_list.append(error)
+                        error_details_list.append({
+                            'message': str(error),
+                            'error_type': type(error).__name__,
+                            'timestamp': str(timezone.now())
+                        })
                 
                 upload_log.error_details = error_details_list
+                
+                # Store comprehensive error message with summary
+                if all_errors:
+                    error_summary = f"Total errors: {len(all_errors)}\n"
+                    error_summary += f"First error: {all_errors[0] if isinstance(all_errors[0], str) else str(all_errors[0])}\n"
+                    if len(all_errors) > 1:
+                        error_summary += f"... and {len(all_errors) - 1} more error(s)"
+                    upload_log.error_message = error_summary
                 upload_log.upload_details = {
                     'has_intake_data': has_intake_data,
                     'source': source,
@@ -4929,41 +5101,72 @@ def upload_clients(request):
         logger.error(f"Upload error [{e.code}]: {e.message}")
         
         # Update upload log with structured error
+        import traceback
+        error_traceback = traceback.format_exc()
+        
+        # Enhance error details with traceback
+        enhanced_error_details = e.to_log_dict()
+        if 'traceback' not in enhanced_error_details or not enhanced_error_details.get('traceback'):
+            enhanced_error_details['traceback'] = error_traceback
+        
         if upload_log:
             try:
                 upload_log.completed_at = timezone.now()
                 upload_log.status = 'failed'
-                upload_log.error_message = e.message
-                upload_log.error_details = e.to_log_dict()
+                upload_log.error_message = f"{e.message}\n\nTraceback:\n{error_traceback}"
+                upload_log.error_details = [enhanced_error_details]
                 if 'file' in locals():
                     upload_log.file_name = file.name if hasattr(file, 'name') else 'Unknown'
                     upload_log.file_size = file.size if hasattr(file, 'size') else 0
                 upload_log.save()
                 
-                # Create audit log entry for failed upload
+                # Create audit log entry for failed upload (always create, even if upload_log is None)
                 try:
                     from core.models import create_audit_log
+                    if upload_log:
+                        entity_id = upload_log.external_id
+                        file_name = upload_log.file_name if hasattr(upload_log, 'file_name') else 'Unknown'
+                        file_size = upload_log.file_size if hasattr(upload_log, 'file_size') else 0
+                        started_at = str(upload_log.started_at) if hasattr(upload_log, 'started_at') else None
+                        completed_at = str(upload_log.completed_at) if hasattr(upload_log, 'completed_at') else None
+                    else:
+                        entity_id = temp_upload_id
+                        file_name = file.name if 'file' in locals() and hasattr(file, 'name') else 'Unknown'
+                        file_size = file.size if 'file' in locals() and hasattr(file, 'size') else 0
+                        started_at = str(upload_start_time) if 'upload_start_time' in locals() else None
+                        completed_at = str(timezone.now())
+                    
+                    # Ensure traceback is string
+                    error_details_dict = e.details.copy() if isinstance(e.details, dict) else {}
+                    if 'traceback' not in error_details_dict or not error_details_dict.get('traceback'):
+                        error_details_dict['traceback'] = error_traceback
+                    else:
+                        error_details_dict['traceback'] = str(error_details_dict['traceback'])
+                    
                     create_audit_log(
                         entity_name='ClientUpload',
-                        entity_id=upload_log.external_id,
+                        entity_id=entity_id,
                         action='import',
                         changed_by=request.user if request.user.is_authenticated else None,
                         diff_data={
-                            'file_name': upload_log.file_name if hasattr(upload_log, 'file_name') else 'Unknown',
-                            'file_size': upload_log.file_size if hasattr(upload_log, 'file_size') else 0,
+                            'file_name': file_name,
+                            'file_size': file_size,
                             'source': source if 'source' in locals() else 'Unknown',
                             'status': 'failed',
                             'error_code': e.code,
                             'error_message': e.message,
                             'error_category': e.category,
-                            'error_details': e.details,
-                            'started_at': str(upload_log.started_at) if hasattr(upload_log, 'started_at') else None,
-                            'completed_at': str(upload_log.completed_at) if hasattr(upload_log, 'completed_at') else None
+                            'error_details': error_details_dict,
+                            'error_traceback': error_traceback,
+                            'raw_error': str(e.raw_error) if e.raw_error else None,
+                            'started_at': started_at,
+                            'completed_at': completed_at
                         }
                     )
-                    logger.info(f"Audit log created for failed upload: {upload_log.external_id}")
+                    logger.info(f"Audit log created for failed upload (UploadError): {entity_id}")
                 except Exception as audit_error:
-                    logger.error(f"Failed to create audit log for failed upload: {audit_error}")
+                    audit_traceback = traceback.format_exc()
+                    logger.error(f"Failed to create audit log for failed upload: {audit_error}\nTraceback:\n{audit_traceback}")
             except Exception as log_error:
                 logger.error(f"Failed to update upload log with error: {log_error}")
         

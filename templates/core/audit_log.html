@@ -694,6 +694,87 @@ function showChangeDetails(logId, diffData, entity, action) {
         html += '</div>';
         html += '</div>';
         html += '</div>';
+    } else if (action === 'import') {
+        html = '<div class="space-y-4">';
+        html += '<div class="bg-gradient-to-r from-purple-50 to-indigo-50 border-l-4 border-purple-400 rounded-lg p-5 shadow-sm">';
+        html += '<div class="flex items-start">';
+        html += '<div class="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3 mt-0.5">';
+        html += '<svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">';
+        html += '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>';
+        html += '</svg>';
+        html += '</div>';
+        html += '<div class="flex-1">';
+        html += '<h4 class="font-bold text-purple-800 mb-1">File Import Completed</h4>';
+        html += '<p class="text-purple-700 text-sm mb-3">Client data was imported from a CSV/Excel file:</p>';
+        
+        // File Information Section
+        html += '<div class="bg-white bg-opacity-60 rounded-lg p-4 border border-purple-200 mb-3">';
+        html += '<h5 class="font-semibold text-purple-800 text-sm mb-2">File Information</h5>';
+        html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">';
+        html += `<div><span class="text-purple-700 text-xs font-medium">File Name:</span><br><span class="text-purple-900 text-sm font-mono">${parsedDiffData.file_name || 'Unknown'}</span></div>`;
+        html += `<div><span class="text-purple-700 text-xs font-medium">File Size:</span><br><span class="text-purple-900 text-sm">${formatFileSize(parsedDiffData.file_size || 0)}</span></div>`;
+        html += `<div><span class="text-purple-700 text-xs font-medium">Source:</span><br><span class="text-purple-900 text-sm">${parsedDiffData.source || 'Unknown'}</span></div>`;
+        html += `<div><span class="text-purple-700 text-xs font-medium">Status:</span><br><span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(parsedDiffData.status)}">${parsedDiffData.status || 'Unknown'}</span></div>`;
+        html += '</div>';
+        html += '</div>';
+        
+        // Upload Statistics Section
+        html += '<div class="bg-white bg-opacity-60 rounded-lg p-4 border border-purple-200 mb-3">';
+        html += '<h5 class="font-semibold text-purple-800 text-sm mb-2">Upload Statistics</h5>';
+        html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">';
+        html += `<div class="text-center"><div class="text-2xl font-bold text-purple-900">${parsedDiffData.total_rows || 0}</div><div class="text-xs text-purple-600 mt-1">Total Rows</div></div>`;
+        html += `<div class="text-center"><div class="text-2xl font-bold text-green-600">${parsedDiffData.records_created || 0}</div><div class="text-xs text-purple-600 mt-1">Created</div></div>`;
+        html += `<div class="text-center"><div class="text-2xl font-bold text-blue-600">${parsedDiffData.records_updated || 0}</div><div class="text-xs text-purple-600 mt-1">Updated</div></div>`;
+        html += `<div class="text-center"><div class="text-2xl font-bold text-orange-600">${parsedDiffData.records_skipped || 0}</div><div class="text-xs text-purple-600 mt-1">Skipped</div></div>`;
+        html += '</div>';
+        if (parsedDiffData.duplicates_flagged > 0) {
+            html += `<div class="mt-3 pt-3 border-t border-purple-200"><div class="text-center"><div class="text-lg font-bold text-yellow-600">${parsedDiffData.duplicates_flagged}</div><div class="text-xs text-purple-600 mt-1">Duplicates Flagged</div></div></div>`;
+        }
+        html += '</div>';
+        
+        // Processing Details Section
+        if (parsedDiffData.chunks_processed || parsedDiffData.duration_seconds) {
+            html += '<div class="bg-white bg-opacity-60 rounded-lg p-4 border border-purple-200 mb-3">';
+            html += '<h5 class="font-semibold text-purple-800 text-sm mb-2">Processing Details</h5>';
+            html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-3">';
+            if (parsedDiffData.chunks_processed) {
+                html += `<div><span class="text-purple-700 text-xs font-medium">Chunks Processed:</span><br><span class="text-purple-900 text-sm">${parsedDiffData.chunks_processed} (${parsedDiffData.chunk_size || 'N/A'} rows per chunk)</span></div>`;
+            }
+            if (parsedDiffData.duration_seconds) {
+                html += `<div><span class="text-purple-700 text-xs font-medium">Duration:</span><br><span class="text-purple-900 text-sm">${formatDuration(parsedDiffData.duration_seconds)}</span></div>`;
+            }
+            if (parsedDiffData.started_at) {
+                html += `<div><span class="text-purple-700 text-xs font-medium">Started At:</span><br><span class="text-purple-900 text-sm">${formatDateTime(parsedDiffData.started_at)}</span></div>`;
+            }
+            if (parsedDiffData.completed_at) {
+                html += `<div><span class="text-purple-700 text-xs font-medium">Completed At:</span><br><span class="text-purple-900 text-sm">${formatDateTime(parsedDiffData.completed_at)}</span></div>`;
+            }
+            html += '</div>';
+            html += '</div>';
+        }
+        
+        // Errors Section (if any)
+        if (parsedDiffData.errors_count > 0 || (parsedDiffData.error_summary && parsedDiffData.error_summary.length > 0)) {
+            html += '<div class="bg-red-50 rounded-lg p-4 border border-red-200 mb-3">';
+            html += '<h5 class="font-semibold text-red-800 text-sm mb-2">Errors</h5>';
+            html += `<div class="text-sm text-red-700 mb-2">Total Errors: <span class="font-bold">${parsedDiffData.errors_count || 0}</span></div>`;
+            if (parsedDiffData.error_summary && parsedDiffData.error_summary.length > 0) {
+                html += '<div class="space-y-1 max-h-32 overflow-y-auto">';
+                parsedDiffData.error_summary.forEach(function(error) {
+                    html += `<div class="text-xs text-red-600 bg-white bg-opacity-60 rounded p-2 border border-red-200">${formatValue(error)}</div>`;
+                });
+                html += '</div>';
+                if (parsedDiffData.errors_count > parsedDiffData.error_summary.length) {
+                    html += `<div class="text-xs text-red-600 mt-2 italic">Showing first ${parsedDiffData.error_summary.length} of ${parsedDiffData.errors_count} errors</div>`;
+                }
+            }
+            html += '</div>';
+        }
+        
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
     } else if (action === 'delete') {
         html = '<div class="space-y-4">';
         html += '<div class="bg-gradient-to-r from-red-50 to-rose-50 border-l-4 border-red-400 rounded-lg p-5 shadow-sm">';
@@ -788,6 +869,59 @@ function formatValue(value) {
         return '<span class="block">' + value + '</span>';
     }
     return '<span class="block">' + value + '</span>';
+}
+
+function formatFileSize(bytes) {
+    if (!bytes || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+}
+
+function formatDuration(seconds) {
+    if (!seconds) return 'N/A';
+    if (seconds < 60) {
+        return seconds.toFixed(2) + ' seconds';
+    } else if (seconds < 3600) {
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.round(seconds % 60);
+        return minutes + ' min ' + secs + ' sec';
+    } else {
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return hours + ' hr ' + minutes + ' min';
+    }
+}
+
+function formatDateTime(dateTimeString) {
+    if (!dateTimeString) return 'N/A';
+    try {
+        const date = new Date(dateTimeString);
+        return date.toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    } catch (e) {
+        return dateTimeString;
+    }
+}
+
+function getStatusColor(status) {
+    if (!status) return 'bg-neutral-100 text-neutral-800';
+    const statusLower = status.toLowerCase();
+    if (statusLower === 'success') {
+        return 'bg-green-100 text-green-800';
+    } else if (statusLower === 'failed') {
+        return 'bg-red-100 text-red-800';
+    } else if (statusLower === 'partial') {
+        return 'bg-yellow-100 text-yellow-800';
+    }
+    return 'bg-neutral-100 text-neutral-800';
 }
 
 // Close change details modal when clicking outside
