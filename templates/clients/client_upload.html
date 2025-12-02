@@ -794,25 +794,30 @@ function uploadManager() {
                     }
                 });
                 
-                // Check if response is ok before parsing JSON
-                if (!response.ok) {
-                    let errorText = `HTTP ${response.status}: ${response.statusText}`;
+                // Clone response to allow fallback reading if needed
+                const responseClone = response.clone();
+                
+                // Read response body once and store it
+                let responseData;
+                try {
+                    responseData = await response.json();
+                } catch (jsonError) {
+                    // If JSON parsing fails, try reading as text from clone
                     try {
-                        const errorData = await response.json();
-                        if (errorData.error) {
-                            errorText = errorData.error;
-                        }
-                    } catch (e) {
-                        // If JSON parsing fails, use the status text
-                        const text = await response.text();
-                        if (text) {
-                            errorText = text.substring(0, 200); // Limit error text length
-                        }
+                        const text = await responseClone.text();
+                        responseData = { error: text.substring(0, 200) };
+                    } catch (textError) {
+                        throw new Error(`Failed to read server response: ${jsonError.message || textError.message}`);
                     }
+                }
+                
+                // Check if response is ok before processing
+                if (!response.ok) {
+                    const errorText = responseData.error || `HTTP ${response.status}: ${response.statusText}`;
                     throw new Error(errorText);
                 }
                 
-                const result = await response.json();
+                const result = responseData;
                 
                 if (result.success) {
                     // Create a more informative message based on results
