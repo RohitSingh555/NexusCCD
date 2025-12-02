@@ -114,7 +114,7 @@
     "lived_last_12_months": ["lived last 12 months", "lived_last_12_months","Lived Last 12 Mnths"],
     "intake_status": ["intake status", "intake_status"],
     "reason_for_service": ["reason for service", "reason_for_service"],
-    "intake_date": ["Receiving Services","Screening Result Date","intake date", "intake_date","admission date", "admissiondate", "admission_date", "Date of Admission", "date of admission", "DATE OF ADMISSION", "start date", "enrollment date","receiving services date", "services start date"],
+    "intake_date": ["Receiving Services","Screening Result Date","intake date", "intake_date","admission date", "admissiondate", "admission_date", "Date of Admission", "date of admission", "DATE OF ADMISSION", "start date", "enrollment date","receiving services date", "services start date", "Receiving Services Date", "RECEIVING SERVICES", "receiving services", "Intake Date", "INTAKE DATE", "Intake Date", "Service Start Date", "service start date", "Service Start", "service start"],
     "service_end_date": ["service end date", "service_end_date", "end date", "exit date"],
     "discharge_date": ["Discharge","Discharge Date","discharge date", "dischargedate", "discharge_date", "DISCHARGE DATE", "end date", "exit date"],
     "rejection_date": ["rejection date", "rejection_date"],

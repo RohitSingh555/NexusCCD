@@ -2410,8 +2410,21 @@ def upload_clients(request):
                             if pd.notna(value) and str(value).strip():
                                 logger.debug(f"Found {field_name} in column '{col}' with value: '{value}'")
                                 return str(value).strip()
+                    # Only log warning for intake_date if we're actually processing intake data
+                    # (i.e., if program_name is present, which means intake processing is expected)
                     if field_name == 'intake_date':
-                        logger.warning(f"No column mapped to 'intake_date' for client {client.first_name} {client.last_name}. Available columns: {list(df_columns)}, Column mapping: {column_mapping}")
+                        # Check if program_name is mapped (indicating intake processing is expected)
+                        has_program = any(column_mapping.get(col) == 'program_name' for col in df_columns)
+                        if has_program:
+                            # Try to find similar column names that might be intake_date
+                            similar_cols = [col for col in df_columns if 'intake' in col.lower() or 'admission' in col.lower() or 'date' in col.lower()]
+                            if similar_cols:
+                                logger.info(f"No column mapped to 'intake_date' for client {client.first_name} {client.last_name}. "
+                                          f"Similar columns found: {similar_cols}. Will use today's date as default. "
+                                          f"To map a column, add it to field_mapping.json under 'intake_date' variations.")
+                            else:
+                                logger.info(f"No column mapped to 'intake_date' for client {client.first_name} {client.last_name}. "
+                                          f"Will use today's date as default. Available columns: {list(df_columns)}")
                     return default
                 
                 # Helper function to ensure proper defaults for optional fields (convert empty strings to None)
@@ -3227,6 +3240,120 @@ def upload_clients(request):
         
         logger.info(f"Pre-loaded {len(potential_duplicates_by_email)} email-based potential duplicates")
         logger.info(f"Pre-loaded {len(potential_duplicates_by_phone)} phone-based potential duplicates")
+        
+        # Pre-load ALL clients from other sources for SMIS/EMHware name-based duplicate detection
+        # This maintains the original business logic while avoiding queries inside transaction
+        all_clients_from_other_sources = []
+        if source in ['SMIS', 'EMHware']:
+            all_clients_from_other_sources = list(Client.objects.exclude(source=source).only(
+                'id', 'first_name', 'last_name', 'email', 'phone', 'contact_information', 
+                'dob', 'client_id', 'source'
+            ))
+            logger.info(f"Pre-loaded {len(all_clients_from_other_sources)} clients from other sources for name-based duplicate detection")
+        
+        # Pre-load clients by DOB for name+DOB matching (for all sources)
+        # This maintains the original business logic for Priority 5 and 6 duplicate checks
+        clients_by_dob = {}
+        all_dobs_in_upload = set()
+        for index, row in df.iterrows():
+            try:
+                # Get DOB from row
+                dob_value = None
+                for col in df.columns:
+                    if column_mapping.get(col) == 'dob':
+                        dob_value = row[col]
+                        break
+                if dob_value:
+                    try:
+                        parsed_dob = pd.to_datetime(dob_value).date()
+                        if parsed_dob and parsed_dob != datetime(1900, 1, 1).date():
+                            all_dobs_in_upload.add(parsed_dob)
+                    except:
+                        pass
+            except:
+                pass
+        
+        if all_dobs_in_upload:
+            clients_with_matching_dob = Client.objects.filter(dob__in=all_dobs_in_upload).only(
+                'id', 'first_name', 'last_name', 'dob', 'source', 'client_id'
+            )
+            for client in clients_with_matching_dob:
+                if client.dob not in clients_by_dob:
+                    clients_by_dob[client.dob] = []
+                clients_by_dob[client.dob].append(client)
+            logger.info(f"Pre-loaded {len(clients_with_matching_dob)} clients with matching DOBs for name+DOB duplicate detection")
+        
+        # Pre-load clients by name+DOB for discharge updates (name-based lookup)
+        # This maintains the original business logic for discharge date updates
+        clients_by_name_dob = {}  # Key: (first_name_lower, last_name_lower, dob) -> [clients]
+        all_name_dob_combos = set()
+        logger.info("Collecting name+DOB combinations from upload file...")
+        for index, row in df.iterrows():
+            try:
+                # Get name and DOB from row
+                first_name_val = None
+                last_name_val = None
+                dob_value = None
+                for col in df.columns:
+                    field_name = column_mapping.get(col)
+                    if field_name == 'first_name':
+                        first_name_val = row[col]
+                    elif field_name == 'last_name':
+                        last_name_val = row[col]
+                    elif field_name == 'dob':
+                        dob_value = row[col]
+                
+                if first_name_val and last_name_val and dob_value:
+                    try:
+                        first_name_clean = str(first_name_val).strip().lower() if first_name_val else ''
+                        last_name_clean = str(last_name_val).strip().lower() if last_name_val else ''
+                        parsed_dob = pd.to_datetime(dob_value).date()
+                        if first_name_clean and last_name_clean and parsed_dob and parsed_dob != datetime(1900, 1, 1).date():
+                            all_name_dob_combos.add((first_name_clean, last_name_clean, parsed_dob))
+                    except:
+                        pass
+            except:
+                pass
+        
+        logger.info(f"Collected {len(all_name_dob_combos)} unique name+DOB combinations from upload file")
+        
+        if all_name_dob_combos:
+            logger.info("Pre-loading clients with matching name+DOB combinations...")
+            # Build query to find clients matching any of the name+DOB combinations
+            # For large sets, we'll query in batches to avoid overly complex Q() objects
+            from django.db.models import Q
+            BATCH_SIZE = 1000  # Process 1000 combinations at a time
+            all_combos_list = list(all_name_dob_combos)
+            
+            for i in range(0, len(all_combos_list), BATCH_SIZE):
+                batch_combos = all_combos_list[i:i+BATCH_SIZE]
+                name_dob_filters = Q()
+                for first_name_lower, last_name_lower, dob in batch_combos:
+                    name_dob_filters |= Q(
+                        first_name__iexact=first_name_lower,
+                        last_name__iexact=last_name_lower,
+                        dob=dob
+                    )
+                
+                if name_dob_filters.children:
+                    try:
+                        clients_with_matching_name_dob = Client.objects.filter(name_dob_filters).only(
+                            'id', 'first_name', 'last_name', 'dob', 'source', 'client_id'
+                        )
+                        for client in clients_with_matching_name_dob:
+                            key = (client.first_name.lower().strip() if client.first_name else '', 
+                                   client.last_name.lower().strip() if client.last_name else '',
+                                   client.dob)
+                            if key not in clients_by_name_dob:
+                                clients_by_name_dob[key] = []
+                            clients_by_name_dob[key].append(client)
+                        logger.info(f"Pre-loaded batch {i//BATCH_SIZE + 1}: {len(clients_with_matching_name_dob)} clients (total so far: {len(clients_by_name_dob)} unique matches)")
+                    except Exception as e:
+                        logger.error(f"Error pre-loading name+DOB batch {i//BATCH_SIZE + 1}: {e}")
+                        # Continue with next batch even if one fails
+            
+            logger.info(f"Pre-loaded {sum(len(clients) for clients in clients_by_name_dob.values())} total clients with matching name+DOB for discharge updates ({len(clients_by_name_dob)} unique name+DOB combinations)")
+        
         # ===== END BATCH OPTIMIZATION =====
         
         # Optimized find_duplicate_client function using pre-loaded data
@@ -3284,40 +3411,45 @@ def upload_clients(request):
                     if similarity >= 0.9:
                         return client, f"name_similarity_{similarity:.2f}"
             
-            # Priority 5: Name + Date of Birth combination (limited query)
-            # Only check against clients from different sources when source is SMIS or EMHware
+            # Priority 5: Name + Date of Birth combination (using pre-loaded data)
+            # Maintains original business logic: check ALL clients with matching name+DOB
             if full_name and dob and dob != datetime(1900, 1, 1).date():
                 first_name_val = client_data.get('first_name') or ''
                 last_name_val = client_data.get('last_name') or ''
-                first_name_clean = first_name_val.strip() if isinstance(first_name_val, str) else str(first_name_val)
-                last_name_clean = last_name_val.strip() if isinstance(last_name_val, str) else str(last_name_val)
-                name_dob_query = Client.objects.filter(
-                    first_name__iexact=first_name_clean,
-                    last_name__iexact=last_name_clean,
-                    dob=dob
-                )
+                first_name_clean = first_name_val.strip().lower() if isinstance(first_name_val, str) else str(first_name_val).lower()
+                last_name_clean = last_name_val.strip().lower() if isinstance(last_name_val, str) else str(last_name_val).lower()
+                
+                # Use pre-loaded clients_by_name_dob cache
+                key = (first_name_clean, last_name_clean, dob)
+                candidates = clients_by_name_dob.get(key, [])
+                
                 # Exclude same source for SMIS/EMHware cross-source duplicate detection
                 if source in ['SMIS', 'EMHware']:
-                    name_dob_query = name_dob_query.exclude(source=source)
-                name_dob_match = name_dob_query.first()
-                if name_dob_match:
-                    return name_dob_match, "name_dob_match"
+                    candidates = [c for c in candidates if c.source != source]
+                
+                if candidates:
+                    # Return first match (exact match)
+                    return candidates[0], "name_dob_match"
             
-            # Priority 6: Date of Birth + Name similarity (limited query)
-            # Only check against clients from different sources when source is SMIS or EMHware
+            # Priority 6: Date of Birth + Name similarity (using pre-loaded data)
+            # Maintains original business logic: check ALL clients with matching DOB, then check name similarity
             if dob and dob != datetime(1900, 1, 1).date():
-                # Build query with exclude before slicing
-                dob_query = Client.objects.filter(dob=dob).only('id', 'first_name', 'last_name')
+                # Use pre-loaded clients_by_dob cache
+                candidates = clients_by_dob.get(dob, [])
+                
                 # Exclude same source for SMIS/EMHware cross-source duplicate detection
                 if source in ['SMIS', 'EMHware']:
-                    dob_query = dob_query.exclude(source=source)
-                # Apply limit after all filters
-                dob_query = dob_query[:100]  # Limit to 100
-                for client in dob_query:
-                    client_full_name = f"{client.first_name} {client.last_name}".strip()
-                    similarity = calculate_name_similarity(full_name, client_full_name)
+                    candidates = [c for c in candidates if c.source != source]
+                
+                # Limit to 100 candidates (same as original logic)
+                candidates = candidates[:100]
+                
+                # Check name similarity
+                for candidate in candidates:
+                    candidate_full_name = f"{candidate.first_name} {candidate.last_name}".strip()
+                    similarity = calculate_name_similarity(full_name, candidate_full_name)
                     if similarity >= 0.7:
-                        return client, f"dob_name_similarity_{similarity:.2f}"
+                        return candidate, f"dob_name_similarity_{similarity:.2f}"
             
             return None, None
         
@@ -3334,6 +3466,8 @@ def upload_clients(request):
         if total_rows > 10000:
             logger.warning(f"Large file detected: {total_rows} rows. Processing in chunks within a single transaction.")
         
+        logger.info("All pre-loading complete. Starting chunked processing within transaction...")
+        
         # Process file in chunks but within a SINGLE transaction
         # If ANY chunk fails, ALL database operations will rollback
         chunk_start = 0
@@ -3342,7 +3476,9 @@ def upload_clients(request):
         # Wrap ALL chunk processing in a single transaction
         # This ensures that if any chunk fails, everything rolls back
         try:
+            logger.info("Entering transaction.atomic() block...")
             with transaction.atomic():
+                logger.info("Inside transaction.atomic() block. Starting chunk processing...")
                 while chunk_start < total_rows:
                     chunk_end = min(chunk_start + CHUNK_SIZE, total_rows)
                     chunk_number += 1
@@ -4126,8 +4262,9 @@ def upload_clients(request):
                             
                             # If discharge_date is present but we haven't found a client yet, try to find existing client
                             # This ensures we update existing clients instead of creating new ones when discharge_date is present
+                            # Maintains original business logic: try client_id first, then name+DOB
                             if has_discharge_date and not is_update:
-                                # Try to find existing client by client_id first
+                                # Try to find existing client by client_id first (using pre-loaded cache)
                                 if client_data.get('client_id'):
                                     try:
                                         client_id_to_find = client_data['client_id']
@@ -4140,29 +4277,26 @@ def upload_clients(request):
                                     except Exception as e:
                                         logger.error(f"Error finding client by ID for discharge: {e}")
                                 
-                                # If still not found, try to find by name + DOB matching
+                                # If still not found, try to find by name + DOB matching (using pre-loaded cache)
+                                # Maintains original business logic
                                 first_name_val = client_data.get('first_name')
                                 last_name_val = client_data.get('last_name')
                                 if not is_update and first_name_val and last_name_val:
                                     try:
-                                        first_name = first_name_val.strip() if isinstance(first_name_val, str) else str(first_name_val or '')
-                                        last_name = last_name_val.strip() if isinstance(last_name_val, str) else str(last_name_val or '')
+                                        first_name = first_name_val.strip().lower() if isinstance(first_name_val, str) else str(first_name_val or '').lower()
+                                        last_name = last_name_val.strip().lower() if isinstance(last_name_val, str) else str(last_name_val or '').lower()
                                         dob = client_data.get('dob')
                                         
-                                        # Search for matching client
-                                        query = Client.objects.filter(
-                                            first_name__iexact=first_name,
-                                            last_name__iexact=last_name
-                                        )
+                                        # Use pre-loaded clients_by_name_dob cache
                                         if dob:
-                                            query = query.filter(dob=dob)
-                                        
-                                        existing_client = query.first()
-                                        if existing_client:
-                                            client = existing_client
-                                            is_update = True
-                                            updated_count += 1
-                                            logger.info(f"Found existing client by name+DOB for discharge update: {first_name} {last_name}")
+                                            key = (first_name, last_name, dob)
+                                            matching_clients = clients_by_name_dob.get(key, [])
+                                            if matching_clients:
+                                                existing_client = matching_clients[0]  # Take first match
+                                                client = existing_client
+                                                is_update = True
+                                                updated_count += 1
+                                                logger.info(f"Found existing client by name+DOB for discharge update: {first_name} {last_name}")
                                     except Exception as e:
                                         logger.error(f"Error finding client by name+DOB for discharge: {e}")
                                 
@@ -4221,36 +4355,37 @@ def upload_clients(request):
                                 
                                 if source in ['SMIS', 'EMHware']:
                                     # Check for name-based duplicates using fuzzy matching
+                                    # Maintains original business logic: check against ALL clients from other sources
                                     first_name_str = str(client_data.get('first_name') or '')
                                     last_name_str = str(client_data.get('last_name') or '')
                                     client_name = f"{first_name_str} {last_name_str}".strip()
                                     
                                     if client_name:
-                                        # Get all existing clients (excluding those from the same source to avoid cross-source duplicates)
-                                        # We want to check against clients from other sources or no source
-                                        existing_clients = Client.objects.exclude(id=client_data.get('id', -1)).exclude(source=source)
-                                        
-                                        logger.debug(f"Checking for duplicates for {client_name} from source {source}. Checking against {existing_clients.count()} clients from other sources.")
-                                        
-                                        # Use fuzzy_matcher to find potential duplicates by name
-                                        potential_duplicates = fuzzy_matcher.find_potential_duplicates(
-                                            client_data, existing_clients, similarity_threshold=0.9
-                                        )
-                                        
-                                        if potential_duplicates:
-                                            # Found name-based duplicate - mark it for duplicate record creation
-                                            # Only mark as duplicate if similarity is >= 0.9 (90%)
-                                            duplicate_client, match_type, similarity = potential_duplicates[0]  # Take the first/highest match
-                                            if similarity >= 0.9:
-                                                name_duplicate_similarity = similarity
-                                                duplicates_flagged += 1
-                                                
-                                                logger.info(f"Name duplicate found for {client_name} (similarity: {similarity:.2f}). Will mark as duplicate after client creation.")
-                                            else:
-                                                # Similarity below 90%, don't mark as duplicate
-                                                duplicate_client = None
-                                                match_type = None
-                                                logger.info(f"Name similarity found for {client_name} (similarity: {similarity:.2f}) but below 90% threshold, not marking as duplicate.")
+                                        # Use pre-loaded all_clients_from_other_sources cache
+                                        # This maintains the original business logic of checking against all clients from other sources
+                                        if all_clients_from_other_sources:
+                                            logger.debug(f"Checking for duplicates for {client_name} from source {source}. Checking against {len(all_clients_from_other_sources)} clients from other sources.")
+                                            
+                                            # Use fuzzy_matcher to find potential duplicates by name
+                                            # Maintains original business logic
+                                            potential_duplicates = fuzzy_matcher.find_potential_duplicates(
+                                                client_data, all_clients_from_other_sources, similarity_threshold=0.9
+                                            )
+                                            
+                                            if potential_duplicates:
+                                                # Found name-based duplicate - mark it for duplicate record creation
+                                                # Only mark as duplicate if similarity is >= 0.9 (90%)
+                                                duplicate_client, match_type, similarity = potential_duplicates[0]  # Take the first/highest match
+                                                if similarity >= 0.9:
+                                                    name_duplicate_similarity = similarity
+                                                    duplicates_flagged += 1
+                                                    
+                                                    # logger.info(f"Name duplicate found for {client_name} (similarity: {similarity:.2f}). Will mark as duplicate after client creation.")
+                                                else:
+                                                    # Similarity below 90%, don't mark as duplicate
+                                                    duplicate_client = None
+                                                    match_type = None
+                                                    # logger.info(f"Name similarity found for {client_name} (similarity: {similarity:.2f}) but below 90% threshold, not marking as duplicate.")
                                 
                                 # If no name duplicate found, check for other types of duplicates using optimized batch function
                                 if not duplicate_client:
@@ -4418,8 +4553,18 @@ def upload_clients(request):
                         ]
                         
                         # Use bulk_update - Django will only update fields that are set on the objects
-                        Client.objects.bulk_update(clients_to_bulk_update, update_fields, batch_size=1000)
-                        logger.info(f"Bulk updated {len(clients_to_bulk_update)} clients successfully")
+                        # Use smaller batch size (100) to avoid PostgreSQL stack depth limit exceeded error
+                        # When updating 1000+ clients, the SQL query becomes too complex
+                        try:
+                            Client.objects.bulk_update(clients_to_bulk_update, update_fields, batch_size=500)
+                            logger.info(f"Bulk updated {len(clients_to_bulk_update)} clients successfully")
+                        except Exception as bulk_error:
+                            import traceback
+                            error_traceback = traceback.format_exc()
+                            logger.error(f"Bulk update failed in chunk {chunk_number}: {str(bulk_error)}\nType: {type(bulk_error).__name__}\nTraceback:\n{error_traceback}")
+                            # Log details about the clients being updated
+                            logger.error(f"Attempting to update {len(clients_to_bulk_update)} clients. First few client IDs: {[c.id for c in clients_to_bulk_update[:5]]}")
+                            raise  # Re-raise to be caught by outer exception handler
                         
                         # Update or create ClientExtended records
                         from core.models import ClientExtended
@@ -4473,7 +4618,8 @@ def upload_clients(request):
                             client_objects.append(Client(**client_data['client_fields']))
                         
                         # Bulk create clients
-                        created_clients = Client.objects.bulk_create(client_objects, batch_size=1000)
+                        # Use smaller batch size (100) to avoid PostgreSQL stack depth limit exceeded error
+                        created_clients = Client.objects.bulk_create(client_objects, batch_size=500)
                         chunk_created_count = len(created_clients)
                         
                         # Create ClientExtended records
@@ -4486,7 +4632,8 @@ def upload_clients(request):
                                 extended_objects.append(ClientExtended(**extended_data))
                         
                         if extended_objects:
-                            ClientExtended.objects.bulk_create(extended_objects, batch_size=1000)
+                            # Use smaller batch size to avoid PostgreSQL stack depth limit
+                            ClientExtended.objects.bulk_create(extended_objects, batch_size=500)
                         
                         # Create duplicate relationships
                         from core.models import ClientDuplicate
@@ -4547,7 +4694,8 @@ def upload_clients(request):
                                 })
                         
                         if duplicate_objects:
-                            ClientDuplicate.objects.bulk_create(duplicate_objects, batch_size=1000)
+                            # Use smaller batch size to avoid PostgreSQL stack depth limit
+                            ClientDuplicate.objects.bulk_create(duplicate_objects, batch_size=500)
                         
                         logger.info(f"Bulk created {chunk_created_count} clients successfully in chunk {chunk_number}")
                         
@@ -4599,9 +4747,23 @@ def upload_clients(request):
                             
         except Exception as e:
             # If ANY chunk fails, the entire transaction rolls back
+            import traceback
+            error_traceback = traceback.format_exc()
             error_code = get_error_code_for_exception(e)
-            upload_error = UploadError(error_code, raw_error=e, details={'chunk': chunk_number, 'chunk_start': chunk_start, 'chunk_end': chunk_end})
+            upload_error = UploadError(
+                error_code, 
+                raw_error=e, 
+                details={
+                    'chunk': chunk_number, 
+                    'chunk_start': chunk_start, 
+                    'chunk_end': chunk_end,
+                    'error_type': type(e).__name__,
+                    'traceback': error_traceback
+                }
+            )
             logger.error(f"Error processing chunk {chunk_number}: {upload_error.message}. ALL database operations will rollback.")
+            logger.error(f"Exception type: {type(e).__name__}, Exception message: {str(e)}")
+            logger.error(f"Full traceback:\n{error_traceback}")
             all_errors.append(f"Chunk {chunk_number} (rows {chunk_start + 1}-{chunk_end}): {upload_error.message}")
             # Re-raise to trigger transaction rollback
             raise upload_error
@@ -4641,11 +4803,12 @@ def upload_clients(request):
                             inactive_count += 1
                 
                 # Bulk update inactive status
+                # Use smaller batch size to avoid PostgreSQL stack depth limit
                 if clients_to_update_status:
                     Client.objects.bulk_update(
                         clients_to_update_status,
                         ['is_inactive'],
-                        batch_size=1000
+                        batch_size=500
                     )
                     logger.info(f"Updated inactive status for {len(clients_to_update_status)} clients ({inactive_count} marked as inactive)")
         except Exception as e:
