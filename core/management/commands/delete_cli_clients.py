@@ -1,5 +1,5 @@
 """
-Django management command to delete all clients with client_id containing 'CLI'
+Django management command to delete all clients with client_id containing 'CLI' or 'CID'
 and all their related data (hard delete).
 
 This script will delete:
@@ -18,6 +18,7 @@ Usage:
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.db.models import Q
 from django.conf import settings
 from core.models import (
     Client, ClientExtended, ClientProgramEnrollment, Intake, Discharge,
@@ -29,13 +30,13 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = 'Delete all clients with client_id containing "CLI" and all related data (hard delete)'
+    help = 'Delete all clients with client_id containing "CLI" or "CID" and all related data (hard delete)'
 
     def add_arguments(self, parser):
         parser.add_argument(
             '--confirm',
             action='store_true',
-            help='Confirm that you want to delete ALL CLI clients and related data (required for safety)'
+            help='Confirm that you want to delete ALL CLI/CID clients and related data (required for safety)'
         )
         parser.add_argument(
             '--dry-run',
@@ -53,16 +54,31 @@ class Command(BaseCommand):
         if is_production:
             self.stdout.write(self.style.WARNING(
                 '\n⚠️  WARNING: You are running this command in PRODUCTION!\n'
-                'This will permanently delete all CLI clients and related data.\n'
+                'This will permanently delete all CLI/CID clients and related data.\n'
             ))
 
-        # Find all clients with client_id containing 'CLI'
-        clients = Client.objects.filter(client_id__icontains='CLI')
+        # Find all clients with client_id containing 'CLI' or 'CID'
+        clients = Client.objects.filter(
+            Q(client_id__icontains='CLI') | Q(client_id__icontains='CID')
+        )
         total_clients = clients.count()
 
         if total_clients == 0:
-            self.stdout.write(self.style.SUCCESS('No clients found with client_id containing "CLI".'))
+            self.stdout.write(self.style.SUCCESS('No clients found with client_id containing "CLI" or "CID".'))
             return
+        
+        # Show breakdown by pattern
+        cli_count = Client.objects.filter(client_id__icontains='CLI').count()
+        cid_count = Client.objects.filter(client_id__icontains='CID').count()
+        self.stdout.write(f'\nFound {cli_count} clients with "CLI" in client_id')
+        self.stdout.write(f'Found {cid_count} clients with "CID" in client_id')
+        if cli_count > 0 and cid_count > 0:
+            # Some clients might match both patterns, so show overlap
+            overlap_count = Client.objects.filter(
+                Q(client_id__icontains='CLI') & Q(client_id__icontains='CID')
+            ).count()
+            if overlap_count > 0:
+                self.stdout.write(f'Note: {overlap_count} clients match both patterns (counted once in total)')
 
         # Collect all related data
         client_ids = list(clients.values_list('id', flat=True))
@@ -105,7 +121,7 @@ class Command(BaseCommand):
         if not confirm:
             self.stdout.write(self.style.ERROR(
                 '\n❌ ERROR: This command requires --confirm flag to proceed.\n'
-                'This will permanently delete ALL CLI clients and related data!\n'
+                'This will permanently delete ALL CLI/CID clients and related data!\n'
                 'This action CANNOT be undone.\n'
                 '\nTo proceed, run: python manage.py delete_cli_clients --confirm\n'
             ))
@@ -118,8 +134,8 @@ class Command(BaseCommand):
         ))
         
         if is_production:
-            response = input('Type "DELETE CLI CLIENTS" (all caps) to confirm: ')
-            if response != 'DELETE CLI CLIENTS':
+            response = input('Type "DELETE CLI CID CLIENTS" (all caps) to confirm: ')
+            if response != 'DELETE CLI CID CLIENTS':
                 self.stdout.write(self.style.ERROR('\n❌ Confirmation text did not match. Deletion cancelled.'))
                 return
         else:
@@ -196,6 +212,6 @@ class Command(BaseCommand):
                 f'\n❌ ERROR: An error occurred during deletion: {str(e)}\n'
                 'All changes have been rolled back.\n'
             ))
-            logger.error(f"Error deleting CLI clients: {str(e)}", exc_info=True)
+            logger.error(f"Error deleting CLI/CID clients: {str(e)}", exc_info=True)
             raise
 
