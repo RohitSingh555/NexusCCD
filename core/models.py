@@ -426,54 +426,54 @@ class Client(BaseModel):
     client_id = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="External client ID")
     last_name = models.CharField(max_length=100, null=True, blank=True, db_index=True)
     first_name = models.CharField(max_length=100, db_index=True)
-    middle_name = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    preferred_name = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    alias = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Last Name at Birth")
+    middle_name = models.CharField(max_length=100, null=True, blank=True)
+    preferred_name = models.CharField(max_length=100, null=True, blank=True)
+    alias = models.CharField(max_length=100, null=True, blank=True, help_text="Last Name at Birth")
     dob = models.DateField(db_index=True, null=True, blank=True)
     age = models.IntegerField(null=True, blank=True, help_text="Calculated from DOB")
-    gender = models.CharField(max_length=50, null=True, blank=True, db_index=True)
-    gender_identity = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    pronoun = models.CharField(max_length=50, null=True, blank=True, db_index=True)
-    marital_status = models.CharField(max_length=50, null=True, blank=True, db_index=True)
-    citizenship_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    location_county = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    province = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    city = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    postal_code = models.CharField(max_length=20, null=True, blank=True, db_index=True)
+    gender = models.CharField(max_length=50, null=True, blank=True)
+    gender_identity = models.CharField(max_length=100, null=True, blank=True)
+    pronoun = models.CharField(max_length=50, null=True, blank=True)
+    marital_status = models.CharField(max_length=50, null=True, blank=True)
+    citizenship_status = models.CharField(max_length=100, null=True, blank=True)
+    location_county = models.CharField(max_length=100, null=True, blank=True)
+    province = models.CharField(max_length=100, null=True, blank=True)
+    city = models.CharField(max_length=100, null=True, blank=True)
+    postal_code = models.CharField(max_length=20, null=True, blank=True, db_index=True)  # Used in search
     address = models.CharField(max_length=500, null=True, blank=True)
     address_2 = models.CharField(max_length=255, null=True, blank=True, help_text="Address line 2")
     
     # 🌍 CULTURAL & DEMOGRAPHIC INFO
-    language = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    preferred_language = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    mother_tongue = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    official_language = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    language_interpreter_required = models.BooleanField(default=False, db_index=True)
-    self_identification_race_ethnicity = models.CharField(max_length=200, null=True, blank=True, db_index=True)
+    language = models.CharField(max_length=100, null=True, blank=True)
+    preferred_language = models.CharField(max_length=100, null=True, blank=True)
+    mother_tongue = models.CharField(max_length=100, null=True, blank=True)
+    official_language = models.CharField(max_length=100, null=True, blank=True)
+    language_interpreter_required = models.BooleanField(default=False)
+    self_identification_race_ethnicity = models.CharField(max_length=200, null=True, blank=True)
     ethnicity = models.JSONField(default=list, help_text="List of ethnicities (multi-select)")
-    aboriginal_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    lgbtq_status = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="LGBTQ+ Status")
-    veteran_status = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Veteran Status")
-    legal_status = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Legal Status")
-    highest_level_education = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    children_home = models.BooleanField(default=False, db_index=True)
+    aboriginal_status = models.CharField(max_length=100, null=True, blank=True)
+    lgbtq_status = models.CharField(max_length=100, null=True, blank=True, help_text="LGBTQ+ Status")
+    veteran_status = models.CharField(max_length=100, null=True, blank=True, help_text="Veteran Status")
+    legal_status = models.CharField(max_length=100, null=True, blank=True, help_text="Legal Status")
+    highest_level_education = models.CharField(max_length=100, null=True, blank=True)
+    children_home = models.BooleanField(default=False)
     children_number = models.IntegerField(null=True, blank=True)
-    lhin = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Local Health Integration Network")
+    lhin = models.CharField(max_length=100, null=True, blank=True, help_text="Local Health Integration Network")
     
     # 💊 MEDICAL & HEALTH INFORMATION
     medical_conditions = models.TextField(null=True, blank=True, help_text="Medical conditions")
     primary_diagnosis = models.CharField(max_length=255, null=True, blank=True, help_text="Primary diagnosis")
     family_doctor = models.CharField(max_length=255, null=True, blank=True)
-    health_card_number = models.CharField(max_length=50, null=True, blank=True, db_index=True, help_text="HC# (Health Card Number)")
+    health_card_number = models.CharField(max_length=50, null=True, blank=True, help_text="HC# (Health Card Number)")
     health_card_version = models.CharField(max_length=10, null=True, blank=True, help_text="HC Version")
     health_card_exp_date = models.DateField(null=True, blank=True, help_text="HC Exp Date")
     health_card_issuing_province = models.CharField(max_length=100, null=True, blank=True, help_text="HC Issuing Province")
     no_health_card_reason = models.CharField(max_length=255, null=True, blank=True, help_text="No HC Reason")
     
     # 👥 CONTACT & PERMISSIONS
-    permission_to_phone = models.BooleanField(default=False, db_index=True, help_text="Permission to contact by phone")
-    permission_to_email = models.BooleanField(default=False, db_index=True, help_text="Permission to contact by email")
-    preferred_communication_method = models.CharField(max_length=50, null=True, blank=True, db_index=True, help_text="Preferred Method of Communication")
+    permission_to_phone = models.BooleanField(default=False, help_text="Permission to contact by phone")
+    permission_to_email = models.BooleanField(default=False, help_text="Permission to contact by email")
+    preferred_communication_method = models.CharField(max_length=50, null=True, blank=True, help_text="Preferred Method of Communication")
     phone = models.CharField(max_length=20, null=True, blank=True, db_index=True)
     phone_work = models.CharField(max_length=20, null=True, blank=True, help_text="Work phone number")
     phone_alt = models.CharField(max_length=20, null=True, blank=True, help_text="Alternative phone number")
@@ -483,27 +483,27 @@ class Client(BaseModel):
     comments = models.TextField(null=True, blank=True, help_text="Additional comments and notes")
     
     # 🧑‍💼 PROGRAM / ENROLLMENT DETAILS
-    program = models.CharField(max_length=255, null=True, blank=True, db_index=True)
-    sub_program = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    program = models.CharField(max_length=255, null=True, blank=True)  # May be used in filtering, but not critical for uploads
+    sub_program = models.CharField(max_length=255, null=True, blank=True)
     support_workers = models.JSONField(default=list, help_text="List of assigned support workers")
-    level_of_support = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    client_type = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    admission_date = models.DateField(null=True, blank=True, db_index=True)
-    discharge_date = models.DateField(null=True, blank=True, db_index=True)
+    level_of_support = models.CharField(max_length=100, null=True, blank=True)
+    client_type = models.CharField(max_length=100, null=True, blank=True)
+    admission_date = models.DateField(null=True, blank=True)
+    discharge_date = models.DateField(null=True, blank=True, db_index=True)  # Used in list views
     days_elapsed = models.IntegerField(null=True, blank=True)
-    program_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    program_status = models.CharField(max_length=100, null=True, blank=True)  # May be used in filtering, but not critical
     reason_discharge = models.CharField(max_length=255, null=True, blank=True, help_text="Reason for Discharge/Program Status")
-    receiving_services = models.BooleanField(default=False, db_index=True)
-    receiving_services_date = models.DateField(null=True, blank=True, db_index=True, help_text="Date when client actually started receiving services")
-    referral_source = models.CharField(max_length=255, null=True, blank=True, db_index=True)
+    receiving_services = models.BooleanField(default=False)
+    receiving_services_date = models.DateField(null=True, blank=True, help_text="Date when client actually started receiving services")
+    referral_source = models.CharField(max_length=255, null=True, blank=True)
     
     # 🧾 ADMINISTRATIVE / SYSTEM FIELDS
-    chart_number = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    chart_number = models.CharField(max_length=100, null=True, blank=True)
     source = models.CharField(max_length=50, choices=[('SMIS', 'SMIS'), ('EMHware', 'EMHware')], null=True, blank=True, db_index=True, help_text="Source system where client data originated")
     legacy_client_ids = models.JSONField(default=list, help_text="List of legacy client IDs from different sources (e.g., [{'source': 'SMIS', 'client_id': '123'}, {'source': 'EMHware', 'client_id': '456'}])")
-    secondary_source_id = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Client ID of the duplicate client that was merged into this client")
-    emhware_id = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Client ID from EMHware system")
-    smis_id = models.CharField(max_length=100, null=True, blank=True, db_index=True, help_text="Client ID from SMIS system")
+    secondary_source_id = models.CharField(max_length=100, null=True, blank=True, help_text="Client ID of the duplicate client that was merged into this client")
+    emhware_id = models.CharField(max_length=100, null=True, blank=True, help_text="Client ID from EMHware system")
+    smis_id = models.CharField(max_length=100, null=True, blank=True, help_text="Client ID from SMIS system")
     is_archived = models.BooleanField(default=False, db_index=True, help_text="Whether this client is archived")
     archived_at = models.DateTimeField(null=True, blank=True, db_index=True, help_text="Timestamp when this client was archived")
     is_inactive = models.BooleanField(default=False, db_index=True, help_text="Whether this client is inactive (has zero active enrollments)")
@@ -515,9 +515,9 @@ class Client(BaseModel):
     addresses = models.JSONField(default=list, help_text="List of addresses with type, street, city, state, zip, country")
     uid_external = models.CharField(max_length=255, null=True, blank=True, unique=True, db_index=True)
     languages_spoken = models.JSONField(default=list)
-    indigenous_status = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    country_of_birth = models.CharField(max_length=100, null=True, blank=True, db_index=True)
-    sexual_orientation = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    indigenous_status = models.CharField(max_length=100, null=True, blank=True)
+    country_of_birth = models.CharField(max_length=100, null=True, blank=True)
+    sexual_orientation = models.CharField(max_length=100, null=True, blank=True)
     
     # Audit fields
     created_by = models.CharField(max_length=255, null=True, blank=True, help_text="Name of the person who created this record")
@@ -631,27 +631,21 @@ class Client(BaseModel):
     class Meta:
         db_table = 'clients'
         indexes = [
+            # Critical for duplicate detection during uploads
             models.Index(fields=['first_name', 'last_name', 'dob'], name='client_name_dob_idx'),
-            models.Index(fields=['uid_external'], name='client_uid_external_idx'),
-            models.Index(fields=['client_id'], name='client_id_idx'),
-            models.Index(fields=['chart_number'], name='client_chart_number_idx'),
-            models.Index(fields=['citizenship_status'], name='client_citizenship_status_idx'),
-            models.Index(fields=['indigenous_status'], name='client_indigenous_status_idx'),
-            models.Index(fields=['country_of_birth'], name='client_country_of_birth_idx'),
-            models.Index(fields=['permission_to_phone'], name='client_permission_phone_idx'),
-            models.Index(fields=['permission_to_email'], name='client_permission_email_idx'),
-            models.Index(fields=['program'], name='client_program_idx'),
-            models.Index(fields=['program_status'], name='client_program_status_idx'),
-            models.Index(fields=['client_type'], name='client_type_idx'),
-            models.Index(fields=['admission_date'], name='client_admission_date_idx'),
-            models.Index(fields=['discharge_date'], name='client_discharge_date_idx'),
-            models.Index(fields=['health_card_number'], name='client_health_card_idx'),
-            models.Index(fields=['lhin'], name='client_lhin_idx'),
-            models.Index(fields=['location_county'], name='client_location_county_idx'),
-            models.Index(fields=['province'], name='client_province_idx'),
-            models.Index(fields=['city'], name='client_city_idx'),
+            # Critical for existing client lookup during uploads (composite for better performance)
+            models.Index(fields=['client_id', 'source'], name='client_id_source_idx'),
+            # Critical for DOB-based duplicate detection
+            models.Index(fields=['dob'], name='client_dob_idx'),
+            # Used in list views and filtering
+            models.Index(fields=['is_archived', 'is_inactive'], name='client_status_idx'),
+            models.Index(fields=['source', 'is_archived'], name='client_source_archived_idx'),
+            # Used in search functionality
             models.Index(fields=['postal_code'], name='client_postal_code_idx'),
-            models.Index(fields=['source'], name='client_source_idx'),
+            # Used in list view filtering
+            models.Index(fields=['discharge_date'], name='client_discharge_date_idx'),
+            # Legacy field index (may be used in some queries)
+            models.Index(fields=['uid_external'], name='client_uid_external_idx'),
         ]
     
     def __str__(self):
