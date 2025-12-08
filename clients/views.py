@@ -3312,35 +3312,59 @@ def upload_clients(request):
                 logger.warning(f"Error collecting data from row {index + 1}: {str(e)}")
                 continue
         
-        # Batch query existing clients by client_id + source
+        # Batch query existing clients by client_id - check ALL sources (including same source)
+        # Logic: If uploading from EMHware, check SMIS AND EMHware. If uploading from SMIS, check EMHware AND SMIS.
+        # This enables both cross-source and same-source updates based on client_id
         existing_clients_by_id = {}
         if all_client_ids:
+            # Helper function to clean client_id (same as used in processing)
+            def clean_client_id_for_matching(value):
+                """Clean client_id to ensure it's a whole number string without decimals, matching the processing logic"""
+                if pd.isna(value) or value is None:
+                    return None
+                try:
+                    str_value = str(value).strip()
+                    if not str_value or str_value.lower() in ['nan', 'none', 'null', '']:
+                        return None
+                    # If it's a decimal number (like 2765.0), convert to integer then back to string
+                    if '.' in str_value:
+                        float_val = float(str_value)
+                        if float_val.is_integer():
+                            return str(int(float_val))
+                        else:
+                            return str_value
+                    else:
+                        return str_value
+                except (ValueError, TypeError):
+                    return None
+            
+            # Check ALL sources (not just same source) - this enables cross-source client_id matching
             existing_clients = Client.objects.filter(
-                client_id__in=all_client_ids,
-                source=source
+                client_id__in=all_client_ids
             ).select_related().only(
                 'id', 'client_id', 'source', 'first_name', 'last_name', 
                 'email', 'phone', 'contact_information', 'dob'
             )
             for client in existing_clients:
-                existing_clients_by_id[client.client_id] = client
+                # Clean the client_id before storing as key to ensure consistent matching
+                cleaned_id = clean_client_id_for_matching(client.client_id)
+                if cleaned_id:
+                    # Store by cleaned client_id - if multiple sources have same client_id, last one wins (but we'll handle this in matching)
+                    existing_clients_by_id[cleaned_id] = client
         
-        logger.info(f"Found {len(existing_clients_by_id)} existing clients by client_id+source")
+        logger.info(f"Found {len(existing_clients_by_id)} existing clients by client_id (all sources)")
         
         # Batch query potential duplicates by email
-        # Note: Email/phone matching should check all sources (including same source) as exact matches indicate true duplicates
-        # For cross-source matching (SMIS/EMHware), we want to find matches from OTHER sources to enable auto-merge
+        # Note: Email/phone matching should check ALL sources (including same source) as exact matches indicate true duplicates
+        # Logic: If uploading from EMHware, check SMIS AND EMHware. If uploading from SMIS, check EMHware AND SMIS.
         # Check both email field and contact_information JSON
         potential_duplicates_by_email = {}
         if all_emails:
             from django.db.models import Q
             # Normalize emails to lowercase for matching
             normalized_emails = [e.strip().lower() if isinstance(e, str) else str(e).strip().lower() for e in all_emails if e and str(e).strip()]
-            # For SMIS/EMHware cross-source matching, exclude same source to find matches from other sources
+            # Check ALL sources (including same source) - this enables both cross-source and same-source updates
             email_filter = Q(email__in=normalized_emails) | Q(contact_information__email__in=normalized_emails)
-            if source in ['SMIS', 'EMHware']:
-                # Exclude same source to enable cross-source auto-merge
-                email_filter = email_filter & ~Q(source=source)
             duplicate_email_clients = Client.objects.filter(email_filter).only('id', 'first_name', 'last_name', 'email', 'phone', 'contact_information', 'dob', 'client_id', 'source')
             for client in duplicate_email_clients:
                 # Check email field first, then contact_information
@@ -3354,19 +3378,34 @@ def upload_clients(request):
                     potential_duplicates_by_email[email_key].append(client)
         
         # Batch query potential duplicates by phone
-        # Note: Email/phone matching should check all sources (including same source) as exact matches indicate true duplicates
-        # For cross-source matching (SMIS/EMHware), we want to find matches from OTHER sources to enable auto-merge
+        # Note: Email/phone matching should check ALL sources (including same source) as exact matches indicate true duplicates
+        # Logic: If uploading from EMHware, check SMIS AND EMHware. If uploading from SMIS, check EMHware AND SMIS.
         # Check both phone field and contact_information JSON
         potential_duplicates_by_phone = {}
         if all_phones:
             from django.db.models import Q
-            # Normalize phones by stripping whitespace
-            normalized_phones = [p.strip() if isinstance(p, str) else str(p).strip() for p in all_phones if p and str(p).strip()]
-            # For SMIS/EMHware cross-source matching, exclude same source to find matches from other sources
-            phone_filter = Q(phone__in=normalized_phones) | Q(contact_information__phone__in=normalized_phones)
-            if source in ['SMIS', 'EMHware']:
-                # Exclude same source to enable cross-source auto-merge
-                phone_filter = phone_filter & ~Q(source=source)
+            # Normalize phones by stripping whitespace and removing common formatting characters for better matching
+            # This handles variations like "+91-9876540020", "+91 9876540020", "91-9876540020", etc.
+            def normalize_phone_for_matching(phone_str):
+                """Normalize phone number by removing spaces, dashes, parentheses, and plus signs for matching"""
+                if not phone_str or not isinstance(phone_str, str):
+                    return ''
+                # Remove common formatting: spaces, dashes, parentheses, plus signs
+                normalized = phone_str.strip().replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('+', '')
+                return normalized
+            
+            normalized_phones_raw = [p.strip() if isinstance(p, str) else str(p).strip() for p in all_phones if p and str(p).strip()]
+            # Create a mapping of normalized phones to original phones for querying
+            phone_mapping = {}
+            for orig_phone in normalized_phones_raw:
+                norm_phone = normalize_phone_for_matching(orig_phone)
+                if norm_phone:
+                    phone_mapping[norm_phone] = orig_phone
+            
+            # Check ALL sources (including same source) - this enables both cross-source and same-source updates
+            # Query using original phone formats (as stored in DB), but match using normalized versions
+            all_phone_variants = list(set(normalized_phones_raw + list(phone_mapping.values())))
+            phone_filter = Q(phone__in=all_phone_variants) | Q(contact_information__phone__in=all_phone_variants)
             duplicate_phone_clients = Client.objects.filter(phone_filter).only('id', 'first_name', 'last_name', 'email', 'phone', 'contact_information', 'dob', 'client_id', 'source')
             for client in duplicate_phone_clients:
                 # Check phone field first, then contact_information
@@ -3374,10 +3413,12 @@ def upload_clients(request):
                 if not phone_val or phone_val.strip() == '':
                     phone_val = client.contact_information.get('phone', '') if client.contact_information else ''
                 if phone_val and str(phone_val).strip():
-                    phone_key = str(phone_val).strip()
-                    if phone_key not in potential_duplicates_by_phone:
+                    # Normalize the phone for matching (remove formatting)
+                    phone_key = normalize_phone_for_matching(str(phone_val))
+                    if phone_key and phone_key not in potential_duplicates_by_phone:
                         potential_duplicates_by_phone[phone_key] = []
-                    potential_duplicates_by_phone[phone_key].append(client)
+                    if phone_key:
+                        potential_duplicates_by_phone[phone_key].append(client)
         
         logger.info(f"Pre-loaded {len(potential_duplicates_by_email)} email-based potential duplicates")
         logger.info(f"Pre-loaded {len(potential_duplicates_by_phone)} phone-based potential duplicates")
@@ -3533,12 +3574,27 @@ def upload_clients(request):
                 if external_id_key in existing_clients_by_external_id:
                     return existing_clients_by_external_id[external_id_key], "matching_external_id"
             
+            # Priority 0.5: Exact client_id match - check ALL sources (cross-source and same-source)
+            # This is high priority because client_id is a unique identifier
+            client_id_val = client_data.get('client_id') or ''
+            if client_id_val and str(client_id_val).strip():
+                client_id_key = str(client_id_val).strip()
+                if client_id_key in existing_clients_by_id:
+                    return existing_clients_by_id[client_id_key], "matching_client_id"
+            
             # Check both contact_information JSON and direct email/phone fields
             contact_info = client_data.get('contact_information', {}) or {}
             email_val = contact_info.get('email') or client_data.get('email') or ''
             email = email_val.strip().lower() if isinstance(email_val, str) and email_val.strip() else ''
             phone_val = contact_info.get('phone') or client_data.get('phone') or ''
-            phone = phone_val.strip() if isinstance(phone_val, str) and phone_val.strip() else ''
+            # Normalize phone for matching (remove formatting characters)
+            def normalize_phone_for_matching(phone_str):
+                """Normalize phone number by removing spaces, dashes, parentheses, and plus signs for matching"""
+                if not phone_str or not isinstance(phone_str, str):
+                    return ''
+                normalized = phone_str.strip().replace(' ', '').replace('-', '').replace('(', '').replace(')', '').replace('+', '')
+                return normalized
+            phone = normalize_phone_for_matching(phone_val) if phone_val else ''
             first_name_val = client_data.get('first_name') or ''
             last_name_val = client_data.get('last_name') or ''
             first_name_str = first_name_val.strip() if isinstance(first_name_val, str) else str(first_name_val)
@@ -3562,8 +3618,10 @@ def upload_clients(request):
             if email and phone:
                 email_matches = potential_duplicates_by_email.get(email, [])
                 for match in email_matches:
-                    match_phone = match.contact_information.get('phone', '').strip() if match.contact_information else ''
-                    if match_phone == phone:
+                    # Get phone from match and normalize it for comparison
+                    match_phone_val = match.phone or (match.contact_information.get('phone', '') if match.contact_information else '')
+                    match_phone_normalized = normalize_phone_for_matching(str(match_phone_val)) if match_phone_val else ''
+                    if match_phone_normalized == phone:
                         return match, "email_phone"
             
             # Priority 4: Name similarity check (only check against pre-loaded duplicates, not all clients)
@@ -3587,7 +3645,8 @@ def upload_clients(request):
                         return client, f"name_similarity_{similarity:.2f}"
             
             # Priority 5: Name + Date of Birth combination (using pre-loaded data)
-            # Maintains original business logic: check ALL clients with matching name+DOB
+            # Check ALL sources (including same source) - if uploading from EMHware, check SMIS AND EMHware
+            # If uploading from SMIS, check EMHware AND SMIS. This enables both cross-source and same-source updates.
             if full_name and dob and dob != datetime(1900, 1, 1).date():
                 first_name_val = client_data.get('first_name') or ''
                 last_name_val = client_data.get('last_name') or ''
@@ -3598,23 +3657,22 @@ def upload_clients(request):
                 key = (first_name_clean, last_name_clean, dob)
                 candidates = clients_by_name_dob.get(key, [])
                 
-                # Exclude same source for SMIS/EMHware cross-source duplicate detection
-                if source in ['SMIS', 'EMHware']:
-                    candidates = [c for c in candidates if c.source != source]
+                # Check ALL sources (including same source) - don't exclude same source
+                # This allows same-source updates (e.g., re-uploading same file) and cross-source updates
                 
                 if candidates:
                     # Return first match (exact match)
                     return candidates[0], "name_dob_match"
             
             # Priority 6: Date of Birth + Name similarity (using pre-loaded data)
-            # Maintains original business logic: check ALL clients with matching DOB, then check name similarity
+            # Check ALL sources (including same source) - if uploading from EMHware, check SMIS AND EMHware
+            # If uploading from SMIS, check EMHware AND SMIS. This enables both cross-source and same-source updates.
             if dob and dob != datetime(1900, 1, 1).date():
                 # Use pre-loaded clients_by_dob cache
                 candidates = clients_by_dob.get(dob, [])
                 
-                # Exclude same source for SMIS/EMHware cross-source duplicate detection
-                if source in ['SMIS', 'EMHware']:
-                    candidates = [c for c in candidates if c.source != source]
+                # Check ALL sources (including same source) - don't exclude same source
+                # This allows same-source updates (e.g., re-uploading same file) and cross-source updates
                 
                 # Limit to 100 candidates (same as original logic)
                 candidates = candidates[:100]
@@ -4264,8 +4322,9 @@ def upload_clients(request):
                             if client_data.get('client_id'):
                                 try:
                                     # Use batch-loaded existing clients instead of querying
-                                    client_id_to_find = client_data['client_id']
-                                    existing_client = existing_clients_by_id.get(client_id_to_find)
+                                    # Clean the client_id to match the cleaned keys in existing_clients_by_id
+                                    client_id_to_find = clean_client_id(client_data['client_id'])
+                                    existing_client = existing_clients_by_id.get(client_id_to_find) if client_id_to_find else None
                                     
                                     if existing_client:
                                         # Found existing client by Client ID + Source combination - UPDATE instead of CREATE
@@ -4368,6 +4427,21 @@ def upload_clients(request):
                                                 client.emhware_id = client_id_value
                                             elif source == 'SMIS':
                                                 client.smis_id = client_id_value
+                                        
+                                        # Update legacy_client_ids to include the new source ID (for cross-source matches)
+                                        if client_id_value and source:
+                                            if not client.legacy_client_ids:
+                                                client.legacy_client_ids = []
+                                            # Check if this source+ID combination already exists
+                                            legacy_id_exists = any(
+                                                leg_id.get('source') == source and leg_id.get('client_id') == client_id_value
+                                                for leg_id in client.legacy_client_ids
+                                            )
+                                            if not legacy_id_exists:
+                                                client.legacy_client_ids.append({
+                                                    'source': source,
+                                                    'client_id': client_id_value
+                                                })
                                         
                                         # Ensure discharge_date and reason_discharge are set if they exist (even if not in filtered_data)
                                         # BUT only if NO program is specified - if program is present, discharge is enrollment-level only
