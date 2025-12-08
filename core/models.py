@@ -985,14 +985,22 @@ class ServiceRestriction(BaseModel):
     
     def get_restriction_type_display(self):
         """Get display text for restriction type (behaviors)"""
-        if not self.restriction_type:
+        # Check both restriction_type and behaviors fields
+        # Behaviors are primarily stored in the behaviors field
+        behaviors_list = self.behaviors if self.behaviors else (self.restriction_type if self.restriction_type else [])
+        
+        if not behaviors_list or (isinstance(behaviors_list, list) and len(behaviors_list) == 0):
             return "No behaviors specified"
         
         # Get the display names for the selected behaviors
         behavior_dict = dict(self.BEHAVIOR_CHOICES)
         display_names = []
         
-        for behavior in self.restriction_type:
+        # Ensure behaviors_list is a list
+        if not isinstance(behaviors_list, list):
+            behaviors_list = [behaviors_list] if behaviors_list else []
+        
+        for behavior in behaviors_list:
             if behavior in behavior_dict:
                 display_names.append(behavior_dict[behavior])
         

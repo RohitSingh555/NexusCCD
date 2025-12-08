@@ -194,9 +194,11 @@
                 <button onclick="closeDeleteWarningModal()" class="px-6 py-3 border border-neutral-300 text-sm font-bold rounded-xl text-neutral-700 bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-500 transition-all duration-200 shadow-sm">
                     Cancel
                 </button>
+                {% if user_permissions.can_manage_clients|default:False %}
                 <button onclick="confirmDelete()" class="px-6 py-3 border border-transparent text-sm font-bold rounded-xl text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-all duration-200 shadow-sm">
                     Yes, Delete Permanently
                 </button>
+                {% endif %}
             </div>
         </div>
     </div>

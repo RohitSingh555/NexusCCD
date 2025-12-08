@@ -44,9 +44,8 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
     def get_queryset(self):
         # First apply the ProgramManagerAccessMixin filtering
         queryset = super().get_queryset()
-        # Exclude archived programs for non-admin users
-        if not can_see_archived(self.request.user):
-            queryset = queryset.filter(is_archived=False)
+        # Always exclude archived programs - archived programs should not be shown in the programs list
+        queryset = queryset.filter(is_archived=False)
         # Exclude programs with archived departments for non-admin users
         if not can_see_archived(self.request.user):
             queryset = queryset.filter(department__is_archived=False)
@@ -1171,6 +1170,21 @@ class ProgramUpdateView(ProgramManagerAccessMixin, UpdateView):
         """Handle program updates with audit logging"""
         # Get the original program data before saving
         original_program = self.get_object()
+        
+        # Prevent Managers and Leaders from changing department
+        if not self.request.user.is_superuser:
+            try:
+                staff = self.request.user.staff_profile
+                user_roles = staff.staffrole_set.select_related('role').all()
+                role_names = [staff_role.role.name for staff_role in user_roles]
+                
+                # Only SuperAdmin and Admin can change departments
+                if not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
+                    # Keep the original department value
+                    form.cleaned_data['department'] = original_program.department
+            except Exception:
+                pass
+        
         no_capacity_limit = form.cleaned_data.get('no_capacity_limit')
         capacity_value = form.cleaned_data.get('capacity_current')
 
@@ -1261,8 +1275,9 @@ class ProgramDeleteView(ProgramManagerAccessMixin, DeleteView):
                 user_roles = staff.staffrole_set.select_related('role').all()
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
-                # Staff role users cannot delete programs
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+                # Only SuperAdmin and Admin can delete programs
+                # Managers and Leaders cannot delete programs
+                if not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     from django.contrib import messages
                     messages.error(request, 'You do not have permission to delete programs. Contact your administrator.')
                     return redirect('programs:list')
@@ -1340,9 +1355,8 @@ class ProgramCSVExportView(ProgramManagerAccessMixin, ListView):
     def get_queryset(self):
         # Use the same filtering logic as ProgramListView
         queryset = super().get_queryset()
-        # Exclude archived programs for non-admin users
-        if not can_see_archived(self.request.user):
-            queryset = queryset.filter(is_archived=False)
+        # Always exclude archived programs - archived programs should not be shown
+        queryset = queryset.filter(is_archived=False)
         # Exclude programs with archived departments for non-admin users
         if not can_see_archived(self.request.user):
             queryset = queryset.filter(department__is_archived=False)
@@ -1495,8 +1509,9 @@ class ProgramBulkChangeDepartmentView(ProgramManagerAccessMixin, View):
                 user_roles = staff.staffrole_set.select_related('role').all()
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
-                # Only SuperAdmin, Admin, and Manager can change departments
-                if not any(role in ['SuperAdmin', 'Admin', 'Manager'] for role in role_names):
+                # Only SuperAdmin and Admin can change departments
+                # Managers and Leaders cannot change departments
+                if not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     return JsonResponse({
                         'success': False,
                         'error': 'You do not have permission to change program departments.'

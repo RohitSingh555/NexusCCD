@@ -1608,8 +1608,9 @@ class ClientDeleteView(DeleteView):
                 user_roles = staff.staffrole_set.select_related('role').all()
                 role_names = [staff_role.role.name for staff_role in user_roles]
                 
-                # Staff role users cannot delete clients
-                if 'Staff' in role_names and not any(role in ['SuperAdmin', 'Admin', 'Manager', 'Leader'] for role in role_names):
+                # Only SuperAdmin and Admin can delete clients
+                # Staff, Managers, and Leaders cannot delete clients
+                if not any(role in ['SuperAdmin', 'Admin'] for role in role_names):
                     messages.error(request, 'You do not have permission to delete clients. Contact your administrator.')
                     return redirect('clients:list')
             except Exception:
