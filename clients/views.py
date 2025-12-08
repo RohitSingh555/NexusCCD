@@ -3329,28 +3329,52 @@ def upload_clients(request):
         
         # Batch query potential duplicates by email
         # Note: Email/phone matching should check all sources (including same source) as exact matches indicate true duplicates
+        # For cross-source matching (SMIS/EMHware), we want to find matches from OTHER sources to enable auto-merge
+        # Check both email field and contact_information JSON
         potential_duplicates_by_email = {}
         if all_emails:
-            duplicate_email_clients = Client.objects.filter(
-                contact_information__email__in=all_emails
-            ).only('id', 'first_name', 'last_name', 'email', 'phone', 'contact_information', 'dob', 'client_id', 'source')
+            from django.db.models import Q
+            # Normalize emails to lowercase for matching
+            normalized_emails = [e.strip().lower() if isinstance(e, str) else str(e).strip().lower() for e in all_emails if e and str(e).strip()]
+            # For SMIS/EMHware cross-source matching, exclude same source to find matches from other sources
+            email_filter = Q(email__in=normalized_emails) | Q(contact_information__email__in=normalized_emails)
+            if source in ['SMIS', 'EMHware']:
+                # Exclude same source to enable cross-source auto-merge
+                email_filter = email_filter & ~Q(source=source)
+            duplicate_email_clients = Client.objects.filter(email_filter).only('id', 'first_name', 'last_name', 'email', 'phone', 'contact_information', 'dob', 'client_id', 'source')
             for client in duplicate_email_clients:
-                email_key = client.contact_information.get('email', '').lower() if client.contact_information else ''
-                if email_key:
+                # Check email field first, then contact_information
+                email_val = client.email
+                if not email_val or email_val.strip() == '':
+                    email_val = client.contact_information.get('email', '') if client.contact_information else ''
+                if email_val and str(email_val).strip():
+                    email_key = str(email_val).strip().lower()
                     if email_key not in potential_duplicates_by_email:
                         potential_duplicates_by_email[email_key] = []
                     potential_duplicates_by_email[email_key].append(client)
         
         # Batch query potential duplicates by phone
         # Note: Email/phone matching should check all sources (including same source) as exact matches indicate true duplicates
+        # For cross-source matching (SMIS/EMHware), we want to find matches from OTHER sources to enable auto-merge
+        # Check both phone field and contact_information JSON
         potential_duplicates_by_phone = {}
         if all_phones:
-            duplicate_phone_clients = Client.objects.filter(
-                contact_information__phone__in=all_phones
-            ).only('id', 'first_name', 'last_name', 'email', 'phone', 'contact_information', 'dob', 'client_id', 'source')
+            from django.db.models import Q
+            # Normalize phones by stripping whitespace
+            normalized_phones = [p.strip() if isinstance(p, str) else str(p).strip() for p in all_phones if p and str(p).strip()]
+            # For SMIS/EMHware cross-source matching, exclude same source to find matches from other sources
+            phone_filter = Q(phone__in=normalized_phones) | Q(contact_information__phone__in=normalized_phones)
+            if source in ['SMIS', 'EMHware']:
+                # Exclude same source to enable cross-source auto-merge
+                phone_filter = phone_filter & ~Q(source=source)
+            duplicate_phone_clients = Client.objects.filter(phone_filter).only('id', 'first_name', 'last_name', 'email', 'phone', 'contact_information', 'dob', 'client_id', 'source')
             for client in duplicate_phone_clients:
-                phone_key = client.contact_information.get('phone', '') if client.contact_information else ''
-                if phone_key:
+                # Check phone field first, then contact_information
+                phone_val = client.phone
+                if not phone_val or phone_val.strip() == '':
+                    phone_val = client.contact_information.get('phone', '') if client.contact_information else ''
+                if phone_val and str(phone_val).strip():
+                    phone_key = str(phone_val).strip()
                     if phone_key not in potential_duplicates_by_phone:
                         potential_duplicates_by_phone[phone_key] = []
                     potential_duplicates_by_phone[phone_key].append(client)
@@ -3473,14 +3497,48 @@ def upload_clients(request):
         
         # ===== END BATCH OPTIMIZATION =====
         
+        # Pre-load clients by uid_external for external ID matching
+        existing_clients_by_external_id = {}
+        all_external_ids_in_upload = set()
+        for index, row in df.iterrows():
+            try:
+                # Get uid_external from row
+                uid_external_val = None
+                for col in df.columns:
+                    if column_mapping.get(col) == 'uid_external':
+                        uid_external_val = row[col]
+                        break
+                if uid_external_val and str(uid_external_val).strip():
+                    all_external_ids_in_upload.add(str(uid_external_val).strip())
+            except:
+                pass
+        
+        if all_external_ids_in_upload:
+            clients_with_external_id = Client.objects.filter(uid_external__in=all_external_ids_in_upload).only(
+                'id', 'first_name', 'last_name', 'uid_external', 'client_id', 'source'
+            )
+            for client in clients_with_external_id:
+                if client.uid_external and client.uid_external.strip():
+                    external_id_key = client.uid_external.strip()
+                    existing_clients_by_external_id[external_id_key] = client
+            logger.info(f"Pre-loaded {len(existing_clients_by_external_id)} clients with matching external IDs")
+        
         # Optimized find_duplicate_client function using pre-loaded data
         def find_duplicate_client_optimized(client_data, row_index):
             """Find duplicate client using pre-loaded batch data"""
+            # Priority 0: Exact external ID (uid_external) match - highest priority
+            uid_external_val = client_data.get('uid_external') or ''
+            if uid_external_val and str(uid_external_val).strip():
+                external_id_key = str(uid_external_val).strip()
+                if external_id_key in existing_clients_by_external_id:
+                    return existing_clients_by_external_id[external_id_key], "matching_external_id"
+            
+            # Check both contact_information JSON and direct email/phone fields
             contact_info = client_data.get('contact_information', {}) or {}
-            email_val = contact_info.get('email') or ''
-            email = email_val.strip().lower() if isinstance(email_val, str) else ''
-            phone_val = contact_info.get('phone') or ''
-            phone = phone_val.strip() if isinstance(phone_val, str) else ''
+            email_val = contact_info.get('email') or client_data.get('email') or ''
+            email = email_val.strip().lower() if isinstance(email_val, str) and email_val.strip() else ''
+            phone_val = contact_info.get('phone') or client_data.get('phone') or ''
+            phone = phone_val.strip() if isinstance(phone_val, str) and phone_val.strip() else ''
             first_name_val = client_data.get('first_name') or ''
             last_name_val = client_data.get('last_name') or ''
             first_name_str = first_name_val.strip() if isinstance(first_name_val, str) else str(first_name_val)
@@ -4508,7 +4566,157 @@ def upload_clients(request):
                                 if not duplicate_client:
                                     duplicate_client, match_type = find_duplicate_client_optimized(client_data, index)
                                 
-                                # Store original values for duplicate relationship creation
+                                # Check if this is an exact match that should be auto-merged/updated
+                                # Auto-merge for: exact_email, exact_phone, email_phone, name_dob_match, matching_external_id
+                                is_exact_match = (
+                                    duplicate_client is not None and 
+                                    match_type in [
+                                        "exact_email", "exact_phone", "email_phone", 
+                                        "name_dob_match", "matching_external_id",
+                                        "matching_email", "matching_phone"  # Also handle scan match types
+                                    ]
+                                )
+                                
+                                # For exact matches, update the existing client instead of creating a duplicate
+                                if is_exact_match:
+                                    # Update existing client instead of creating a new one
+                                    # This handles the auto-merge for exact name+DOB matches
+                                    existing_client = duplicate_client
+                                    
+                                    # Collect update data - only include fields that are actually present in the CSV
+                                    filtered_data = {}
+                                    
+                                    # Get all fields that are mapped from CSV columns
+                                    csv_fields = set()
+                                    for col in df.columns:
+                                        field_name = column_mapping.get(col)
+                                        if field_name:
+                                            csv_fields.add(field_name)
+                                    
+                                    # Only include fields that exist in the CSV and have non-empty values
+                                    for field, value in client_data.items():
+                                        # Skip if field is not in CSV
+                                        if field not in csv_fields:
+                                            continue
+                                            
+                                        # Skip if value is None, empty string, or empty dict
+                                        if value is None:
+                                            continue
+                                        if isinstance(value, str) and value.strip() == '':
+                                            continue
+                                        if isinstance(value, dict) and not value:
+                                            continue
+                                            
+                                        # Handle contact_information specially - only include if it has actual values
+                                        if field == 'contact_information' and isinstance(value, dict):
+                                            has_values = False
+                                            for key, val in value.items():
+                                                if val and str(val).strip():
+                                                    has_values = True
+                                                    break
+                                            if not has_values:
+                                                continue
+                                        
+                                        # Handle other dictionary fields (addresses, etc.) - only include if they have actual values
+                                        if isinstance(value, dict) and field not in ['contact_information']:
+                                            has_values = False
+                                            for key, val in value.items():
+                                                if val and str(val).strip():
+                                                    has_values = True
+                                                    break
+                                            if not has_values:
+                                                continue
+                                        
+                                        filtered_data[field] = value
+                                    
+                                    # Define extended fields list
+                                    extended_fields_list = [
+                                        'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
+                                        'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
+                                        'num_bednights_current_stay', 'length_homeless_3yrs', 'income_source',
+                                        'taxation_year_filed', 'status_id', 'picture_id', 'other_id', 'bnl_consent',
+                                        'allergies', 'harm_reduction_support', 'medication_support', 'pregnancy_support',
+                                        'mental_health_support', 'physical_health_support', 'daily_activities_support',
+                                        'other_health_supports', 'cannot_use_stairs', 'limited_mobility',
+                                        'wheelchair_accessibility', 'vision_hearing_speech_supports', 'english_translator',
+                                        'reading_supports', 'other_accessibility_supports', 'pet_owner', 'legal_support',
+                                        'immigration_support', 'religious_cultural_supports', 'safety_concerns',
+                                        'intimate_partner_violence_support', 'human_trafficking_support', 'other_supports',
+                                        'access_to_housing_application', 'access_to_housing_no', 'access_point_application',
+                                        'access_point_no', 'cars', 'cars_no', 'discharge_disposition', 'intake_status',
+                                        'lived_last_12_months', 'reason_for_service', 'intake_date', 'service_end_date',
+                                        'rejection_date', 'rejection_reason', 'room', 'bed', 'occupancy_status',
+                                        'bed_nights_historical', 'restriction_reason', 'restriction_date',
+                                        'restriction_duration_days', 'restriction_status', 'early_termination_by'
+                                    ]
+                                    
+                                    # Apply filtered values to client object for bulk update
+                                    for field, value in filtered_data.items():
+                                        if hasattr(existing_client, field) and field not in extended_fields_list:
+                                            # Only update if existing value is empty/null, or merge data intelligently
+                                            existing_value = getattr(existing_client, field, None)
+                                            if not existing_value or existing_value == '':
+                                                setattr(existing_client, field, value)
+                                            # For SMIS/EMHware IDs, always update to preserve legacy IDs
+                                            elif field in ['smis_id', 'emhware_id'] and value:
+                                                setattr(existing_client, field, value)
+                                    
+                                    # Copy client_id to emhware_id or smis_id based on source
+                                    client_id_value = client_data.get('client_id')
+                                    if source and client_id_value:
+                                        if source == 'EMHware':
+                                            existing_client.emhware_id = client_id_value
+                                        elif source == 'SMIS':
+                                            existing_client.smis_id = client_id_value
+                                    
+                                    # Update legacy_client_ids to include the new source ID
+                                    if client_id_value and source:
+                                        if not existing_client.legacy_client_ids:
+                                            existing_client.legacy_client_ids = []
+                                        # Check if this source+ID combination already exists
+                                        legacy_id_exists = any(
+                                            leg_id.get('source') == source and leg_id.get('client_id') == client_id_value
+                                            for leg_id in existing_client.legacy_client_ids
+                                        )
+                                        if not legacy_id_exists:
+                                            existing_client.legacy_client_ids.append({
+                                                'source': source,
+                                                'client_id': client_id_value
+                                            })
+                                    
+                                    # Set updated_by field
+                                    if request.user.is_authenticated:
+                                        first_name = request.user.first_name or ''
+                                        last_name = request.user.last_name or ''
+                                        user_name = f"{first_name} {last_name}".strip()
+                                        if not user_name or user_name == ' ':
+                                            user_name = request.user.username or request.user.email or 'System'
+                                        existing_client.updated_by = user_name
+                                    else:
+                                        existing_client.updated_by = 'System'
+                                    
+                                    # Store client and extended data for bulk update
+                                    extended_data = {}
+                                    for field in extended_fields_list:
+                                        if field in filtered_data:
+                                            value = filtered_data[field]
+                                            if value is not None and value != '':
+                                                if isinstance(value, str) and value.strip() != '':
+                                                    extended_data[field] = value.strip()
+                                                elif not isinstance(value, str):
+                                                    extended_data[field] = value
+                                    
+                                    # Add to update list instead of create list
+                                    clients_to_update.append({
+                                        'client': existing_client,
+                                        'extended_data': extended_data,
+                                        'row_index': index
+                                    })
+                                    
+                                    # Skip creating a new client - we're updating the existing one
+                                    continue
+                                
+                                # Store original values for duplicate relationship creation (for non-exact matches)
                                 original_email = ''
                                 original_phone = ''
                                 original_client_id = ''
@@ -4517,10 +4725,6 @@ def upload_clients(request):
                                     original_email = client_data.get('contact_information', {}).get('email', '')
                                     original_phone = client_data.get('contact_information', {}).get('phone', '')
                                     original_client_id = client_data.get('client_id', '')
-                                    
-                                    # Don't modify email/phone - keep original values
-                                    # The client will be created with original contact information
-                                    # Duplicate detection will be handled through the ClientDuplicate relationship
                                     
                                     # If this was a name-based duplicate, use the similarity score from fuzzy matching
                                     if name_duplicate_similarity is not None:
@@ -6503,7 +6707,36 @@ def run_duplicate_scan(request):
                 'confidence_level': confidence,
             })
         
-        # 1. Exact Client ID + Source matches
+        # 1. Exact External ID (uid_external) matches - highest priority for auto-merge
+        if len(results) < scan_limit:
+            external_id_groups = (
+                clients_qs
+                .filter(uid_external__isnull=False)
+                .exclude(uid_external__exact='')
+                .values('uid_external')
+                .annotate(count=Count('id'))
+                .filter(count__gt=1)
+                .order_by('-count', 'uid_external')[:scan_limit * 5]
+            )
+            
+            for group in external_id_groups:
+                group_clients = list(
+                    clients_qs.filter(uid_external=group['uid_external']).order_by('created_at', 'id')
+                )
+                
+                if len(group_clients) < 2:
+                    continue
+                
+                primary_candidate = group_clients[0]
+                for duplicate_candidate in group_clients[1:]:
+                    reason = f"Matching external ID {group['uid_external']}"
+                    add_candidate(primary_candidate, duplicate_candidate, 'matching_external_id', reason, 1.0)
+                    if len(results) >= scan_limit:
+                        break
+                if len(results) >= scan_limit:
+                    break
+        
+        # 1b. Exact Client ID + Source matches
         if len(results) < scan_limit:
             id_groups = (
                 clients_qs
@@ -6535,58 +6768,82 @@ def run_duplicate_scan(request):
                 if len(results) >= scan_limit:
                     break
         
-        # 2. Exact Email matches
+        # 2. Exact Email matches (check both email field and contact_information JSON)
         if len(results) < scan_limit:
-            email_groups = (
-                clients_qs
-                .filter(email__isnull=False)
-                .exclude(email__exact='')
-                .values('email')
-                .annotate(count=Count('id'))
-                .filter(count__gt=1)
-                .order_by('-count', 'email')[:scan_limit * 5]
+            # Get all unique emails from both email field and contact_information
+            from django.db.models import Q
+            email_clients = clients_qs.filter(
+                Q(email__isnull=False) & ~Q(email__exact='') |
+                Q(contact_information__email__isnull=False) & ~Q(contact_information__email__exact='')
             )
             
-            for group in email_groups:
-                group_clients = list(
-                    clients_qs.filter(email=group['email']).order_by('created_at', 'id')
-                )
+            # Normalize emails (lowercase) and group by normalized email
+            email_groups_dict = {}
+            for client in email_clients:
+                # Check email field first
+                email_val = client.email
+                if not email_val or email_val.strip() == '':
+                    # Fall back to contact_information
+                    email_val = client.contact_information.get('email', '') if client.contact_information else ''
                 
+                if email_val and email_val.strip():
+                    normalized_email = email_val.strip().lower()
+                    if normalized_email not in email_groups_dict:
+                        email_groups_dict[normalized_email] = []
+                    email_groups_dict[normalized_email].append(client)
+            
+            # Find groups with multiple clients
+            for normalized_email, group_clients in email_groups_dict.items():
                 if len(group_clients) < 2:
                     continue
                 
+                # Sort by created_at to ensure consistent primary/duplicate assignment
+                group_clients.sort(key=lambda c: (c.created_at or timezone.now(), c.id))
+                
                 primary_candidate = group_clients[0]
                 for duplicate_candidate in group_clients[1:]:
-                    reason = f"Matching email address {group['email']}"
+                    reason = f"Matching email address {normalized_email}"
                     add_candidate(primary_candidate, duplicate_candidate, 'matching_email', reason, 0.99)
                     if len(results) >= scan_limit:
                         break
                 if len(results) >= scan_limit:
                     break
         
-        # 3. Exact Phone matches
+        # 3. Exact Phone matches (check both phone field and contact_information JSON)
         if len(results) < scan_limit:
-            phone_groups = (
-                clients_qs
-                .filter(phone__isnull=False)
-                .exclude(phone__exact='')
-                .values('phone')
-                .annotate(count=Count('id'))
-                .filter(count__gt=1)
-                .order_by('-count', 'phone')[:scan_limit * 5]
+            # Get all unique phones from both phone field and contact_information
+            from django.db.models import Q
+            phone_clients = clients_qs.filter(
+                Q(phone__isnull=False) & ~Q(phone__exact='') |
+                Q(contact_information__phone__isnull=False) & ~Q(contact_information__phone__exact='')
             )
             
-            for group in phone_groups:
-                group_clients = list(
-                    clients_qs.filter(phone=group['phone']).order_by('created_at', 'id')
-                )
+            # Normalize phones (strip whitespace) and group by normalized phone
+            phone_groups_dict = {}
+            for client in phone_clients:
+                # Check phone field first
+                phone_val = client.phone
+                if not phone_val or phone_val.strip() == '':
+                    # Fall back to contact_information
+                    phone_val = client.contact_information.get('phone', '') if client.contact_information else ''
                 
+                if phone_val and phone_val.strip():
+                    normalized_phone = phone_val.strip()
+                    if normalized_phone not in phone_groups_dict:
+                        phone_groups_dict[normalized_phone] = []
+                    phone_groups_dict[normalized_phone].append(client)
+            
+            # Find groups with multiple clients
+            for normalized_phone, group_clients in phone_groups_dict.items():
                 if len(group_clients) < 2:
                     continue
                 
+                # Sort by created_at to ensure consistent primary/duplicate assignment
+                group_clients.sort(key=lambda c: (c.created_at or timezone.now(), c.id))
+                
                 primary_candidate = group_clients[0]
                 for duplicate_candidate in group_clients[1:]:
-                    reason = f"Matching phone number {group['phone']}"
+                    reason = f"Matching phone number {normalized_phone}"
                     add_candidate(primary_candidate, duplicate_candidate, 'matching_phone', reason, 0.96)
                     if len(results) >= scan_limit:
                         break
@@ -6765,8 +7022,13 @@ def run_duplicate_scan(request):
                     similarity_score >= AUTO_MERGE_SIMILARITY_THRESHOLD
                 )
                 
-                # Also auto-merge exact matches (email, phone, name+dob) regardless of similarity score
-                is_exact_match = match_type in ['matching_email', 'matching_phone', 'name_dob_match'] or similarity_score >= 0.95
+                # Also auto-merge exact matches (email, phone, name+dob, client_id, external_id) regardless of similarity score
+                # Include all possible match type variations
+                is_exact_match = match_type in [
+                    'matching_email', 'exact_email', 'matching_phone', 'exact_phone', 
+                    'email_phone', 'name_dob_match', 'matching_name_dob',
+                    'matching_client_id', 'matching_external_id', 'matching_uid_external'
+                ] or similarity_score >= 0.95
                 
                 if should_auto_merge or is_exact_match:
                     # Automatically merge high-confidence duplicates
