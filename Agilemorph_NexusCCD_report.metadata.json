@@ -1,0 +1,17 @@
+{
+  "report_name": "Agilemorph_NexusCCD_report",
+  "report_date": "2025-12-03",
+  "repo_name": "NexusCCD",
+  "repo_path": "/Users/shashankjain/agilemorph/nexus/NexusCCD",
+  "branch": "main",
+  "repo_sha": "3762805d25a19ab53b1519d522df4c2ab1d7ecc3",
+  "total_files_scanned": 258,
+  "findings_count_by_severity": {
+    "high": 5,
+    "medium": 4,
+    "low": 2,
+    "total": 11
+  },
+  "scanned_date": "2025-12-03",
+  "generator": "Automated Security Audit Tool"
+}
