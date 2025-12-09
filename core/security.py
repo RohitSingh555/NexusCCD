@@ -150,11 +150,11 @@ class SecurityManager:
         if any(role in ['Manager', 'Leader'] for role in user_roles):
             try:
                 staff = user.staff_profile
-                # Filter by department assignments
+                # Filter by department assignments (exclude archived departments)
                 if hasattr(queryset.model, 'department'):
-                    return queryset.filter(department__in=staff.departments.all())
+                    return queryset.filter(department__in=staff.departments())
                 elif hasattr(queryset.model, 'staff'):
-                    return queryset.filter(staff__departments__in=staff.departments.all())
+                    return queryset.filter(staff__departments__in=staff.departments())
             except Exception:
                 pass
         

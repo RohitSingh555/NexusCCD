@@ -222,7 +222,8 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
                 elif staff.is_leader():
                     assigned_departments = Department.objects.filter(
                         leader_assignments__staff=staff,
-                        leader_assignments__is_active=True
+                        leader_assignments__is_active=True,
+                        is_archived=False
                     ).distinct()
                     base_queryset = base_queryset.filter(department__in=assigned_departments)
                 
@@ -268,9 +269,8 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
         context['programs_with_capacity'] = programs_with_capacity
         context['total_filtered_count'] = total_filtered_count
         # Exclude archived departments and HASS from department dropdown (for non-admin users)
-        departments_queryset = Department.objects.all()
-        if not can_see_archived(self.request.user):
-            departments_queryset = departments_queryset.filter(is_archived=False)
+        # Always exclude archived departments
+        departments_queryset = Department.objects.filter(is_archived=False)
         context['departments'] = departments_queryset.exclude(
             name__iexact='HASS'
         ).order_by('name')
@@ -349,7 +349,8 @@ class ProgramDetailView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMana
                     from core.models import Department
                     assigned_departments = Department.objects.filter(
                         leader_assignments__staff=staff,
-                        leader_assignments__is_active=True
+                        leader_assignments__is_active=True,
+                        is_archived=False
                     ).distinct()
                     assigned_programs = Program.objects.filter(
                         department__in=assigned_departments
@@ -560,7 +561,8 @@ def fetch_enrollments_ajax(request, external_id):
                     from core.models import Department
                     assigned_departments = Department.objects.filter(
                         leader_assignments__staff=staff,
-                        leader_assignments__is_active=True
+                        leader_assignments__is_active=True,
+                        is_archived=False
                     ).distinct()
                     assigned_programs = Program.objects.filter(
                         department__in=assigned_departments
@@ -1025,10 +1027,8 @@ class ProgramCreateView(ProgramManagerAccessMixin, CreateView):
         """Filter out HASS from department dropdown"""
         form = super().get_form(form_class)
         if 'department' in form.fields:
-            departments_queryset = Department.objects.all()
-            # Exclude archived departments for non-admin users
-            if not can_see_archived(self.request.user):
-                departments_queryset = departments_queryset.filter(is_archived=False)
+            # Always exclude archived departments
+            departments_queryset = Department.objects.filter(is_archived=False)
             form.fields['department'].queryset = departments_queryset.exclude(
                 name__iexact='HASS'
             ).order_by('name')
@@ -1157,10 +1157,8 @@ class ProgramUpdateView(ProgramManagerAccessMixin, UpdateView):
         """Filter out HASS from department dropdown"""
         form = super().get_form(form_class)
         if 'department' in form.fields:
-            departments_queryset = Department.objects.all()
-            # Exclude archived departments for non-admin users
-            if not can_see_archived(self.request.user):
-                departments_queryset = departments_queryset.filter(is_archived=False)
+            # Always exclude archived departments
+            departments_queryset = Department.objects.filter(is_archived=False)
             form.fields['department'].queryset = departments_queryset.exclude(
                 name__iexact='HASS'
             ).order_by('name')
@@ -1550,9 +1548,9 @@ class ProgramBulkChangeDepartmentView(ProgramManagerAccessMixin, View):
                 messages.error(request, 'No department selected.')
                 return redirect('programs:list')
             
-            # Get the new department
+            # Get the new department (exclude archived)
             try:
-                new_department = Department.objects.get(id=new_department_id)
+                new_department = Department.objects.get(id=new_department_id, is_archived=False)
             except Department.DoesNotExist:
                 messages.error(request, 'Selected department does not exist.')
                 return redirect('programs:list')

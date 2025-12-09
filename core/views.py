@@ -233,7 +233,8 @@ class ProgramManagerAccessMixin:
                 # Use direct queries since the methods aren't working
                 assigned_departments = Department.objects.filter(
                     leader_assignments__staff=staff,
-                    leader_assignments__is_active=True
+                    leader_assignments__is_active=True,
+                    is_archived=False
                 ).distinct()
                 assigned_programs = Program.objects.filter(
                     department__in=assigned_departments
@@ -367,7 +368,8 @@ def dashboard(request):
             # Get assigned programs for leader users via departments using direct queries
             assigned_departments = Department.objects.filter(
                 leader_assignments__staff=staff_profile,
-                leader_assignments__is_active=True
+                leader_assignments__is_active=True,
+                is_archived=False
             ).distinct()
             assigned_programs = Program.objects.filter(
                 department__in=assigned_departments
@@ -720,7 +722,8 @@ def departments(request):
                 # Leader sees only programs from their assigned departments
                 assigned_departments = Department.objects.filter(
                     leader_assignments__staff=staff,
-                    leader_assignments__is_active=True
+                    leader_assignments__is_active=True,
+                    is_archived=False
                 ).distinct()
                 total_programs = Program.objects.filter(
                     department__in=assigned_departments,
@@ -748,7 +751,8 @@ def departments(request):
                 # Leader sees only staff from their assigned departments
                 assigned_departments = Department.objects.filter(
                     leader_assignments__staff=staff,
-                    leader_assignments__is_active=True
+                    leader_assignments__is_active=True,
+                    is_archived=False
                 ).distinct()
                 assigned_programs = Program.objects.filter(
                     department__in=assigned_departments
@@ -1495,11 +1499,14 @@ class AuditLogRestoreView(View):
         except Program.DoesNotExist:
             pass
         
-        # Find department by name
+        # Find department by name (exclude archived for audit log display)
         department = None
         if diff_data.get('department'):
             try:
-                department = Department.objects.filter(name__iexact=diff_data['department']).first()
+                department = Department.objects.filter(
+                    name__iexact=diff_data['department'],
+                    is_archived=False
+                ).first()
             except:
                 pass
         
@@ -1685,12 +1692,10 @@ class DepartmentListView(AnalystAccessMixin, ListView):
     paginate_by = 10
     
     def get_queryset(self):
-        # Exclude archived departments for non-admin users
-        departments_queryset = Department.objects.all()
-        if not can_see_archived(self.request.user):
-            departments_queryset = departments_queryset.filter(is_archived=False)
-        # Also filter archived programs in counts for non-admin users
-        program_filter = Q(program__is_archived=False) if not can_see_archived(self.request.user) else Q()
+        # Always exclude archived departments
+        departments_queryset = Department.objects.filter(is_archived=False)
+        # Also filter archived programs in counts
+        program_filter = Q(program__is_archived=False)
         return departments_queryset.annotate(
             program_count=Count('program', filter=program_filter, distinct=True),
             staff_count=Count('program__programstaff__staff', filter=Q(program__programstaff__program__is_archived=False), distinct=True)
@@ -2162,7 +2167,8 @@ class EnrollmentDetailView(StaffAccessControlMixin, AnalystAccessMixin, ProgramM
             elif staff.is_leader():
                 assigned_departments = Department.objects.filter(
                     leader_assignments__staff=staff,
-                    leader_assignments__is_active=True
+                    leader_assignments__is_active=True,
+                    is_archived=False
                 ).distinct()
                 assigned_programs = Program.objects.filter(
                     department__in=assigned_departments

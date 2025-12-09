@@ -318,12 +318,12 @@ def debug_info(request):
     """Debug endpoint to check system status"""
     try:
         roles_count = Role.objects.count()
-        departments_count = Department.objects.count()
+        departments_count = Department.objects.filter(is_archived=False).count()
         users_count = User.objects.count()
         staff_count = Staff.objects.count()
         
         roles = list(Role.objects.values('name', 'description'))
-        departments = list(Department.objects.values('name', 'owner'))
+        departments = list(Department.objects.filter(is_archived=False).values('name', 'owner'))
         
         return Response({
             'status': 'ok',

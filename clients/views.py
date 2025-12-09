@@ -234,7 +234,8 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
                     from core.models import Department
                     assigned_departments = Department.objects.filter(
                         leader_assignments__staff=staff,
-                        leader_assignments__is_active=True
+                        leader_assignments__is_active=True,
+                        is_archived=False
                     ).distinct()
                     assigned_programs = Program.objects.filter(
                         department__in=assigned_departments
@@ -819,7 +820,8 @@ class ClientListView(AnalystAccessMixin, ProgramManagerAccessMixin, ListView):
                     from core.models import Department
                     assigned_departments = Department.objects.filter(
                         leader_assignments__staff=staff,
-                        leader_assignments__is_active=True
+                        leader_assignments__is_active=True,
+                        is_archived=False
                     ).distinct()
                     assigned_programs = Program.objects.filter(
                         department__in=assigned_departments
@@ -971,7 +973,8 @@ class ClientDetailView(AnalystAccessMixin, DetailView):
                     from core.models import Department
                     assigned_departments = Department.objects.filter(
                         leader_assignments__staff=staff,
-                        leader_assignments__is_active=True
+                        leader_assignments__is_active=True,
+                        is_archived=False
                     ).distinct()
                     assigned_programs = Program.objects.filter(
                         department__in=assigned_departments
@@ -3263,7 +3266,7 @@ def upload_clients(request):
         
         # Pre-load all departments and programs for intake processing optimization
         logger.info("Pre-loading departments and programs for batch processing")
-        departments_cache = {dept.name: dept for dept in Department.objects.all()}
+        departments_cache = {dept.name: dept for dept in Department.objects.filter(is_archived=False)}
         all_programs_list = list(Program.objects.select_related('department').all())
         program_lookup_by_name = {}
         for program in all_programs_list:

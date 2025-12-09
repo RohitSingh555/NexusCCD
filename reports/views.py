@@ -129,7 +129,8 @@ def get_program_manager_filtering(request):
                 # Get assigned programs for leader users via departments using direct queries
                 assigned_departments = Department.objects.filter(
                     leader_assignments__staff=staff_profile,
-                    leader_assignments__is_active=True
+                    leader_assignments__is_active=True,
+                    is_archived=False
                 ).distinct()
                 assigned_programs = Program.objects.filter(
                     department__in=assigned_departments
@@ -811,7 +812,7 @@ class ClientDemographicsView(ReportsAccessMixin, TemplateView):
         # Apply department filter if specified
         if department_filter:
             try:
-                department = Department.objects.get(id=department_filter)
+                department = Department.objects.get(id=department_filter, is_archived=False)
                 clients = clients.filter(clientprogramenrollment__program__department=department).distinct()
             except (Department.DoesNotExist, ValueError):
                 pass
@@ -929,7 +930,7 @@ class ClientDemographicsView(ReportsAccessMixin, TemplateView):
             ).distinct().order_by('name')
         else:
             available_programs = Program.objects.filter(status='active').order_by('name')
-            available_departments = Department.objects.all().order_by('name')
+            available_departments = Department.objects.filter(is_archived=False).order_by('name')
         
         context.update({
             'total_clients': clients.count(),
@@ -1017,7 +1018,7 @@ class ClientEnrollmentHistoryView(ReportsAccessMixin, ListView):
         # Apply department filter if specified
         if department_filter:
             try:
-                department = Department.objects.get(id=department_filter)
+                department = Department.objects.get(id=department_filter, is_archived=False)
                 queryset = queryset.filter(program__department=department)
             except (Department.DoesNotExist, ValueError):
                 pass
@@ -1081,7 +1082,7 @@ class ClientEnrollmentHistoryView(ReportsAccessMixin, ListView):
         # Apply department filter to statistics if specified
         if department_filter:
             try:
-                department = Department.objects.get(id=department_filter)
+                department = Department.objects.get(id=department_filter, is_archived=False)
                 all_enrollments = all_enrollments.filter(program__department=department)
             except (Department.DoesNotExist, ValueError):
                 pass
@@ -1125,7 +1126,7 @@ class ClientEnrollmentHistoryView(ReportsAccessMixin, ListView):
             ).distinct().order_by('name')
         else:
             available_programs = Program.objects.filter(status='active').order_by('name')
-            available_departments = Department.objects.all().order_by('name')
+            available_departments = Department.objects.filter(is_archived=False).order_by('name')
         
         # Add per_page to context for the template
         context['per_page'] = str(self.get_paginate_by(self.get_queryset()))
@@ -1199,7 +1200,7 @@ class ClientEnrollmentHistoryExportView(ReportsExportAccessMixin, ListView):
         # Apply department filter if specified
         if department_filter:
             try:
-                department = Department.objects.get(id=department_filter)
+                department = Department.objects.get(id=department_filter, is_archived=False)
                 queryset = queryset.filter(program__department=department)
             except (Department.DoesNotExist, ValueError):
                 pass
@@ -1743,13 +1744,13 @@ class DepartmentSummaryView(ReportsAccessMixin, TemplateView):
         if (is_program_manager or is_leader) and assigned_programs:
             # Get departments that have assigned programs
             department_ids = assigned_programs.values_list('department_id', flat=True).distinct()
-            departments = Department.objects.filter(id__in=department_ids)
+            departments = Department.objects.filter(id__in=department_ids, is_archived=False)
         elif is_staff_only:
             # Get departments that have assigned programs
             department_ids = assigned_programs.values_list('department_id', flat=True).distinct()
-            departments = Department.objects.filter(id__in=department_ids)
+            departments = Department.objects.filter(id__in=department_ids, is_archived=False)
         else:
-            departments = Department.objects.all()
+            departments = Department.objects.filter(is_archived=False)
         department_data = []
         
         for dept in departments:
@@ -1828,7 +1829,7 @@ class ClientDemographicsExportView(ReportsExportAccessMixin, TemplateView):
         # Apply department filter if specified
         if department_filter:
             try:
-                department = Department.objects.get(id=department_filter)
+                department = Department.objects.get(id=department_filter, is_archived=False)
                 clients = clients.filter(clientprogramenrollment__program__department=department).distinct()
             except (Department.DoesNotExist, ValueError):
                 pass

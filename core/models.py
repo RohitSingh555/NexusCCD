@@ -142,7 +142,7 @@ class Staff(BaseModel):
         department_ids = list(assignments.values_list('department_id', flat=True))
         if not department_ids:
             return Department.objects.none()
-        return Department.objects.filter(id__in=department_ids)
+        return Department.objects.filter(id__in=department_ids, is_archived=False)
     
     def get_assigned_programs_via_departments(self):
         """Get all programs in assigned departments for leaders"""
@@ -179,7 +179,8 @@ class Staff(BaseModel):
             return Department.objects.none()
         return Department.objects.filter(
             program__manager_assignments__staff=self,
-            program__manager_assignments__is_active=True
+            program__manager_assignments__is_active=True,
+            is_archived=False
         ).distinct()
     
     def can_access_program(self, program):
@@ -205,6 +206,17 @@ class Staff(BaseModel):
         if not self.is_program_manager():
             return False
         return self.can_access_program(enrollment.program)
+    
+    def departments(self):
+        """Return assigned departments queryset (non-archived) for compatibility with staff.departments.all()"""
+        # This method returns a queryset that filters archived departments
+        # It combines both leader and manager assigned departments
+        if self.is_leader():
+            return self.get_assigned_departments()
+        elif self.is_program_manager():
+            return self.get_assigned_departments()
+        else:
+            return Department.objects.none()
 
 
 class StaffRole(BaseModel):
@@ -1379,7 +1391,7 @@ class EmailRecipientManager(models.Manager):
             if any(role in ['Manager', 'Leader'] for role in user_roles):
                 staff = user.staff_profile
                 return self.filter(
-                    Q(department__in=staff.departments.all()) | Q(department__isnull=True)
+                    Q(department__in=staff.departments()) | Q(department__isnull=True)
                 )
             
             # Staff and others cannot see any
