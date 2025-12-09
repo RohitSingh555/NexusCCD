@@ -1174,6 +1174,8 @@ function clientManager() {
         ],
         
         init() {
+            // User-scoped storage key to avoid cross-user leakage
+            this.storageKey = `selectedClients_{{ request.user.id|default:"anon" }}`;
             // Load selected clients from localStorage on page load
             this.loadSelectedClients();
             // Update selectedClients array based on current page clients
@@ -1182,7 +1184,7 @@ function clientManager() {
         
         loadSelectedClients() {
             try {
-                const saved = localStorage.getItem('selectedClients');
+                const saved = localStorage.getItem(this.storageKey);
                 if (saved) {
                     const clientIds = JSON.parse(saved);
                     this.allSelectedClients = new Set(clientIds);
@@ -1196,7 +1198,7 @@ function clientManager() {
         saveSelectedClients() {
             try {
                 const clientIds = Array.from(this.allSelectedClients);
-                localStorage.setItem('selectedClients', JSON.stringify(clientIds));
+                localStorage.setItem(this.storageKey, JSON.stringify(clientIds));
             } catch (error) {
                 console.error('Error saving selected clients:', error);
             }

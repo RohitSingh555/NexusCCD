@@ -311,11 +311,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get all department sections and program items
     const departmentSections = document.querySelectorAll('.department-section');
     const programItems = document.querySelectorAll('.program-item');
+    const storageSuffix = '{{ request.user.id|default:"anon" }}';
+    const selectedProgramsKey = `selectedPrograms_${storageSuffix}`;
+    const programDepartmentsKey = `programDepartments_${storageSuffix}`;
     
     // Load saved selections from localStorage
     function loadSelections() {
-        const saved = localStorage.getItem('selectedPrograms');
-        const savedDepartments = localStorage.getItem('programDepartments');
+        const saved = localStorage.getItem(selectedProgramsKey);
+        const savedDepartments = localStorage.getItem(programDepartmentsKey);
         
         if (saved) {
             const programIds = JSON.parse(saved);
@@ -519,11 +522,11 @@ function clearAllSelections() {
 // Function to save selections to localStorage
 function saveSelections() {
     const programIds = Array.from(selectedPrograms);
-    localStorage.setItem('selectedPrograms', JSON.stringify(programIds));
+    localStorage.setItem(selectedProgramsKey, JSON.stringify(programIds));
     
     // Save department mapping
     const deptMapping = Object.fromEntries(programDepartments);
-    localStorage.setItem('programDepartments', JSON.stringify(deptMapping));
+    localStorage.setItem(programDepartmentsKey, JSON.stringify(deptMapping));
 }
 
 // Function to update selection count for each department

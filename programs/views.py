@@ -193,10 +193,8 @@ class ProgramListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramManage
         # Calculate status card counts (assigned/unassigned/total)
         # Use base queryset with permission filters but without search/filter params
         today = timezone.now().date()
-        base_queryset = Program.objects.all()
-        # Exclude archived programs for non-admin users
-        if not can_see_archived(self.request.user):
-            base_queryset = base_queryset.filter(is_archived=False)
+        # Always exclude archived programs from summary counts
+        base_queryset = Program.objects.filter(is_archived=False)
         # Exclude programs with archived departments for non-admin users
         if not can_see_archived(self.request.user):
             base_queryset = base_queryset.filter(department__is_archived=False)
@@ -305,6 +303,10 @@ class ProgramDetailView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMana
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     
+    def get_queryset(self):
+        """Only allow access to non-archived programs"""
+        return super().get_queryset().filter(is_archived=False)
+    
     def get(self, request, *args, **kwargs):
         """Override get method to handle permission checks before rendering"""
         try:
@@ -405,10 +407,7 @@ class ProgramDetailView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMana
             start_date__lte=timezone.now().date()
         ).filter(
             models.Q(end_date__isnull=True) | models.Q(end_date__gt=timezone.now().date())
-        )
-        # Exclude archived enrollments for non-admin users
-        if not can_see_archived(self.request.user):
-            current_enrollments_queryset = current_enrollments_queryset.filter(is_archived=False)
+        ).filter(is_archived=False)
         current_enrollments_queryset = current_enrollments_queryset.select_related('client').order_by('-start_date')
         
         # Get total count for display
@@ -583,10 +582,7 @@ def fetch_enrollments_ajax(request, external_id):
             start_date__lte=timezone.now().date()
         ).filter(
             models.Q(end_date__isnull=True) | models.Q(end_date__gt=timezone.now().date())
-        )
-        # Exclude archived enrollments for non-admin users
-        if not can_see_archived(request.user):
-            enrollments_queryset = enrollments_queryset.filter(is_archived=False)
+        ).filter(is_archived=False)
         enrollments_queryset = enrollments_queryset.select_related('client').order_by('-start_date')
         
         total_count = enrollments_queryset.count()
@@ -822,7 +818,7 @@ class ProgramBulkEnrollView(ProgramManagerAccessMixin, View):
         from django.db import transaction
         
         try:
-            program = Program.objects.get(external_id=external_id)
+            program = Program.objects.get(external_id=external_id, is_archived=False)
             client_ids = request.POST.getlist('client_ids')
             start_date = request.POST.get('start_date', timezone.now().date())
             
@@ -932,7 +928,7 @@ class ProgramBulkAssignManagersView(ProgramManagerAccessMixin, View):
         from django.db import transaction
         
         try:
-            program = Program.objects.get(external_id=external_id)
+            program = Program.objects.get(external_id=external_id, is_archived=False)
             staff_ids = request.POST.getlist('staff_ids')
             
             if not staff_ids:
@@ -1115,6 +1111,10 @@ class ProgramUpdateView(ProgramManagerAccessMixin, UpdateView):
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('programs:list')
     
+    def get_queryset(self):
+        """Restrict updates to non-archived programs"""
+        return super().get_queryset().filter(is_archived=False)
+    
     def dispatch(self, request, *args, **kwargs):
         """Check if user has permission to edit programs"""
         if request.user.is_authenticated:
@@ -1265,6 +1265,10 @@ class ProgramDeleteView(ProgramManagerAccessMixin, DeleteView):
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('programs:list')
     
+    def get_queryset(self):
+        """Restrict deletes to non-archived programs"""
+        return super().get_queryset().filter(is_archived=False)
+    
     def dispatch(self, request, *args, **kwargs):
         """Check if user has permission to delete programs"""
         if request.user.is_authenticated:
@@ -1336,6 +1340,15 @@ class ProgramDeleteView(ProgramManagerAccessMixin, DeleteView):
         user_name = f"{self.request.user.first_name} {self.request.user.last_name}".strip() or self.request.user.username
         program.updated_by = user_name
         program.save()
+
+        # Also archive enrollments associated with this program
+        from core.models import ClientProgramEnrollment
+        now_ts = timezone.now()
+        ClientProgramEnrollment.objects.filter(program=program, is_archived=False).update(
+            is_archived=True,
+            archived_at=now_ts,
+            updated_by=user_name
+        )
         
         delete_success(self.request, 'Program', program.name)
         messages.success(
@@ -1556,7 +1569,10 @@ class ProgramBulkChangeDepartmentView(ProgramManagerAccessMixin, View):
                 return redirect('programs:list')
             
             # Get programs to update
-            programs_to_update = Program.objects.filter(external_id__in=program_ids)
+            programs_to_update = Program.objects.filter(
+                external_id__in=program_ids,
+                is_archived=False
+            )
             
             if not programs_to_update.exists():
                 messages.error(request, 'No valid programs found to update.')
@@ -1641,7 +1657,10 @@ class ProgramBulkDeleteView(ProgramManagerAccessMixin, View):
                 })
             
             # Get programs to delete
-            programs_to_delete = Program.objects.filter(external_id__in=program_ids)
+            programs_to_delete = Program.objects.filter(
+                external_id__in=program_ids,
+                is_archived=False
+            )
             
             if not programs_to_delete.exists():
                 return JsonResponse({
@@ -1678,11 +1697,16 @@ class ProgramBulkDeleteView(ProgramManagerAccessMixin, View):
                         
                         # Soft delete: archive program instead of actually deleting
                         # Note: We don't delete related enrollments/assignments - they remain but the program is archived
-                        from django.utils import timezone
                         program.is_archived = True
                         program.archived_at = timezone.now()
                         program.updated_by = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username
                         program.save()
+                        # Archive enrollments associated with this program
+                        ClientProgramEnrollment.objects.filter(program=program, is_archived=False).update(
+                            is_archived=True,
+                            archived_at=timezone.now(),
+                            updated_by=program.updated_by
+                        )
                         deleted_count += 1
                         
                     except Exception as e:

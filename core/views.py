@@ -1903,6 +1903,19 @@ class DepartmentDeleteView(AnalystAccessMixin, DeleteView):
         department.is_archived = True
         department.archived_at = timezone.now()
         department.save()
+
+        # Cascade archive programs and their enrollments in this department
+        now_ts = timezone.now()
+        user_name = self.request.user.get_full_name() or self.request.user.username if self.request.user.is_authenticated else 'System'
+        programs = Program.objects.filter(department=department)
+        # Archive programs
+        programs.filter(is_archived=False).update(is_archived=True, archived_at=now_ts, updated_by=user_name)
+        # Archive enrollments tied to any program in this department
+        ClientProgramEnrollment.objects.filter(program__department=department, is_archived=False).update(
+            is_archived=True,
+            archived_at=now_ts,
+            updated_by=user_name
+        )
         
         messages.success(
             self.request, 
@@ -1937,9 +1950,8 @@ class EnrollmentListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMan
         # First apply the ProgramManagerAccessMixin filtering
         queryset = super().get_queryset().select_related('client', 'program', 'program__department')
         
-        # Exclude archived enrollments for non-admin users
-        if not can_see_archived(self.request.user):
-            queryset = queryset.filter(is_archived=False)
+        # Always exclude archived enrollments
+        queryset = queryset.filter(is_archived=False)
         
         # Apply date range filtering (start_date maps to intake_date, end_date maps to discharge_date)
         start_date, end_date, parsed_start_date, parsed_end_date = get_date_range_filter(self.request)
@@ -2007,10 +2019,7 @@ class EnrollmentListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMan
         # Calculate counts from ALL enrollments (excluding archived for non-admin users) for users with full access
         # This ensures the statistics show the true system-wide counts
         today = timezone.now().date()
-        all_enrollments = ClientProgramEnrollment.objects.all()
-        # Exclude archived enrollments for non-admin users
-        if not can_see_archived(self.request.user):
-            all_enrollments = all_enrollments.filter(is_archived=False)
+        all_enrollments = ClientProgramEnrollment.objects.filter(is_archived=False)
         
         # Check if user has full access (SuperAdmin, Admin, Analyst, or no restrictions)
         has_full_access = False
@@ -2034,9 +2043,6 @@ class EnrollmentListView(StaffAccessControlMixin, AnalystAccessMixin, ProgramMan
         else:
             # Use filtered queryset for counts (respects user permissions)
             counts_queryset = filtered_queryset
-            # Exclude archived enrollments for non-admin users
-            if not can_see_archived(self.request.user):
-                counts_queryset = counts_queryset.filter(is_archived=False)
         
         # Calculate status counts using date-based logic
         active_count = counts_queryset.filter(
@@ -2118,6 +2124,10 @@ class EnrollmentDetailView(StaffAccessControlMixin, AnalystAccessMixin, ProgramM
     context_object_name = 'enrollment'
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
+    
+    def get_queryset(self):
+        """Only serve non-archived enrollments"""
+        return super().get_queryset().filter(is_archived=False)
     
     def get(self, request, *args, **kwargs):
         """Override get method to check access before showing enrollment details"""
@@ -2276,7 +2286,7 @@ class EnrollmentCreateView(StaffAccessControlMixin, AnalystAccessMixin, ProgramM
                 staff = self.request.user.staff_profile
                 if staff.is_program_manager():
                     # Filter programs to only assigned ones
-                    assigned_programs = staff.get_assigned_programs()
+                    assigned_programs = staff.get_assigned_programs().filter(is_archived=False)
                     kwargs['program_queryset'] = assigned_programs
                 elif staff.is_leader():
                     # Filter programs to only assigned ones via departments
@@ -2285,7 +2295,8 @@ class EnrollmentCreateView(StaffAccessControlMixin, AnalystAccessMixin, ProgramM
                         leader_assignments__is_active=True
                     ).distinct()
                     assigned_programs = Program.objects.filter(
-                        department__in=assigned_departments
+                        department__in=assigned_departments,
+                        is_archived=False
                     ).distinct()
                     kwargs['program_queryset'] = assigned_programs
                     
@@ -2338,6 +2349,10 @@ class EnrollmentUpdateView(StaffAccessControlMixin, AnalystAccessMixin, ProgramM
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:enrollments')
     
+    def get_queryset(self):
+        """Restrict updates to non-archived enrollments"""
+        return super().get_queryset().filter(is_archived=False)
+    
     def dispatch(self, request, *args, **kwargs):
         """Check if user has permission to edit enrollments"""
         if request.user.is_authenticated:
@@ -2363,7 +2378,7 @@ class EnrollmentUpdateView(StaffAccessControlMixin, AnalystAccessMixin, ProgramM
                 staff = self.request.user.staff_profile
                 if staff.is_program_manager():
                     # Filter programs to only assigned ones
-                    assigned_programs = staff.get_assigned_programs()
+                    assigned_programs = staff.get_assigned_programs().filter(is_archived=False)
                     kwargs['program_queryset'] = assigned_programs
                 elif staff.is_leader():
                     # Filter programs to only assigned ones via departments
@@ -2372,7 +2387,8 @@ class EnrollmentUpdateView(StaffAccessControlMixin, AnalystAccessMixin, ProgramM
                         leader_assignments__is_active=True
                     ).distinct()
                     assigned_programs = Program.objects.filter(
-                        department__in=assigned_departments
+                        department__in=assigned_departments,
+                        is_archived=False
                     ).distinct()
                     kwargs['program_queryset'] = assigned_programs
                     
@@ -2440,6 +2456,10 @@ class EnrollmentDeleteView(StaffAccessControlMixin, AnalystAccessMixin, ProgramM
     slug_field = 'external_id'
     slug_url_kwarg = 'external_id'
     success_url = reverse_lazy('core:enrollments')
+    
+    def get_queryset(self):
+        """Restrict deletes to non-archived enrollments"""
+        return super().get_queryset().filter(is_archived=False)
     
     def dispatch(self, request, *args, **kwargs):
         """Check if user has permission to archive enrollments"""
@@ -2535,7 +2555,7 @@ def check_program_capacity(request):
         
         # Get the program
         try:
-            program = Program.objects.get(id=program_id)
+            program = Program.objects.get(id=program_id, is_archived=False)
         except Program.DoesNotExist:
             return JsonResponse({
                 'success': False,
@@ -3430,6 +3450,9 @@ def bulk_delete_departments(request):
         
         # Actually delete the departments
         from .models import create_audit_log
+        from django.utils import timezone
+        now_ts = timezone.now()
+        user_name = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
         for department in departments_to_delete:
             # Create audit log entry before deletion
             create_audit_log(
@@ -3445,10 +3468,18 @@ def bulk_delete_departments(request):
             )
             
             # Soft delete: set is_archived=True and archived_at timestamp
-            from django.utils import timezone
             department.is_archived = True
-            department.archived_at = timezone.now()
+            department.archived_at = now_ts
             department.save()
+
+            # Cascade archive programs and enrollments for this department
+            programs = Program.objects.filter(department=department)
+            programs.filter(is_archived=False).update(is_archived=True, archived_at=now_ts, updated_by=user_name)
+            ClientProgramEnrollment.objects.filter(program__department=department, is_archived=False).update(
+                is_archived=True,
+                archived_at=now_ts,
+                updated_by=user_name
+            )
         
         return JsonResponse({
             'success': True,
@@ -3490,7 +3521,10 @@ def bulk_delete_enrollments(request):
             }, status=400)
         
         # Get the enrollments to delete
-        enrollments_to_delete = ClientProgramEnrollment.objects.filter(id__in=enrollment_ids)
+        enrollments_to_delete = ClientProgramEnrollment.objects.filter(
+            id__in=enrollment_ids,
+            is_archived=False
+        )
         deleted_count = enrollments_to_delete.count()
         
         if deleted_count == 0:
@@ -4075,7 +4109,9 @@ class EnrollmentCSVExportView(StaffAccessControlMixin, AnalystAccessMixin, Progr
     
     def get_queryset(self):
         # Use the same filtering logic as EnrollmentListView
-        queryset = super().get_queryset()
+        base_queryset = super().get_queryset()
+        # Default to only non-archived enrollments
+        queryset = base_queryset.filter(is_archived=False)
         
         # Apply additional filters
         department_filter = self.request.GET.get('department', '')
@@ -4107,7 +4143,7 @@ class EnrollmentCSVExportView(StaffAccessControlMixin, AnalystAccessMixin, Progr
                 queryset = queryset.filter(start_date__gt=timezone.now().date(), is_archived=False)
             elif status_filter == 'archived':
                 # Show only archived enrollments
-                queryset = queryset.filter(is_archived=True)
+                queryset = base_queryset.filter(is_archived=True)
         
         if client_search:
             queryset = queryset.filter(

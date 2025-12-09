@@ -492,11 +492,12 @@
 
 <script>
 // Global variables for selected clients
+const clientSelectionKey = `selectedProgramClients_{{ request.user.id|default:"anon" }}`;
 let selectedClients = new Set();
 
 // Load saved selections from localStorage
 function loadClientSelections() {
-    const saved = localStorage.getItem('selectedProgramClients');
+    const saved = localStorage.getItem(clientSelectionKey);
     if (saved) {
         const clientIds = JSON.parse(saved);
         clientIds.forEach(id => selectedClients.add(id));
@@ -515,7 +516,7 @@ function loadClientSelections() {
 // Save selections to localStorage
 function saveClientSelections() {
     const clientIds = Array.from(selectedClients);
-    localStorage.setItem('selectedProgramClients', JSON.stringify(clientIds));
+    localStorage.setItem(clientSelectionKey, JSON.stringify(clientIds));
 }
 
 // Update selection count
