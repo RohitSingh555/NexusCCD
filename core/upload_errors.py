@@ -58,6 +58,11 @@ UPLOAD_ERROR_CODES = {
         'category': 'validation',
         'user_action': 'Please check phone numbers in your file.'
     },
+    'UPLOAD_030': {
+        'message': 'Future date detected in discharge or intake date field.',
+        'category': 'validation',
+        'user_action': 'Please update the sheet with correct dates. Upload has been aborted and no changes were saved.'
+    },
     
     # Database errors (040-059)
     'UPLOAD_040': {

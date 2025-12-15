@@ -2518,6 +2518,7 @@ def upload_clients(request):
             program_fuzzy_cache,
             enrollment_cache,
             intake_cache,
+            warnings_list=None,  # Optional list to collect future date warnings
         ):
             """Process intake data for a client - optimized with pre-loaded caches"""
             try:
@@ -2572,8 +2573,48 @@ def upload_clients(request):
                     except (ValueError, TypeError):
                         return default
                 
+                # Helper function to check for future dates and raise error for discharge/intake dates
+                def check_future_date_intake(parsed_date, field_name):
+                    """Check if date is in the future and raise error for discharge/intake dates, warning for others"""
+                    if parsed_date:
+                        from django.utils import timezone
+                        today = timezone.now().date()
+                        if parsed_date > today:
+                            client_id = client.client_id if client else 'N/A'
+                            
+                            # For discharge_date and intake_date, raise error immediately (rollback transaction)
+                            if field_name in ['discharge_date', 'intake_date']:
+                                error_msg = (
+                                    f"Row {index + 2}: Future date detected for {field_name}. "
+                                    f"Date: {parsed_date} (Client ID: {client_id}). "
+                                    f"Please update the sheet with the correct date. Upload aborted."
+                                )
+                                logger.error(error_msg)
+                                # Raise UploadError to trigger transaction rollback
+                                raise UploadError(
+                                    'UPLOAD_030',
+                                    message=error_msg,
+                                    details={
+                                        'row': index + 2,
+                                        'field': field_name,
+                                        'date': str(parsed_date),
+                                        'client_id': client_id,
+                                        'error_type': 'future_date_validation'
+                                    }
+                                )
+                            else:
+                                # For other date fields, just add warning if warnings_list is provided
+                                if warnings_list is not None:
+                                    warning_msg = (
+                                        f"Row {index + 2}: Future date detected for {field_name}. "
+                                        f"Date: {parsed_date} (Client ID: {client_id}). "
+                                        f"Please update the sheet with the correct date."
+                                    )
+                                    warnings_list.append(warning_msg)
+                                    logger.warning(warning_msg)
+                
                 # Helper function to parse date values safely
-                def parse_date(value, default=None):
+                def parse_date(value, field_name='date', default=None):
                     """Parse date value from string, handling empty values, multiple formats, Excel serial numbers, and various date formats"""
                     if not value or (isinstance(value, str) and value.strip() == ''):
                         return default
@@ -2581,7 +2622,9 @@ def upload_clients(request):
                     # Handle pandas Timestamp or datetime objects directly
                     if hasattr(value, 'date'):
                         try:
-                            return value.date()
+                            parsed_date_obj = value.date()
+                            check_future_date_intake(parsed_date_obj, field_name)
+                            return parsed_date_obj
                         except (AttributeError, TypeError):
                             pass
                     
@@ -2590,6 +2633,7 @@ def upload_clients(request):
                         try:
                             from datetime import date
                             if isinstance(value, date):
+                                check_future_date_intake(value, field_name)
                                 return value
                         except (AttributeError, TypeError):
                             pass
@@ -2602,11 +2646,17 @@ def upload_clients(request):
                             # Excel serial numbers for dates are typically between 1 (Jan 1, 1900) and ~45000+ (modern dates)
                             if 1 <= numeric_value <= 1000000:
                                 from datetime import datetime, timedelta
+                                from django.utils import timezone
                                 # Excel epoch is 1899-12-30 (not 1900-01-01 due to Excel's 1900 leap year bug)
                                 excel_epoch = datetime(1899, 12, 30)
                                 parsed_date = excel_epoch + timedelta(days=int(numeric_value))
-                                logger.debug(f"Converted Excel serial {numeric_value} to date: {parsed_date.date()}")
-                                return parsed_date.date()
+                                parsed_date_obj = parsed_date.date()
+                                
+                                # Check for future date and add warning (don't reject)
+                                check_future_date_intake(parsed_date_obj, field_name)
+                                
+                                logger.debug(f"Converted Excel serial {numeric_value} to date: {parsed_date_obj}")
+                                return parsed_date_obj
                         except (ValueError, TypeError):
                             pass
                         
@@ -2614,7 +2664,12 @@ def upload_clients(request):
                         try:
                             parsed = pd.to_datetime(value, errors='coerce', infer_datetime_format=True)
                             if pd.notna(parsed):
-                                return parsed.date() if hasattr(parsed, 'date') else parsed
+                                parsed_date_obj = parsed.date() if hasattr(parsed, 'date') else parsed
+                                
+                                # Check for future date and add warning (don't reject)
+                                check_future_date_intake(parsed_date_obj, field_name)
+                                
+                                return parsed_date_obj
                         except (ValueError, TypeError, OverflowError):
                             pass
                     except (ValueError, TypeError):
@@ -2622,12 +2677,18 @@ def upload_clients(request):
                     
                     # If pandas fails, try manual parsing for common formats
                     try:
-                        from datetime import datetime
+                        from datetime import datetime, timedelta
                         value_str = str(value).strip()
                         
-                        # Remove time components if present (e.g., "2024-12-05 00:00:00" -> "2024-12-05")
+                        # ISSUE 6 FIX: Enhanced time stripping - handle multiple datetime formats
+                        # Remove time components: "2024-12-05 14:30:00" -> "2024-12-05"
                         if ' ' in value_str:
                             value_str = value_str.split(' ')[0]
+                            logger.debug(f"Stripped time component from datetime string, result: {value_str}")
+                        # Handle T separator: "2024-12-05T14:30:00" -> "2024-12-05"
+                        if 'T' in value_str:
+                            value_str = value_str.split('T')[0]
+                            logger.debug(f"Stripped T separator from datetime string, result: {value_str}")
                         
                         # Try various date formats
                         date_formats = [
@@ -2652,7 +2713,12 @@ def upload_clients(request):
                         for date_format in date_formats:
                             try:
                                 parsed = datetime.strptime(value_str, date_format)
-                                return parsed.date()
+                                parsed_date = parsed.date()
+                                
+                                # Check for future date and add warning (don't reject)
+                                check_future_date_intake(parsed_date, field_name)
+                                
+                                return parsed_date
                             except (ValueError, TypeError):
                                 continue
                         
@@ -2664,13 +2730,17 @@ def upload_clients(request):
                                     # Try MM/DD/YYYY first (US format)
                                     month, day, year = parts
                                     if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                        return datetime(int(year), int(month), int(day)).date()
+                                        parsed_date = datetime(int(year), int(month), int(day)).date()
+                                        check_future_date_intake(parsed_date, field_name)
+                                        return parsed_date
                                 except (ValueError, TypeError):
                                     try:
                                         # Try DD/MM/YYYY (European format)
                                         day, month, year = parts
                                         if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                            return datetime(int(year), int(month), int(day)).date()
+                                            parsed_date = datetime(int(year), int(month), int(day)).date()
+                                            check_future_date_intake(parsed_date, field_name)
+                                            return parsed_date
                                     except (ValueError, TypeError):
                                         pass
                         
@@ -2682,19 +2752,25 @@ def upload_clients(request):
                                     # Try YYYY-MM-DD first (ISO format)
                                     year, month, day = parts
                                     if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                        return datetime(int(year), int(month), int(day)).date()
+                                        parsed_date = datetime(int(year), int(month), int(day)).date()
+                                        check_future_date_intake(parsed_date, field_name)
+                                        return parsed_date
                                 except (ValueError, TypeError):
                                     try:
                                         # Try MM-DD-YYYY (US format)
                                         month, day, year = parts
                                         if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                            return datetime(int(year), int(month), int(day)).date()
+                                            parsed_date = datetime(int(year), int(month), int(day)).date()
+                                            check_future_date_intake(parsed_date, field_name)
+                                            return parsed_date
                                     except (ValueError, TypeError):
                                         try:
                                             # Try DD-MM-YYYY (European format)
                                             day, month, year = parts
                                             if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                                return datetime(int(year), int(month), int(day)).date()
+                                                parsed_date = datetime(int(year), int(month), int(day)).date()
+                                                check_future_date_intake(parsed_date, field_name)
+                                                return parsed_date
                                         except (ValueError, TypeError):
                                             pass
                     except (ValueError, TypeError, AttributeError) as e:
@@ -2729,11 +2805,17 @@ def upload_clients(request):
                 # Use the source from the form (upload type selection), not from CSV
                 
                 print(f"DEBUG: Program enrollment data - program_name: '{program_name}', source: '{source}'")
+                
+                # ISSUE 7 FIX: Get discharge_date early to use as fallback for intake_date
+                discharge_date_value = get_field_data('discharge_date')
+                parsed_discharge_date = parse_date(discharge_date_value, 'discharge_date')
+                
                 intake_date_value = get_field_data('intake_date')
                 logger.debug(f"DEBUG: Raw intake_date_value for client {client.first_name} {client.last_name}: '{intake_date_value}' (type: {type(intake_date_value)})")
                 # Parse the intake date value first - only default to today if truly empty
-                parsed_intake_date = parse_date(intake_date_value)
+                parsed_intake_date = parse_date(intake_date_value, 'intake_date')
                 logger.debug(f"DEBUG: Parsed intake_date for client {client.first_name} {client.last_name}: {parsed_intake_date}")
+                
                 # Only use today's date as default if no date was provided at all
                 # If a date was provided but couldn't be parsed, we should log a warning
                 if not parsed_intake_date and intake_date_value:
@@ -2743,12 +2825,20 @@ def upload_clients(request):
                     )
                     intake_date = datetime.now().date()
                 elif not parsed_intake_date:
-                    # No date provided at all - use today as default
-                    logger.info(
-                        f"No intake_date provided for client {client.first_name} {client.last_name}. "
-                        f"Using today's date as default."
-                    )
-                    intake_date = datetime.now().date()
+                    # ISSUE 7 FIX: Use discharge_date as fallback for intake_date if available
+                    if parsed_discharge_date:
+                        intake_date = parsed_discharge_date
+                        logger.info(
+                            f"No intake_date provided for client {client.first_name} {client.last_name}. "
+                            f"Using discharge_date {parsed_discharge_date} as intake_date (same-day enrollment/discharge)."
+                        )
+                    else:
+                        # No date provided at all - use today as default
+                        logger.info(
+                            f"No intake_date provided for client {client.first_name} {client.last_name}. "
+                            f"Using today's date as default."
+                        )
+                        intake_date = datetime.now().date()
                 else:
                     # Successfully parsed date - use it
                     intake_date = parsed_intake_date
@@ -2805,14 +2895,13 @@ def upload_clients(request):
                 support_workers = get_field_data('support_workers')
                 level_of_support = get_field_data('level_of_support')
                 client_type = get_field_data('client_type')
-                discharge_date_value = get_field_data('discharge_date')
                 days_elapsed_value = get_field_data('days_elapsed')
                 program_status = get_field_data('program_status', 'active')
                 reason_discharge = get_field_data('reason_discharge')
                 receiving_services_value = get_field_data('receiving_services', 'false')
                 
-                # Parse dates
-                discharge_date = parse_date(discharge_date_value)
+                # Use the already-parsed discharge_date
+                discharge_date = parsed_discharge_date
                 
                 # Parse days elapsed
                 days_elapsed = parse_integer(days_elapsed_value)
@@ -2938,7 +3027,14 @@ def upload_clients(request):
                         adjacent = (end1 and end1 + timedelta(days=1) == start2) or (end2 and end2 + timedelta(days=1) == start1)
                         return overlap or adjacent
                     
-                    # Find all overlapping/adjacent enrollments
+                    # ISSUE 1 FIX: First check for exact start_date matches (highest priority)
+                    # This handles enrollments with the same start_date in the same program
+                    exact_match_enrollments = [
+                        e for e in all_enrollments 
+                        if e.start_date == new_start_date
+                    ]
+                    
+                    # Find all overlapping/adjacent enrollments (including exact matches)
                     overlapping_enrollments = []
                     for existing in all_enrollments:
                         if ranges_overlap_or_adjacent(
@@ -2946,6 +3042,14 @@ def upload_clients(request):
                             new_start_date, new_end_date
                         ):
                             overlapping_enrollments.append(existing)
+                    
+                    # If we found exact matches, prioritize them for merging
+                    if exact_match_enrollments and not overlapping_enrollments:
+                        overlapping_enrollments = exact_match_enrollments
+                    elif exact_match_enrollments:
+                        # Combine exact matches with overlapping enrollments, removing duplicates
+                        all_to_merge = exact_match_enrollments + overlapping_enrollments
+                        overlapping_enrollments = list({e.id: e for e in all_to_merge}.values())
                     
                     existing_enrollment = None
                     enrollment = None
@@ -2958,11 +3062,38 @@ def upload_clients(request):
                         all_start_dates = [e.start_date for e in overlapping_enrollments] + [new_start_date]
                         earliest_start = min(all_start_dates)
                         
-                        # Collect all end dates (excluding None)
-                        all_end_dates = [e.end_date for e in overlapping_enrollments if e.end_date]
+                        # ISSUE 4 FIX: Collect all discharge information from all enrollments
+                        all_discharge_info = []
+                        for e in overlapping_enrollments:
+                            if e.end_date:
+                                # Extract discharge reason from notes if present
+                                discharge_reason = None
+                                if e.notes:
+                                    # Look for "Reason:" pattern in notes
+                                    if 'Reason:' in e.notes:
+                                        try:
+                                            reason_part = e.notes.split('Reason:')[1].split('|')[0].strip()
+                                            if reason_part:
+                                                discharge_reason = reason_part
+                                        except:
+                                            pass
+                                
+                                all_discharge_info.append({
+                                    'date': e.end_date,
+                                    'reason': discharge_reason,
+                                    'notes': e.notes
+                                })
+                        
+                        # Add new discharge info if provided
                         if new_end_date:
-                            all_end_dates.append(new_end_date)
-                        latest_end = max(all_end_dates) if all_end_dates else None
+                            all_discharge_info.append({
+                                'date': new_end_date,
+                                'reason': reason_discharge,
+                                'notes': None
+                            })
+                        
+                        # Use latest discharge date
+                        latest_end = max([d['date'] for d in all_discharge_info]) if all_discharge_info else None
                         
                         # Use the first overlapping enrollment as the base for merging
                         existing_enrollment = overlapping_enrollments[0]
@@ -2979,9 +3110,50 @@ def upload_clients(request):
                         existing_enrollment.start_date = earliest_start
                         existing_enrollment.end_date = latest_end
                         
+                        # ISSUE 4 FIX: Merge all discharge reasons and notes
+                        if all_discharge_info:
+                            # Collect unique discharge reasons
+                            discharge_reasons = []
+                            for info in all_discharge_info:
+                                if info['reason'] and info['reason'] not in discharge_reasons:
+                                    discharge_reasons.append(info['reason'])
+                            
+                            # Build merged notes with all discharge information
+                            existing_notes = existing_enrollment.notes or ''
+                            notes_parts = []
+                            
+                            # Preserve existing notes that aren't discharge-related
+                            if existing_notes and 'Discharge Date:' not in existing_notes:
+                                notes_parts.append(existing_notes)
+                            
+                            # Add merged discharge information
+                            if latest_end:
+                                discharge_note = f'Discharge Date: {latest_end.strftime("%Y-%m-%d")}'
+                                if discharge_reasons:
+                                    discharge_note += f' | Reason: {", ".join(discharge_reasons)}'
+                                notes_parts.append(discharge_note)
+                            
+                            # Merge notes from other enrollments (non-discharge info)
+                            for info in all_discharge_info:
+                                if info['notes'] and 'Discharge Date:' not in info['notes']:
+                                    if info['notes'] not in notes_parts:
+                                        notes_parts.append(f"Merged: {info['notes']}")
+                            
+                            if notes_parts:
+                                existing_enrollment.notes = ' | '.join(notes_parts)
+                        
                         # Save the merged enrollment immediately so it's visible to subsequent CSV records
                         existing_enrollment.updated_by = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
                         existing_enrollment.save()
+                        
+                        # ISSUE 2 FIX: Update client status after enrollment merge
+                        try:
+                            status_changed = client.update_inactive_status()
+                            if status_changed:
+                                client.save(update_fields=['is_inactive'])
+                                logger.debug(f"Updated client inactive status after enrollment merge for {client.first_name} {client.last_name}")
+                        except Exception as e:
+                            logger.warning(f"Failed to update client status after enrollment merge: {e}")
                         
                         # Update cache with the merged enrollment
                         enrollment_cache_key = (client.id, program.id, earliest_start)
@@ -2999,6 +3171,15 @@ def upload_clients(request):
                                     f"for client {client.first_name} {client.last_name} "
                                     f"in program {program.name} - merged into enrollment ID: {existing_enrollment.id}"
                                 )
+                                
+                                # ISSUE 2 FIX: Update client status after archiving enrollment
+                                try:
+                                    status_changed = client.update_inactive_status()
+                                    if status_changed:
+                                        client.save(update_fields=['is_inactive'])
+                                        logger.debug(f"Updated client inactive status after archiving enrollment for {client.first_name} {client.last_name}")
+                                except Exception as e:
+                                    logger.warning(f"Failed to update client status after archiving enrollment: {e}")
                         
                         # Mark that we've already merged and saved
                         enrollment = existing_enrollment
@@ -3097,6 +3278,14 @@ def upload_clients(request):
                             # Only save if we didn't just merge (merge already saved above)
                             if not enrollment_was_just_merged:
                                 enrollment.save()
+                                # ISSUE 2 FIX: Update client status after enrollment update
+                                try:
+                                    status_changed = client.update_inactive_status()
+                                    if status_changed:
+                                        client.save(update_fields=['is_inactive'])
+                                        logger.debug(f"Updated client inactive status after enrollment update for {client.first_name} {client.last_name}")
+                                except Exception as e:
+                                    logger.warning(f"Failed to update client status after enrollment update: {e}")
                             logger.info(f"Updated enrollment end_date for {client.first_name} {client.last_name} in {program.name} with discharge date {discharge_date}")
                         else:
                             # No discharge date, just update other fields
@@ -3216,9 +3405,25 @@ def upload_clients(request):
                             enrollment.status = final_status
                             enrollment.updated_by = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
                             enrollment.save()
+                            # ISSUE 2 FIX: Update client status after enrollment update
+                            try:
+                                status_changed = client.update_inactive_status()
+                                if status_changed:
+                                    client.save(update_fields=['is_inactive'])
+                                    logger.debug(f"Updated client inactive status after enrollment update for {client.first_name} {client.last_name}")
+                            except Exception as e:
+                                logger.warning(f"Failed to update client status after enrollment update: {e}")
                             logger.info(f"Updated existing enrollment (found during get_or_create) for {client.first_name} {client.last_name} in {program.name}")
-                    
+
                     if created:
+                        # ISSUE 2 FIX: Update client status after enrollment creation
+                        try:
+                            status_changed = client.update_inactive_status()
+                            if status_changed:
+                                client.save(update_fields=['is_inactive'])
+                                logger.debug(f"Updated client inactive status after enrollment creation for {client.first_name} {client.last_name}")
+                        except Exception as e:
+                            logger.warning(f"Failed to update client status after enrollment creation: {e}")
                         logger.info(f"Created {final_status} enrollment for {client.first_name} {client.last_name} in {current_program_name}")
                         # Skip audit log for bulk imports to improve performance
                         # Audit logs can be created separately if needed for specific tracking
@@ -3695,6 +3900,7 @@ def upload_clients(request):
         total_skipped_count = 0
         total_duplicates_flagged = 0
         all_errors = []
+        all_warnings = []  # Track all future date warnings
         all_duplicate_details = []
         
         # Check file size and warn if very large
@@ -3747,6 +3953,7 @@ def upload_clients(request):
                     extended_records_to_create = []
                     duplicate_relationships_to_create = []
                     chunk_errors = []
+                    chunk_warnings = []  # Track future date warnings
                     chunk_duplicate_details = []
                     chunk_created_count = 0
                     chunk_updated_count = 0
@@ -3790,8 +3997,46 @@ def upload_clients(request):
                                 except (ValueError, TypeError):
                                     return default
                             
+                            # Helper function to check for future dates and raise error for discharge/intake dates
+                            def check_future_date(parsed_date, field_name, row_index):
+                                """Check if date is in the future and raise error for discharge/intake dates, warning for others"""
+                                from django.utils import timezone
+                                today = timezone.now().date()
+                                if parsed_date and parsed_date > today:
+                                    client_id = get_field_data('client_id', 'N/A')
+                                    
+                                    # For discharge_date and intake_date, raise error immediately (rollback transaction)
+                                    if field_name in ['discharge_date', 'intake_date']:
+                                        error_msg = (
+                                            f"Row {row_index + 2}: Future date detected for {field_name}. "
+                                            f"Date: {parsed_date} (Client ID: {client_id}). "
+                                            f"Please update the sheet with the correct date. Upload aborted."
+                                        )
+                                        logger.error(error_msg)
+                                        # Raise UploadError to trigger transaction rollback
+                                        raise UploadError(
+                                            'UPLOAD_030',
+                                            message=error_msg,
+                                            details={
+                                                'row': row_index + 2,
+                                                'field': field_name,
+                                                'date': str(parsed_date),
+                                                'client_id': client_id,
+                                                'error_type': 'future_date_validation'
+                                            }
+                                        )
+                                    else:
+                                        # For other date fields, just add warning
+                                        warning_msg = (
+                                            f"Row {row_index + 2}: Future date detected for {field_name}. "
+                                            f"Date: {parsed_date} (Client ID: {client_id}). "
+                                            f"Please update the sheet with the correct date."
+                                        )
+                                        chunk_warnings.append(warning_msg)
+                                        logger.warning(warning_msg)
+                            
                             # Helper function to parse date values safely
-                            def parse_date(value, default=None):
+                            def parse_date(value, field_name='date', default=None):
                                 """Parse date value from string, handling empty values, multiple formats, Excel serial numbers, and various date formats"""
                                 if not value or (isinstance(value, str) and value.strip() == ''):
                                     return default
@@ -3799,7 +4044,9 @@ def upload_clients(request):
                                 # Handle pandas Timestamp or datetime objects directly
                                 if hasattr(value, 'date'):
                                     try:
-                                        return value.date()
+                                        parsed_date_obj = value.date()
+                                        check_future_date(parsed_date_obj, field_name, index)
+                                        return parsed_date_obj
                                     except (AttributeError, TypeError):
                                         pass
                                 
@@ -3808,6 +4055,7 @@ def upload_clients(request):
                                     try:
                                         from datetime import date
                                         if isinstance(value, date):
+                                            check_future_date(value, field_name, index)
                                             return value
                                     except (AttributeError, TypeError):
                                         pass
@@ -3820,11 +4068,17 @@ def upload_clients(request):
                                         # Excel serial numbers for dates are typically between 1 (Jan 1, 1900) and ~45000+ (modern dates)
                                         if 1 <= numeric_value <= 1000000:
                                             from datetime import datetime, timedelta
+                                            from django.utils import timezone
                                             # Excel epoch is 1899-12-30 (not 1900-01-01 due to Excel's 1900 leap year bug)
                                             excel_epoch = datetime(1899, 12, 30)
                                             parsed_date = excel_epoch + timedelta(days=int(numeric_value))
-                                            logger.debug(f"Converted Excel serial {numeric_value} to date: {parsed_date.date()}")
-                                            return parsed_date.date()
+                                            parsed_date_obj = parsed_date.date()
+                                            
+                                            # Check for future date and add warning (don't reject)
+                                            check_future_date(parsed_date_obj, field_name, index)
+                                            
+                                            logger.debug(f"Converted Excel serial {numeric_value} to date: {parsed_date_obj}")
+                                            return parsed_date_obj
                                     except (ValueError, TypeError):
                                         pass
                                     
@@ -3832,7 +4086,12 @@ def upload_clients(request):
                                     try:
                                         parsed = pd.to_datetime(value, errors='coerce', infer_datetime_format=True)
                                         if pd.notna(parsed):
-                                            return parsed.date() if hasattr(parsed, 'date') else parsed
+                                            parsed_date_obj = parsed.date() if hasattr(parsed, 'date') else parsed
+                                            
+                                            # Check for future date and add warning (don't reject)
+                                            check_future_date(parsed_date_obj, field_name, index)
+                                            
+                                            return parsed_date_obj
                                     except (ValueError, TypeError, OverflowError):
                                         pass
                                 except (ValueError, TypeError):
@@ -3840,12 +4099,19 @@ def upload_clients(request):
                                 
                                 # If pandas fails, try manual parsing for common formats
                                 try:
-                                    from datetime import datetime
+                                    from datetime import datetime, timedelta
+                                    from django.utils import timezone
                                     value_str = str(value).strip()
                                     
-                                    # Remove time components if present (e.g., "2024-12-05 00:00:00" -> "2024-12-05")
+                                    # ISSUE 6 FIX: Enhanced time stripping - handle multiple datetime formats
+                                    # Remove time components: "2024-12-05 14:30:00" -> "2024-12-05"
                                     if ' ' in value_str:
                                         value_str = value_str.split(' ')[0]
+                                        logger.debug(f"Stripped time component from datetime string, result: {value_str}")
+                                    # Handle T separator: "2024-12-05T14:30:00" -> "2024-12-05"
+                                    if 'T' in value_str:
+                                        value_str = value_str.split('T')[0]
+                                        logger.debug(f"Stripped T separator from datetime string, result: {value_str}")
                                     
                                     # Try various date formats
                                     date_formats = [
@@ -3870,7 +4136,12 @@ def upload_clients(request):
                                     for date_format in date_formats:
                                         try:
                                             parsed = datetime.strptime(value_str, date_format)
-                                            return parsed.date()
+                                            parsed_date = parsed.date()
+                                            
+                                            # Check for future date and add warning (don't reject)
+                                            check_future_date(parsed_date, field_name, index)
+                                            
+                                            return parsed_date
                                         except (ValueError, TypeError):
                                             continue
                                     
@@ -3882,13 +4153,17 @@ def upload_clients(request):
                                                 # Try MM/DD/YYYY first (US format)
                                                 month, day, year = parts
                                                 if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                                    return datetime(int(year), int(month), int(day)).date()
+                                                    parsed_date = datetime(int(year), int(month), int(day)).date()
+                                                    check_future_date(parsed_date, field_name, index)
+                                                    return parsed_date
                                             except (ValueError, TypeError):
                                                 try:
                                                     # Try DD/MM/YYYY (European format)
                                                     day, month, year = parts
                                                     if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                                        return datetime(int(year), int(month), int(day)).date()
+                                                        parsed_date = datetime(int(year), int(month), int(day)).date()
+                                                        check_future_date(parsed_date, field_name, index)
+                                                        return parsed_date
                                                 except (ValueError, TypeError):
                                                     pass
                                     
@@ -3900,19 +4175,25 @@ def upload_clients(request):
                                                 # Try YYYY-MM-DD first (ISO format)
                                                 year, month, day = parts
                                                 if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                                    return datetime(int(year), int(month), int(day)).date()
+                                                    parsed_date = datetime(int(year), int(month), int(day)).date()
+                                                    check_future_date(parsed_date, field_name, index)
+                                                    return parsed_date
                                             except (ValueError, TypeError):
                                                 try:
                                                     # Try MM-DD-YYYY (US format)
                                                     month, day, year = parts
                                                     if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                                        return datetime(int(year), int(month), int(day)).date()
+                                                        parsed_date = datetime(int(year), int(month), int(day)).date()
+                                                        check_future_date(parsed_date, field_name, index)
+                                                        return parsed_date
                                                 except (ValueError, TypeError):
                                                     try:
                                                         # Try DD-MM-YYYY (European format)
                                                         day, month, year = parts
                                                         if len(year) == 4 and 1 <= int(month) <= 12 and 1 <= int(day) <= 31:
-                                                            return datetime(int(year), int(month), int(day)).date()
+                                                            parsed_date = datetime(int(year), int(month), int(day)).date()
+                                                            check_future_date(parsed_date, field_name, index)
+                                                            return parsed_date
                                                     except (ValueError, TypeError):
                                                         pass
                                 except (ValueError, TypeError, AttributeError) as e:
@@ -3969,32 +4250,13 @@ def upload_clients(request):
                                         dob_value = None
                                     
                                     if dob_value:
-                                        # Try to parse the date with multiple format attempts
-                                        try:
-                                            # First try pandas automatic parsing
-                                            dob = pd.to_datetime(dob_value).date()
-                                        except (ValueError, TypeError, OverflowError):
-                                            # If that fails, try specific date formats
-                                            dob_str = str(dob_value).strip()
-                                            try:
-                                                # Try YYYY-MM-DD format
-                                                dob = datetime.strptime(dob_str, '%Y-%m-%d').date()
-                                            except (ValueError, TypeError):
-                                                # Try other common formats
-                                                try:
-                                                    dob = datetime.strptime(dob_str, '%Y/%m/%d').date()
-                                                except (ValueError, TypeError):
-                                                    try:
-                                                        dob = datetime.strptime(dob_str, '%m/%d/%Y').date()
-                                                    except (ValueError, TypeError):
-                                                        try:
-                                                            dob = datetime.strptime(dob_str, '%d/%m/%Y').date()
-                                                        except (ValueError, TypeError):
-                                                            # If all parsing attempts fail, raise the original error
-                                                            raise ValueError(f"Unable to parse date: {dob_str}")
+                                        # Use parse_date helper function which handles all formats and future date warnings
+                                        dob = parse_date(dob_value, 'dob')
+                                        # DOB should never be in the future - if it is, it's likely a data entry error
+                                        # But we'll still allow it and just warn (parse_date already handles the warning)
                                 else:
                                     # DOB is optional - no error needed
-                                    pass
+                                    dob = None
                             except Exception as e:
                                 # If date parsing fails, DOB is optional - just set to None
                                 dob = None
@@ -4045,7 +4307,7 @@ def upload_clients(request):
                                 'family_doctor': get_field_with_default('family_doctor'),
                                 'health_card_number': get_field_with_default('health_card_number'),
                                 'health_card_version': get_field_with_default('health_card_version'),
-                                'health_card_exp_date': parse_date(get_field_data('health_card_exp_date')),
+                                'health_card_exp_date': parse_date(get_field_data('health_card_exp_date'), 'health_card_exp_date'),
                                 'health_card_issuing_province': get_field_with_default('health_card_issuing_province'),
                                 'no_health_card_reason': get_field_with_default('no_health_card_reason'),
                                 'next_of_kin': get_field_with_default('next_of_kin'),
@@ -4106,16 +4368,16 @@ def upload_clients(request):
                                 'intake_status': get_field_with_default('intake_status'),
                                 'lived_last_12_months': get_field_with_default('lived_last_12_months'),
                                 'reason_for_service': get_field_with_default('reason_for_service'),
-                                'intake_date': parse_date(get_field_data('intake_date')),
-                                'service_end_date': parse_date(get_field_data('service_end_date')),
-                                'rejection_date': parse_date(get_field_data('rejection_date')),
+                                'intake_date': parse_date(get_field_data('intake_date'), 'intake_date'),
+                                'service_end_date': parse_date(get_field_data('service_end_date'), 'service_end_date'),
+                                'rejection_date': parse_date(get_field_data('rejection_date'), 'rejection_date'),
                                 'rejection_reason': get_field_with_default('rejection_reason'),
                                 'room': get_field_with_default('room'),
                                 'bed': get_field_with_default('bed'),
                                 'occupancy_status': get_field_with_default('occupancy_status'),
                                 'bed_nights_historical': parse_integer(get_field_data('bed_nights_historical')),
                                 'restriction_reason': get_field_with_default('restriction_reason'),
-                                'restriction_date': parse_date(get_field_data('restriction_date')),
+                                'restriction_date': parse_date(get_field_data('restriction_date'), 'restriction_date'),
                                 'restriction_duration_days': parse_integer(get_field_data('restriction_duration_days')),
                                 'restriction_status': get_field_with_default('restriction_status'),
                                 'early_termination_by': get_field_with_default('early_termination_by')
@@ -4299,7 +4561,7 @@ def upload_clients(request):
                             
                             # Parse discharge_date and reason_discharge early to check if we should update instead of create
                             discharge_date_value = get_field_data('discharge_date')
-                            discharge_date_parsed = parse_date(discharge_date_value)
+                            discharge_date_parsed = parse_date(discharge_date_value, 'discharge_date')
                             reason_discharge_value = get_field_data('reason_discharge')
                             program_name = get_field_data('program_name')
                             
@@ -4315,14 +4577,182 @@ def upload_clients(request):
                             if has_discharge_date:
                                 logger.info(f"Row {index + 2}: has_discharge_date=True, will update existing client")
                             
-                            # Check for existing client_id first - this is the primary update mechanism (using batch lookup)
+                            # ISSUE 5 FIX: Check for existing client by source ID (smis_id/emhware_id) FIRST - highest priority
+                            # This prevents duplicate clients with same source ID
                             client = None
                             is_update = False
                             original_email = ''
                             original_phone = ''
                             original_client_id = ''
                             
-                            if client_data.get('client_id'):
+                            source_id = client_data.get('client_id')
+                            source_type = client_data.get('source')  # 'SMIS' or 'EMHware'
+                            
+                            if source_id and source_type:
+                                try:
+                                    # Check for existing client with same source ID
+                                    if source_type == 'SMIS':
+                                        existing_client_by_source_id = Client.objects.filter(smis_id=source_id).first()
+                                    elif source_type == 'EMHware':
+                                        existing_client_by_source_id = Client.objects.filter(emhware_id=source_id).first()
+                                    else:
+                                        existing_client_by_source_id = None
+                                    
+                                    if existing_client_by_source_id:
+                                        # Found existing client by source ID - UPDATE instead of CREATE
+                                        client = existing_client_by_source_id
+                                        is_update = True
+                                        updated_count += 1
+                                        
+                                        # Update source ID field if not already set
+                                        if source_type == 'SMIS' and not client.smis_id:
+                                            client.smis_id = source_id
+                                        elif source_type == 'EMHware' and not client.emhware_id:
+                                            client.emhware_id = source_id
+                                        
+                                        # Update legacy_client_ids to preserve all source IDs
+                                        if client.legacy_client_ids is None:
+                                            client.legacy_client_ids = []
+                                        legacy_id_entry = {'source': source_type, 'client_id': source_id}
+                                        if legacy_id_entry not in client.legacy_client_ids:
+                                            client.legacy_client_ids.append(legacy_id_entry)
+                                        
+                                        logger.info(
+                                            f"Found existing client by {source_type} source ID {source_id}: "
+                                            f"{client.first_name} {client.last_name} (ID: {client.id})"
+                                        )
+                                        
+                                        # Prepare update data - collect fields from CSV
+                                        filtered_data = {}
+                                        
+                                        # Get all fields that are mapped from CSV columns
+                                        csv_fields = set()
+                                        for col in df.columns:
+                                            field_name = column_mapping.get(col)
+                                            if field_name:
+                                                csv_fields.add(field_name)
+                                        
+                                        # Only include fields that exist in the CSV and have non-empty values
+                                        for field, value in client_data.items():
+                                            # Skip if field is not in CSV
+                                            if field not in csv_fields:
+                                                continue
+                                                
+                                            # Skip if value is None, empty string, or empty dict
+                                            if value is None:
+                                                continue
+                                            if isinstance(value, str) and value.strip() == '':
+                                                continue
+                                            if isinstance(value, dict) and not value:
+                                                continue
+                                                
+                                            # Handle contact_information specially - only include if it has actual values
+                                            if field == 'contact_information' and isinstance(value, dict):
+                                                has_values = False
+                                                for key, val in value.items():
+                                                    if val and str(val).strip():
+                                                        has_values = True
+                                                        break
+                                                if not has_values:
+                                                    continue
+                                            
+                                            # Handle other dictionary fields (addresses, etc.) - only include if they have actual values
+                                            if isinstance(value, dict) and field not in ['contact_information']:
+                                                has_values = False
+                                                for key, val in value.items():
+                                                    if val and str(val).strip():
+                                                        has_values = True
+                                                        break
+                                                if not has_values:
+                                                    continue
+                                            
+                                            filtered_data[field] = value
+                                        
+                                        # Define extended fields list
+                                        extended_fields_list = [
+                                            'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
+                                            'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
+                                            'num_bednights_current_stay', 'length_homeless_3yrs', 'income_source',
+                                            'taxation_year_filed', 'status_id', 'picture_id', 'other_id', 'bnl_consent',
+                                            'allergies', 'harm_reduction_support', 'medication_support', 'pregnancy_support',
+                                            'mental_health_support', 'physical_health_support', 'daily_activities_support',
+                                            'other_health_supports', 'cannot_use_stairs', 'limited_mobility',
+                                            'wheelchair_accessibility', 'vision_hearing_speech_supports', 'english_translator',
+                                            'reading_supports', 'other_accessibility_supports', 'pet_owner', 'legal_support',
+                                            'immigration_support', 'religious_cultural_supports', 'safety_concerns',
+                                            'intimate_partner_violence_support', 'human_trafficking_support', 'other_supports',
+                                            'access_to_housing_application', 'access_to_housing_no', 'access_point_application',
+                                            'access_point_no', 'cars', 'cars_no', 'discharge_disposition', 'intake_status',
+                                            'lived_last_12_months', 'reason_for_service', 'intake_date', 'service_end_date',
+                                            'rejection_date', 'rejection_reason', 'room', 'bed', 'occupancy_status',
+                                            'bed_nights_historical', 'restriction_reason', 'restriction_date',
+                                            'restriction_duration_days', 'restriction_status', 'early_termination_by'
+                                        ]
+                                        
+                                        # Apply filtered values to client object for bulk update
+                                        for field, value in filtered_data.items():
+                                            if hasattr(client, field) and field not in extended_fields_list:
+                                                # Only update if existing value is empty/null, or merge data intelligently
+                                                existing_value = getattr(client, field, None)
+                                                if not existing_value or existing_value == '':
+                                                    setattr(client, field, value)
+                                                # For SMIS/EMHware IDs, always update to preserve legacy IDs
+                                                elif field in ['smis_id', 'emhware_id'] and value:
+                                                    setattr(client, field, value)
+                                        
+                                        # If discharge_date is present, ensure it's handled
+                                        if has_discharge_date:
+                                            # Check if program is specified
+                                            if not program_name or not program_name.strip():
+                                                # No program specified - store at client level
+                                                if discharge_date_parsed:
+                                                    client.discharge_date = discharge_date_parsed
+                                                    if 'discharge_date' not in filtered_data:
+                                                        filtered_data['discharge_date'] = discharge_date_parsed
+                                                if reason_discharge_value:
+                                                    client.reason_discharge = reason_discharge_value
+                                                    if 'reason_discharge' not in filtered_data:
+                                                        filtered_data['reason_discharge'] = reason_discharge_value
+                                                logger.info(f"Prepared client-level discharge update for {client.first_name} {client.last_name}")
+                                            # If program is specified, we'll handle it later in enrollment processing
+                                        
+                                        # Set updated_by field
+                                        if request.user.is_authenticated:
+                                            first_name = request.user.first_name or ''
+                                            last_name = request.user.last_name or ''
+                                            user_name = f"{first_name} {last_name}".strip()
+                                            if not user_name or user_name == ' ':
+                                                user_name = request.user.username or request.user.email or 'System'
+                                            client.updated_by = user_name
+                                        else:
+                                            client.updated_by = 'System'
+                                        
+                                        # Store client and extended data for bulk update
+                                        extended_data = {}
+                                        for field in extended_fields_list:
+                                            if field in filtered_data:
+                                                value = filtered_data[field]
+                                                if value is not None and value != '':
+                                                    if isinstance(value, str) and value.strip() != '':
+                                                        extended_data[field] = value.strip()
+                                                    elif not isinstance(value, str):
+                                                        extended_data[field] = value
+                                        
+                                        # Add to update list
+                                        clients_to_update.append({
+                                            'client': client,
+                                            'extended_data': extended_data,
+                                            'row_index': index
+                                        })
+                                        
+                                        logger.info(f"Prepared update for client by {source_type} source ID {source_id}: {client.first_name} {client.last_name}")
+                                        # Skip the client_id lookup below since we already found the client
+                                        continue
+                                except Exception as e:
+                                    logger.warning(f"Error checking source ID match: {e}")
+                            
+                            # Check for existing client_id - this is the secondary update mechanism (using batch lookup)
+                            if not client and client_data.get('client_id'):
                                 try:
                                     # Use batch-loaded existing clients instead of querying
                                     # Clean the client_id to match the cleaned keys in existing_clients_by_id
@@ -4554,12 +4984,61 @@ def upload_clients(request):
                                 
                                 # If we found a client for discharge update, prepare the update data
                                 if is_update and client:
+                                    # Collect update data - only include fields that are actually present in the CSV
+                                    filtered_data = {}
+                                    
+                                    # Get all fields that are mapped from CSV columns
+                                    csv_fields = set()
+                                    for col in df.columns:
+                                        field_name = column_mapping.get(col)
+                                        if field_name:
+                                            csv_fields.add(field_name)
+                                    
+                                    # Only include fields that exist in the CSV and have non-empty values
+                                    for field, value in client_data.items():
+                                        # Skip if field is not in CSV
+                                        if field not in csv_fields:
+                                            continue
+                                            
+                                        # Skip if value is None, empty string, or empty dict
+                                        if value is None:
+                                            continue
+                                        if isinstance(value, str) and value.strip() == '':
+                                            continue
+                                        if isinstance(value, dict) and not value:
+                                            continue
+                                            
+                                        # Handle contact_information specially - only include if it has actual values
+                                        if field == 'contact_information' and isinstance(value, dict):
+                                            has_values = False
+                                            for key, val in value.items():
+                                                if val and str(val).strip():
+                                                    has_values = True
+                                                    break
+                                            if not has_values:
+                                                continue
+                                        
+                                        # Handle other dictionary fields (addresses, etc.) - only include if they have actual values
+                                        if isinstance(value, dict) and field not in ['contact_information']:
+                                            has_values = False
+                                            for key, val in value.items():
+                                                if val and str(val).strip():
+                                                    has_values = True
+                                                    break
+                                            if not has_values:
+                                                continue
+                                        
+                                        filtered_data[field] = value
+                                    
                                     # Prepare discharge data
                                     if not program_name or not program_name.strip():
                                         # No program specified - store at client level
-                                        client.discharge_date = discharge_date_parsed
+                                        if discharge_date_parsed:
+                                            client.discharge_date = discharge_date_parsed
+                                            filtered_data['discharge_date'] = discharge_date_parsed
                                         if reason_discharge_value:
                                             client.reason_discharge = reason_discharge_value
+                                            filtered_data['reason_discharge'] = reason_discharge_value
                                         logger.info(f"Prepared client-level discharge update for {client.first_name} {client.last_name}")
                                     # If program is specified, we'll handle it later in the enrollment processing
                                     # Only add discharge_date and reason_discharge to client_data if NO program is specified
@@ -4569,6 +5048,71 @@ def upload_clients(request):
                                             client_data['discharge_date'] = discharge_date_parsed
                                         if reason_discharge_value:
                                             client_data['reason_discharge'] = reason_discharge_value
+                                    
+                                    # Define extended fields list
+                                    extended_fields_list = [
+                                        'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
+                                        'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
+                                        'num_bednights_current_stay', 'length_homeless_3yrs', 'income_source',
+                                        'taxation_year_filed', 'status_id', 'picture_id', 'other_id', 'bnl_consent',
+                                        'allergies', 'harm_reduction_support', 'medication_support', 'pregnancy_support',
+                                        'mental_health_support', 'physical_health_support', 'daily_activities_support',
+                                        'other_health_supports', 'cannot_use_stairs', 'limited_mobility',
+                                        'wheelchair_accessibility', 'vision_hearing_speech_supports', 'english_translator',
+                                        'reading_supports', 'other_accessibility_supports', 'pet_owner', 'legal_support',
+                                        'immigration_support', 'religious_cultural_supports', 'safety_concerns',
+                                        'intimate_partner_violence_support', 'human_trafficking_support', 'other_supports',
+                                        'access_to_housing_application', 'access_to_housing_no', 'access_point_application',
+                                        'access_point_no', 'cars', 'cars_no', 'discharge_disposition', 'intake_status',
+                                        'lived_last_12_months', 'reason_for_service', 'intake_date', 'service_end_date',
+                                        'rejection_date', 'rejection_reason', 'room', 'bed', 'occupancy_status',
+                                        'bed_nights_historical', 'restriction_reason', 'restriction_date',
+                                        'restriction_duration_days', 'restriction_status', 'early_termination_by'
+                                    ]
+                                    
+                                    # Apply filtered values to client object for bulk update
+                                    for field, value in filtered_data.items():
+                                        if hasattr(client, field) and field not in extended_fields_list:
+                                            # Only update if existing value is empty/null, or merge data intelligently
+                                            existing_value = getattr(client, field, None)
+                                            if not existing_value or existing_value == '':
+                                                setattr(client, field, value)
+                                            # For SMIS/EMHware IDs, always update to preserve legacy IDs
+                                            elif field in ['smis_id', 'emhware_id'] and value:
+                                                setattr(client, field, value)
+                                    
+                                    # Set updated_by field
+                                    if request.user.is_authenticated:
+                                        first_name = request.user.first_name or ''
+                                        last_name = request.user.last_name or ''
+                                        user_name = f"{first_name} {last_name}".strip()
+                                        if not user_name or user_name == ' ':
+                                            user_name = request.user.username or request.user.email or 'System'
+                                        client.updated_by = user_name
+                                    else:
+                                        client.updated_by = 'System'
+                                    
+                                    # Store client and extended data for bulk update
+                                    extended_data = {}
+                                    for field in extended_fields_list:
+                                        if field in filtered_data:
+                                            value = filtered_data[field]
+                                            if value is not None and value != '':
+                                                if isinstance(value, str) and value.strip() != '':
+                                                    extended_data[field] = value.strip()
+                                                elif not isinstance(value, str):
+                                                    extended_data[field] = value
+                                    
+                                    # Add to update list
+                                    clients_to_update.append({
+                                        'client': client,
+                                        'extended_data': extended_data,
+                                        'row_index': index
+                                    })
+                                    
+                                    logger.info(f"Prepared update for client found by name+DOB: {client.first_name} {client.last_name}")
+                                    # Skip creating a new client - we're updating the existing one
+                                    continue
                             
                             # Validate required fields for all rows (client_id is now required for all uploads)
                             if not is_update:
@@ -4889,6 +5433,10 @@ def upload_clients(request):
                             
                             # Note: Duplicate relationships and intake data will be created after bulk client creation
                     
+                        except UploadError:
+                            # Re-raise UploadError to trigger transaction rollback
+                            # This is critical for future date validation in discharge/intake dates
+                            raise
                         except Exception as e:
                             error_message = str(e)
                             import traceback
@@ -5034,7 +5582,11 @@ def upload_clients(request):
                                         program_fuzzy_cache,
                                         enrollment_cache,
                                         intake_cache,
+                                        chunk_warnings,  # Pass warnings list
                                     )
+                                except UploadError:
+                                    # Re-raise UploadError to trigger transaction rollback
+                                    raise
                                 except Exception as e:
                                     logger.error(f"Error processing intake data for updated client {update_data['client'].client_id}: {str(e)}")
                                     chunk_errors.append(f"Row {update_data['row_index'] + 2}: Error processing intake data - {str(e)}")
@@ -5154,7 +5706,11 @@ def upload_clients(request):
                                         program_fuzzy_cache,
                                         enrollment_cache,
                                         intake_cache,
+                                        chunk_warnings,  # Pass warnings list
                                     )
+                                except UploadError:
+                                    # Re-raise UploadError to trigger transaction rollback
+                                    raise
                                 except Exception as e:
                                     logger.error(f"Error processing intake data for client {client.first_name} {client.last_name}: {str(e)}")
                                     chunk_errors.append(f"Row {row_index + 2}: Error processing intake data - {str(e)}")
@@ -5167,6 +5723,7 @@ def upload_clients(request):
                     total_skipped_count += chunk_skipped_count
                     total_duplicates_flagged += chunk_duplicates_flagged
                     all_errors.extend(chunk_errors)
+                    all_warnings.extend(chunk_warnings)  # Collect warnings from chunk
                     all_duplicate_details.extend(chunk_duplicate_details)
                     
                     logger.info(f"Chunk {chunk_number} completed: {chunk_created_count} created, {chunk_updated_count} updated, {len(chunk_errors)} errors")
@@ -5177,6 +5734,15 @@ def upload_clients(request):
                 # All chunks processed successfully - transaction will commit
                 logger.info(f"All {chunk_number} chunks processed successfully. Transaction will commit.")
                             
+        except UploadError as e:
+            # If UploadError is raised (e.g., future date validation), preserve it and re-raise
+            # This ensures the original error message and details are maintained
+            logger.error(f"UploadError in chunk {chunk_number}: {e.message}. ALL database operations will rollback.")
+            logger.error(f"Error code: {e.code}, Category: {e.category}")
+            if isinstance(e.details, dict):
+                logger.error(f"Error details: Row {e.details.get('row', 'N/A')}, Field: {e.details.get('field', 'N/A')}, Date: {e.details.get('date', 'N/A')}")
+            # Re-raise the original UploadError to preserve error message and details
+            raise
         except Exception as e:
             # If ANY chunk fails, the entire transaction rolls back
             import traceback
@@ -5360,11 +5926,13 @@ def upload_clients(request):
                 'skipped': total_skipped_count,
                 'duplicates_flagged': total_duplicates_flagged,
                 'errors': len(all_errors),
+                'warnings': len(all_warnings),
                 'duration_seconds': upload_log.duration_seconds if upload_log else None,
                 'chunks_processed': chunk_number
             },
             'duplicate_details': all_duplicate_details[:20],  # Limit to first 20 duplicates for display
             'errors': all_errors[:10] if all_errors else [],  # Limit to first 10 errors
+            'warnings': all_warnings if all_warnings else [],  # Include all future date warnings
             'debug_info': debug_info,  # Add debug information
             'notes': [
                 'Existing clients with matching Client ID were updated with new information',
@@ -5375,6 +5943,12 @@ def upload_clients(request):
                 'Review flagged duplicates in the "Probable Duplicate Clients" section'
             ] if total_created_count > 0 or total_updated_count > 0 or total_duplicates_flagged > 0 else []
         }
+        
+        # Add warning note if there are future date warnings
+        if all_warnings:
+            response_data['notes'].append(
+                f'{len(all_warnings)} record(s) have future dates. Please review and update the sheet with correct dates.'
+            )
         
         return JsonResponse(response_data)
         
@@ -5452,14 +6026,39 @@ def upload_clients(request):
             except Exception as log_error:
                 logger.error(f"Failed to update upload log with error: {log_error}")
         
-        return JsonResponse({
+        # Determine appropriate status code based on error category
+        # Validation errors (like future dates) should be 400, not 500
+        if e.category == 'validation':
+            status_code = 400
+        elif e.category in ['permission', 'authentication']:
+            status_code = 403
+        else:
+            status_code = 500
+        
+        # Build user-friendly error response
+        error_response = {
             'success': False,
             'error': e.message,
             'error_code': e.code,
             'error_category': e.category,
             'user_action': e.user_action,
             'details': e.details
-        }, status=500)
+        }
+        
+        # For future date validation errors, include additional helpful information
+        if e.code == 'UPLOAD_030' and isinstance(e.details, dict):
+            error_response['row_number'] = e.details.get('row')
+            error_response['field_name'] = e.details.get('field')
+            error_response['date_value'] = e.details.get('date')
+            error_response['client_id'] = e.details.get('client_id')
+            error_response['message'] = (
+                f"Row {e.details.get('row', 'N/A')}: Future date detected in {e.details.get('field', 'date field')}. "
+                f"Date: {e.details.get('date', 'N/A')} (Client ID: {e.details.get('client_id', 'N/A')}). "
+                f"Please update the Excel sheet with the correct date and try uploading again. "
+                f"No changes were saved to the database."
+            )
+        
+        return JsonResponse(error_response, status=status_code)
         
     except Exception as e:
         # Handle unexpected errors
@@ -6263,15 +6862,28 @@ class ClientDedupeView(TemplateView):
         
         paginated_groups = GroupedDuplicatesPage(grouped_duplicates_list, paginated_primary_ids_page)
         
+        # ISSUE 8 FIX: Filter duplicate count to only show relevant duplicates
+        # Build base query for stats (exclude archived clients for non-admin users)
+        stats_base_query = ClientDuplicate.objects.all()
+        if not can_see_archived(self.request.user):
+            stats_base_query = stats_base_query.exclude(
+                primary_client__is_archived=True,
+                duplicate_client__is_archived=True
+            )
+        
         # OPTIMIZATION: Get all statistics using a single aggregate query
         # This replaces multiple separate queries with one efficient aggregate query
-        all_stats = ClientDuplicate.objects.aggregate(
-            total_duplicates=Count('id'),
+        # ISSUE 8 FIX: Only count pending duplicates as "total_duplicates" (relevant duplicates)
+        all_stats = stats_base_query.aggregate(
+            total_duplicates=Count('id', filter=Q(status='pending')),  # Only count pending
             pending_duplicates=Count('id', filter=Q(status='pending')),
             high_confidence_duplicates=Count('id', filter=Q(confidence_level='high', status='pending')),
-            scanned_duplicates=Count('id', filter=Q(detection_source='scan')),
+            scanned_duplicates=Count('id', filter=Q(detection_source='scan', status='pending')),  # Only count pending
             scanned_pending_duplicates=Count('id', filter=Q(detection_source='scan', status='pending')),
-            scanned_high_confidence=Count('id', filter=Q(detection_source='scan', confidence_level='high', status='pending'))
+            scanned_high_confidence=Count('id', filter=Q(detection_source='scan', confidence_level='high', status='pending')),
+            # Add separate counts for different statuses
+            confirmed_duplicates=Count('id', filter=Q(status='confirmed_duplicate')),
+            not_duplicates=Count('id', filter=Q(status='not_duplicate'))
         )
         
         # Use tab-filtered stats if on scanned tab, otherwise use all stats
