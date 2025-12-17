@@ -2573,45 +2573,35 @@ def upload_clients(request):
                     except (ValueError, TypeError):
                         return default
                 
-                # Helper function to check for future dates and raise error for discharge/intake dates
+                # Helper function to check if a date is in the future (without adding warning)
+                def is_future_date_intake(parsed_date):
+                    """Check if date is in the future. Returns True if date is future."""
+                    if not parsed_date:
+                        return False
+                    from django.utils import timezone
+                    today = timezone.now().date()
+                    return parsed_date > today
+                
+                # Helper function to check for future dates and add warnings
                 def check_future_date_intake(parsed_date, field_name):
-                    """Check if date is in the future and raise error for discharge/intake dates, warning for others"""
-                    if parsed_date:
-                        from django.utils import timezone
-                        today = timezone.now().date()
-                        if parsed_date > today:
-                            client_id = client.client_id if client else 'N/A'
-                            
-                            # For discharge_date and intake_date, raise error immediately (rollback transaction)
-                            if field_name in ['discharge_date', 'intake_date']:
-                                error_msg = (
-                                    f"Row {index + 2}: Future date detected for {field_name}. "
-                                    f"Date: {parsed_date} (Client ID: {client_id}). "
-                                    f"Please update the sheet with the correct date. Upload aborted."
-                                )
-                                logger.error(error_msg)
-                                # Raise UploadError to trigger transaction rollback
-                                raise UploadError(
-                                    'UPLOAD_030',
-                                    message=error_msg,
-                                    details={
-                                        'row': index + 2,
-                                        'field': field_name,
-                                        'date': str(parsed_date),
-                                        'client_id': client_id,
-                                        'error_type': 'future_date_validation'
-                                    }
-                                )
-                            else:
-                                # For other date fields, just add warning if warnings_list is provided
-                                if warnings_list is not None:
-                                    warning_msg = (
-                                        f"Row {index + 2}: Future date detected for {field_name}. "
-                                        f"Date: {parsed_date} (Client ID: {client_id}). "
-                                        f"Please update the sheet with the correct date."
-                                    )
-                                    warnings_list.append(warning_msg)
-                                    logger.warning(warning_msg)
+                    """Check if date is in the future and add warning for all date fields. Returns True if date is future."""
+                    if is_future_date_intake(parsed_date):
+                        # For intake_date and discharge_date, don't add warning here - it will be added when we skip processing
+                        if field_name in ['intake_date', 'discharge_date']:
+                            return True
+                        
+                        # For other date fields, add warning
+                        client_id = client.client_id if client else 'N/A'
+                        if warnings_list is not None:
+                            warning_msg = (
+                                f"Row {index + 2}: Future date detected for {field_name}. "
+                                f"Date: {parsed_date} (Client ID: {client_id}). "
+                                f"Please update the sheet with the correct date."
+                            )
+                            warnings_list.append(warning_msg)
+                            logger.warning(warning_msg)
+                        return True
+                    return False
                 
                 # Helper function to parse date values safely
                 def parse_date(value, field_name='date', default=None):
@@ -2815,6 +2805,27 @@ def upload_clients(request):
                 # Parse the intake date value first - only default to today if truly empty
                 parsed_intake_date = parse_date(intake_date_value, 'intake_date')
                 logger.debug(f"DEBUG: Parsed intake_date for client {client.first_name} {client.last_name}: {parsed_intake_date}")
+                
+                # Check if either date is in the future - if so, skip processing this intake
+                has_future_intake = is_future_date_intake(parsed_intake_date)
+                has_future_discharge = is_future_date_intake(parsed_discharge_date)
+                
+                if has_future_intake or has_future_discharge:
+                    client_id_display = client.client_id if client else 'N/A'
+                    fields_with_future_dates = []
+                    if has_future_intake:
+                        fields_with_future_dates.append(f'intake_date ({parsed_intake_date})')
+                    if has_future_discharge:
+                        fields_with_future_dates.append(f'discharge_date ({parsed_discharge_date})')
+                    
+                    warning_msg = (
+                        f"Row {index + 2}: Intake processing skipped for client due to future date(s) in {', '.join(fields_with_future_dates)}. "
+                        f"Client ID: {client_id_display}. Please update the sheet with the correct date(s)."
+                    )
+                    if warnings_list is not None:
+                        warnings_list.append(warning_msg)
+                    logger.warning(warning_msg)
+                    return  # Skip processing this intake
                 
                 # Only use today's date as default if no date was provided at all
                 # If a date was provided but couldn't be parsed, we should log a warning
@@ -3997,43 +4008,34 @@ def upload_clients(request):
                                 except (ValueError, TypeError):
                                     return default
                             
-                            # Helper function to check for future dates and raise error for discharge/intake dates
-                            def check_future_date(parsed_date, field_name, row_index):
-                                """Check if date is in the future and raise error for discharge/intake dates, warning for others"""
+                            # Helper function to check if a date is in the future (without adding warning)
+                            def is_future_date(parsed_date):
+                                """Check if date is in the future. Returns True if date is future."""
+                                if not parsed_date:
+                                    return False
                                 from django.utils import timezone
                                 today = timezone.now().date()
-                                if parsed_date and parsed_date > today:
-                                    client_id = get_field_data('client_id', 'N/A')
+                                return parsed_date > today
+                            
+                            # Helper function to check for future dates and add warnings
+                            def check_future_date(parsed_date, field_name, row_index):
+                                """Check if date is in the future and add warning for all date fields. Returns True if date is future."""
+                                if is_future_date(parsed_date):
+                                    # For intake_date and discharge_date, don't add warning here - it will be added when we skip the record
+                                    if field_name in ['intake_date', 'discharge_date']:
+                                        return True
                                     
-                                    # For discharge_date and intake_date, raise error immediately (rollback transaction)
-                                    if field_name in ['discharge_date', 'intake_date']:
-                                        error_msg = (
-                                            f"Row {row_index + 2}: Future date detected for {field_name}. "
-                                            f"Date: {parsed_date} (Client ID: {client_id}). "
-                                            f"Please update the sheet with the correct date. Upload aborted."
-                                        )
-                                        logger.error(error_msg)
-                                        # Raise UploadError to trigger transaction rollback
-                                        raise UploadError(
-                                            'UPLOAD_030',
-                                            message=error_msg,
-                                            details={
-                                                'row': row_index + 2,
-                                                'field': field_name,
-                                                'date': str(parsed_date),
-                                                'client_id': client_id,
-                                                'error_type': 'future_date_validation'
-                                            }
-                                        )
-                                    else:
-                                        # For other date fields, just add warning
-                                        warning_msg = (
-                                            f"Row {row_index + 2}: Future date detected for {field_name}. "
-                                            f"Date: {parsed_date} (Client ID: {client_id}). "
-                                            f"Please update the sheet with the correct date."
-                                        )
-                                        chunk_warnings.append(warning_msg)
-                                        logger.warning(warning_msg)
+                                    # For other date fields, add warning
+                                    client_id = get_field_data('client_id', 'N/A')
+                                    warning_msg = (
+                                        f"Row {row_index + 2}: Future date detected for {field_name}. "
+                                        f"Date: {parsed_date} (Client ID: {client_id}). "
+                                        f"Please update the sheet with the correct date."
+                                    )
+                                    chunk_warnings.append(warning_msg)
+                                    logger.warning(warning_msg)
+                                    return True
+                                return False
                             
                             # Helper function to parse date values safely
                             def parse_date(value, field_name='date', default=None):
@@ -4235,6 +4237,35 @@ def upload_clients(request):
                             phone = get_field_data('phone')
                             client_id = get_field_data('client_id')
                             
+                            # Early validation: Check for future dates in intake_date and discharge_date
+                            # If found, skip this record and add warning
+                            intake_date_value = get_field_data('intake_date')
+                            discharge_date_value = get_field_data('discharge_date')
+                            
+                            parsed_intake_date = parse_date(intake_date_value, 'intake_date') if intake_date_value else None
+                            parsed_discharge_date = parse_date(discharge_date_value, 'discharge_date') if discharge_date_value else None
+                            
+                            # Check if either date is in the future (without adding warning yet)
+                            has_future_intake = is_future_date(parsed_intake_date)
+                            has_future_discharge = is_future_date(parsed_discharge_date)
+                            
+                            # If either intake_date or discharge_date is in the future, skip this record
+                            if has_future_intake or has_future_discharge:
+                                client_id_display = client_id if client_id else 'N/A'
+                                fields_with_future_dates = []
+                                if has_future_intake:
+                                    fields_with_future_dates.append(f'intake_date ({parsed_intake_date})')
+                                if has_future_discharge:
+                                    fields_with_future_dates.append(f'discharge_date ({parsed_discharge_date})')
+                                
+                                warning_msg = (
+                                    f"Row {index + 2}: Record skipped due to future date(s) in {', '.join(fields_with_future_dates)}. "
+                                    f"Client ID: {client_id_display}. Please update the sheet with the correct date(s)."
+                                )
+                                chunk_warnings.append(warning_msg)
+                                logger.warning(warning_msg)
+                                chunk_skipped_count += 1
+                                continue  # Skip this record
                             
                             # Handle date of birth - required for new clients, optional for updates
                             dob = None
@@ -5435,7 +5466,6 @@ def upload_clients(request):
                     
                         except UploadError:
                             # Re-raise UploadError to trigger transaction rollback
-                            # This is critical for future date validation in discharge/intake dates
                             raise
                         except Exception as e:
                             error_message = str(e)
@@ -5735,7 +5765,7 @@ def upload_clients(request):
                 logger.info(f"All {chunk_number} chunks processed successfully. Transaction will commit.")
                             
         except UploadError as e:
-            # If UploadError is raised (e.g., future date validation), preserve it and re-raise
+            # If UploadError is raised, preserve it and re-raise
             # This ensures the original error message and details are maintained
             logger.error(f"UploadError in chunk {chunk_number}: {e.message}. ALL database operations will rollback.")
             logger.error(f"Error code: {e.code}, Category: {e.category}")
@@ -5916,9 +5946,14 @@ def upload_clients(request):
             except Exception as e:
                 logger.error(f"Failed to update upload log: {e}")
         
+        # Build success message with skipped records info if applicable
+        success_message = f'Upload completed! {total_created_count} clients created, {total_updated_count} clients updated.'
+        if total_skipped_count > 0:
+            success_message += f' {total_skipped_count} record(s) skipped due to future dates.'
+        
         response_data = {
             'success': True,
-            'message': f'Upload completed! {total_created_count} clients created, {total_updated_count} clients updated.',
+            'message': success_message,
             'stats': {
                 'total_rows': total_rows,
                 'created': total_created_count,
@@ -5947,7 +5982,7 @@ def upload_clients(request):
         # Add warning note if there are future date warnings
         if all_warnings:
             response_data['notes'].append(
-                f'{len(all_warnings)} record(s) have future dates. Please review and update the sheet with correct dates.'
+                f'{len(all_warnings)} record(s) were skipped due to future dates in intake_date or discharge_date. Please review and update the sheet with correct dates.'
             )
         
         return JsonResponse(response_data)
