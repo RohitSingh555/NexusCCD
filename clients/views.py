@@ -2960,37 +2960,94 @@ def upload_clients(request):
                         )
                         continue
                     
-                    # Create intake record
+                    # Create or update intake record with intelligent merging
+                    # When client is merged cross-source, merge intake data intelligently
                     intake_cache_key = (client.id, program.id)
                     intake = intake_cache.get(intake_cache_key)
                     if intake is None:
-                        intake, created = Intake.objects.get_or_create(
+                        # Check if intake already exists in database (for cross-source merges)
+                        existing_intake = Intake.objects.filter(
                             client=client,
-                            program=program,
-                            defaults={
-                                'department': department,
-                                'intake_date': current_intake_date,
-                                'intake_database': intake_database,
-                                'referral_source': referral_source,
-                                'intake_housing_status': intake_housing_status,
-                                'notes': f'Intake created from {source} upload (program {i+1})'
-                            }
-                        )
+                            program=program
+                        ).first()
+                        
+                        if existing_intake:
+                            # Merge existing intake with new data
+                            intake = existing_intake
+                            created = False
+                            
+                            # Use earliest intake_date
+                            if current_intake_date and (not intake.intake_date or current_intake_date < intake.intake_date):
+                                intake.intake_date = current_intake_date
+                                logger.info(
+                                    f"Updated intake_date to earliest date {current_intake_date} for {client.first_name} {client.last_name} "
+                                    f"in {current_program_name} (was {intake.intake_date})"
+                                )
+                            
+                            # Update other fields if empty or merge data
+                            if department and not intake.department:
+                                intake.department = department
+                            if intake_database and not intake.intake_database:
+                                intake.intake_database = intake_database
+                            if referral_source and not intake.referral_source:
+                                intake.referral_source = referral_source
+                            if intake_housing_status and not intake.intake_housing_status:
+                                intake.intake_housing_status = intake_housing_status
+                            
+                            # Merge notes
+                            new_note = f'Intake updated from {source} upload (program {i+1})'
+                            if intake.notes:
+                                if new_note not in intake.notes:
+                                    intake.notes = f"{intake.notes} | {new_note}"
+                            else:
+                                intake.notes = new_note
+                            
+                            intake.save()
+                            logger.info(
+                                f"Merged intake record for {client.first_name} {client.last_name} in {current_program_name} "
+                                f"(cross-source merge)"
+                            )
+                        else:
+                            # Create new intake
+                            intake, created = Intake.objects.get_or_create(
+                                client=client,
+                                program=program,
+                                defaults={
+                                    'department': department,
+                                    'intake_date': current_intake_date,
+                                    'intake_database': intake_database,
+                                    'referral_source': referral_source,
+                                    'intake_housing_status': intake_housing_status,
+                                    'notes': f'Intake created from {source} upload (program {i+1})'
+                                }
+                            )
+                            logger.info(f"Created intake record for {client.first_name} {client.last_name} in {current_program_name}")
+                        
                         intake_cache[intake_cache_key] = intake
                     else:
+                        # Intake already processed in this upload batch
                         created = False
+                        # Still check if we should update intake_date to earliest
+                        if current_intake_date and (not intake.intake_date or current_intake_date < intake.intake_date):
+                            intake.intake_date = current_intake_date
+                            intake.save()
+                            logger.info(
+                                f"Updated intake_date to earliest date {current_intake_date} for {client.first_name} {client.last_name} "
+                                f"in {current_program_name} (within same upload batch)"
+                            )
                     
-                    if created:
-                        logger.info(f"Created intake record for {client.first_name} {client.last_name} in {current_program_name}")
-                    else:
+                    if not created:
                         logger.info(f"Intake record already exists for {client.first_name} {client.last_name} in {current_program_name}")
                     
                     # Check if enrollment exists for this client-program combination
-                    # NEW LOGIC: Find and merge overlapping/adjacent enrollments
-                    # Merge strategy:
-                    # 1. Find all enrollments that overlap or are adjacent to the new enrollment date range
-                    # 2. Merge them into one enrollment with earliest start_date and latest end_date
-                    # 3. Don't create duplicate enrollments
+                    # CROSS-SOURCE MERGING: When clients are merged from different sources (SMIS/EMHware),
+                    # this logic ensures enrollments are intelligently merged:
+                    # 1. Same program + similar start dates (within 7 days) → merge into one
+                    # 2. Same program + overlapping/adjacent dates → merge into one
+                    # 3. Different programs → create separate enrollments
+                    # 4. Merge strategy: earliest start_date, latest end_date
+                    # 5. This works for cross-source merges because it queries ALL existing enrollments
+                    #    for the client, not just from the current upload
                     
                     from django.db.models import Q
                     from datetime import timedelta
@@ -3001,6 +3058,8 @@ def upload_clients(request):
                     new_end_date = discharge_date
                     
                     # Get all non-archived enrollments for this client and program
+                    # IMPORTANT: This queries ALL existing enrollments, including those from other sources
+                    # This enables cross-source enrollment merging when clients are merged
                     # Also check the enrollment_cache for enrollments created in this same upload
                     all_enrollments = list(ClientProgramEnrollment.objects.filter(
                         client=client,
@@ -3038,14 +3097,29 @@ def upload_clients(request):
                         adjacent = (end1 and end1 + timedelta(days=1) == start2) or (end2 and end2 + timedelta(days=1) == start1)
                         return overlap or adjacent
                     
-                    # ISSUE 1 FIX: First check for exact start_date matches (highest priority)
+                    # Helper function to check if start dates are similar (within threshold)
+                    def start_dates_similar(start1, start2, threshold_days=7):
+                        """Check if two start dates are similar (within threshold days)"""
+                        if not start1 or not start2:
+                            return False
+                        date_diff = abs((start1 - start2).days)
+                        return date_diff <= threshold_days
+                    
+                    # PRIORITY 1: Check for exact start_date matches (highest priority)
                     # This handles enrollments with the same start_date in the same program
                     exact_match_enrollments = [
                         e for e in all_enrollments 
                         if e.start_date == new_start_date
                     ]
                     
-                    # Find all overlapping/adjacent enrollments (including exact matches)
+                    # PRIORITY 2: Check for similar start dates (within 7 days) for same program
+                    # This handles cross-source enrollments with slightly different start dates
+                    similar_start_enrollments = [
+                        e for e in all_enrollments
+                        if start_dates_similar(e.start_date, new_start_date, threshold_days=7)
+                    ]
+                    
+                    # PRIORITY 3: Find all overlapping/adjacent enrollments
                     overlapping_enrollments = []
                     for existing in all_enrollments:
                         if ranges_overlap_or_adjacent(
@@ -3054,13 +3128,31 @@ def upload_clients(request):
                         ):
                             overlapping_enrollments.append(existing)
                     
-                    # If we found exact matches, prioritize them for merging
-                    if exact_match_enrollments and not overlapping_enrollments:
-                        overlapping_enrollments = exact_match_enrollments
-                    elif exact_match_enrollments:
-                        # Combine exact matches with overlapping enrollments, removing duplicates
-                        all_to_merge = exact_match_enrollments + overlapping_enrollments
-                        overlapping_enrollments = list({e.id: e for e in all_to_merge}.values())
+                    # Combine all potential matches: exact matches, similar starts, and overlapping
+                    # Remove duplicates while preserving priority (exact > similar > overlapping)
+                    all_potential_matches = []
+                    match_ids = set()
+                    
+                    # Add exact matches first (highest priority)
+                    for e in exact_match_enrollments:
+                        if e.id not in match_ids:
+                            all_potential_matches.append(e)
+                            match_ids.add(e.id)
+                    
+                    # Add similar start matches (medium priority)
+                    for e in similar_start_enrollments:
+                        if e.id not in match_ids:
+                            all_potential_matches.append(e)
+                            match_ids.add(e.id)
+                    
+                    # Add overlapping matches (lowest priority, but still valid)
+                    for e in overlapping_enrollments:
+                        if e.id not in match_ids:
+                            all_potential_matches.append(e)
+                            match_ids.add(e.id)
+                    
+                    # Use combined list for merging
+                    overlapping_enrollments = all_potential_matches
                     
                     existing_enrollment = None
                     enrollment = None
@@ -3782,6 +3874,77 @@ def upload_clients(request):
                     external_id_key = client.uid_external.strip()
                     existing_clients_by_external_id[external_id_key] = client
             logger.info(f"Pre-loaded {len(existing_clients_by_external_id)} clients with matching external IDs")
+        
+        # ===== CROSS-SOURCE ID MATCHING: Pre-load clients by smis_id, emhware_id, and legacy_client_ids =====
+        # This enables robust cross-source matching when importing from different sources
+        existing_clients_by_smis_id = {}
+        existing_clients_by_emhware_id = {}
+        existing_clients_by_legacy_id = {}  # Key: client_id -> [clients] (list because one ID might map to multiple clients in edge cases)
+        
+        # Pre-load all clients with smis_id
+        logger.info("Pre-loading clients by smis_id for cross-source matching...")
+        clients_with_smis_id = Client.objects.filter(
+            smis_id__isnull=False
+        ).exclude(
+            smis_id=''
+        ).only(
+            'id', 'smis_id', 'emhware_id', 'client_id', 'source', 'legacy_client_ids', 
+            'first_name', 'last_name', 'email', 'phone', 'dob'
+        )
+        for client in clients_with_smis_id:
+            if client.smis_id and str(client.smis_id).strip():
+                smis_id_key = str(client.smis_id).strip()
+                # Normalize: handle case where multiple clients might have same smis_id (edge case)
+                if smis_id_key not in existing_clients_by_smis_id:
+                    existing_clients_by_smis_id[smis_id_key] = []
+                existing_clients_by_smis_id[smis_id_key].append(client)
+        logger.info(f"Pre-loaded {len(clients_with_smis_id)} clients with smis_id ({len(existing_clients_by_smis_id)} unique IDs)")
+        
+        # Pre-load all clients with emhware_id
+        logger.info("Pre-loading clients by emhware_id for cross-source matching...")
+        clients_with_emhware_id = Client.objects.filter(
+            emhware_id__isnull=False
+        ).exclude(
+            emhware_id=''
+        ).only(
+            'id', 'smis_id', 'emhware_id', 'client_id', 'source', 'legacy_client_ids',
+            'first_name', 'last_name', 'email', 'phone', 'dob'
+        )
+        for client in clients_with_emhware_id:
+            if client.emhware_id and str(client.emhware_id).strip():
+                emhware_id_key = str(client.emhware_id).strip()
+                # Normalize: handle case where multiple clients might have same emhware_id (edge case)
+                if emhware_id_key not in existing_clients_by_emhware_id:
+                    existing_clients_by_emhware_id[emhware_id_key] = []
+                existing_clients_by_emhware_id[emhware_id_key].append(client)
+        logger.info(f"Pre-loaded {len(clients_with_emhware_id)} clients with emhware_id ({len(existing_clients_by_emhware_id)} unique IDs)")
+        
+        # Pre-load all clients with legacy_client_ids
+        logger.info("Pre-loading clients by legacy_client_ids for cross-source matching...")
+        from django.db.models import Q
+        # Query clients that have non-empty legacy_client_ids
+        clients_with_legacy_ids = Client.objects.filter(
+            legacy_client_ids__len__gt=0
+        ).only(
+            'id', 'smis_id', 'emhware_id', 'client_id', 'source', 'legacy_client_ids',
+            'first_name', 'last_name', 'email', 'phone', 'dob'
+        )
+        for client in clients_with_legacy_ids:
+            if client.legacy_client_ids and isinstance(client.legacy_client_ids, list):
+                for legacy_entry in client.legacy_client_ids:
+                    if isinstance(legacy_entry, dict):
+                        legacy_client_id = legacy_entry.get('client_id')
+                        legacy_source = legacy_entry.get('source')
+                        if legacy_client_id and str(legacy_client_id).strip():
+                            legacy_id_key = str(legacy_client_id).strip()
+                            # Store by legacy_id -> list of clients (in case of duplicates)
+                            if legacy_id_key not in existing_clients_by_legacy_id:
+                                existing_clients_by_legacy_id[legacy_id_key] = []
+                            # Avoid adding same client multiple times for same legacy_id
+                            if client not in existing_clients_by_legacy_id[legacy_id_key]:
+                                existing_clients_by_legacy_id[legacy_id_key].append(client)
+        logger.info(f"Pre-loaded {len(clients_with_legacy_ids)} clients with legacy_client_ids ({len(existing_clients_by_legacy_id)} unique legacy IDs)")
+        # ===== END CROSS-SOURCE ID PRE-LOADING =====
         
         # Optimized find_duplicate_client function using pre-loaded data
         def find_duplicate_client_optimized(client_data, row_index):
@@ -4782,6 +4945,268 @@ def upload_clients(request):
                                 except Exception as e:
                                     logger.warning(f"Error checking source ID match: {e}")
                             
+                            # ===== CROSS-SOURCE ID MATCHING: Check opposite source IDs and legacy_client_ids =====
+                            # This handles the scenario where same client exists in different sources with different IDs
+                            # Priority: Check cross-source IDs BEFORE client_id matching to prevent false duplicates
+                            if not client and source_id and source_type:
+                                try:
+                                    # Normalize source_id for matching (strip whitespace, handle case)
+                                    normalized_source_id = str(source_id).strip() if source_id else None
+                                    if not normalized_source_id:
+                                        normalized_source_id = None
+                                    
+                                    if normalized_source_id:
+                                        existing_client_cross_source = None
+                                        match_reason = None
+                                        
+                                        # Check opposite source ID field
+                                        if source_type == 'SMIS':
+                                            # When importing from SMIS, check if this ID exists in EMHware clients
+                                            emhware_matches = existing_clients_by_emhware_id.get(normalized_source_id, [])
+                                            if emhware_matches:
+                                                # Found match in emhware_id - this is a cross-source match
+                                                # Use first match (in edge case of multiple matches, prefer oldest client)
+                                                existing_client_cross_source = sorted(emhware_matches, key=lambda c: (c.created_at if hasattr(c, 'created_at') else c.id, c.id))[0]
+                                                match_reason = f"Cross-source match: SMIS ID '{normalized_source_id}' found in existing client's emhware_id"
+                                        
+                                        elif source_type == 'EMHware':
+                                            # When importing from EMHware, check if this ID exists in SMIS clients
+                                            smis_matches = existing_clients_by_smis_id.get(normalized_source_id, [])
+                                            if smis_matches:
+                                                # Found match in smis_id - this is a cross-source match
+                                                # Use first match (in edge case of multiple matches, prefer oldest client)
+                                                existing_client_cross_source = sorted(smis_matches, key=lambda c: (c.created_at if hasattr(c, 'created_at') else c.id, c.id))[0]
+                                                match_reason = f"Cross-source match: EMHware ID '{normalized_source_id}' found in existing client's smis_id"
+                                        
+                                        # If no cross-source match found, check legacy_client_ids
+                                        if not existing_client_cross_source:
+                                            legacy_matches = existing_clients_by_legacy_id.get(normalized_source_id, [])
+                                            if legacy_matches:
+                                                # Found match in legacy_client_ids - verify it matches the source
+                                                for legacy_client in legacy_matches:
+                                                    if legacy_client.legacy_client_ids and isinstance(legacy_client.legacy_client_ids, list):
+                                                        for legacy_entry in legacy_client.legacy_client_ids:
+                                                            if isinstance(legacy_entry, dict):
+                                                                legacy_id = str(legacy_entry.get('client_id', '')).strip()
+                                                                legacy_source = legacy_entry.get('source', '')
+                                                                # Match if client_id matches AND source matches
+                                                                if legacy_id == normalized_source_id and legacy_source == source_type:
+                                                                    existing_client_cross_source = legacy_client
+                                                                    match_reason = f"Cross-source match: {source_type} ID '{normalized_source_id}' found in existing client's legacy_client_ids"
+                                                                    break
+                                                    if existing_client_cross_source:
+                                                        break
+                                                
+                                                # If no exact source match in legacy, but ID matches, use first match (with validation)
+                                                if not existing_client_cross_source and legacy_matches:
+                                                    # Additional validation: ensure names are similar to prevent false matches
+                                                    incoming_first_name = str(client_data.get('first_name', '')).strip().lower()
+                                                    incoming_last_name = str(client_data.get('last_name', '')).strip().lower()
+                                                    
+                                                    for legacy_client in legacy_matches:
+                                                        existing_first_name = str(legacy_client.first_name or '').strip().lower()
+                                                        existing_last_name = str(legacy_client.last_name or '').strip().lower()
+                                                        
+                                                        # Require at least partial name match to prevent false duplicates
+                                                        if incoming_first_name and existing_first_name:
+                                                            first_name_match = incoming_first_name == existing_first_name or \
+                                                                              (incoming_first_name in existing_first_name or existing_first_name in incoming_first_name)
+                                                        else:
+                                                            first_name_match = False
+                                                        
+                                                        if incoming_last_name and existing_last_name:
+                                                            last_name_match = incoming_last_name == existing_last_name or \
+                                                                             (incoming_last_name in existing_last_name or existing_last_name in incoming_last_name)
+                                                        else:
+                                                            last_name_match = False
+                                                        
+                                                        # Require both first and last name to have some match
+                                                        if first_name_match and last_name_match:
+                                                            existing_client_cross_source = legacy_client
+                                                            match_reason = f"Cross-source match: {source_type} ID '{normalized_source_id}' found in legacy_client_ids with name validation"
+                                                            break
+                                        
+                                        # If cross-source match found, update existing client
+                                        if existing_client_cross_source:
+                                            client = existing_client_cross_source
+                                            is_update = True
+                                            updated_count += 1
+                                            
+                                            logger.info(
+                                                f"{match_reason}: {client.first_name} {client.last_name} (ID: {client.id})"
+                                            )
+                                            
+                                            # Update source ID field if not already set
+                                            if source_type == 'SMIS':
+                                                if not client.smis_id:
+                                                    client.smis_id = normalized_source_id
+                                                elif client.smis_id != normalized_source_id:
+                                                    # Different SMIS ID exists - add to legacy_client_ids instead
+                                                    logger.warning(
+                                                        f"Client {client.id} already has smis_id='{client.smis_id}', "
+                                                        f"new SMIS ID '{normalized_source_id}' will be added to legacy_client_ids"
+                                                    )
+                                            elif source_type == 'EMHware':
+                                                if not client.emhware_id:
+                                                    client.emhware_id = normalized_source_id
+                                                elif client.emhware_id != normalized_source_id:
+                                                    # Different EMHware ID exists - add to legacy_client_ids instead
+                                                    logger.warning(
+                                                        f"Client {client.id} already has emhware_id='{client.emhware_id}', "
+                                                        f"new EMHware ID '{normalized_source_id}' will be added to legacy_client_ids"
+                                                    )
+                                            
+                                            # Update legacy_client_ids to preserve all source IDs
+                                            if client.legacy_client_ids is None:
+                                                client.legacy_client_ids = []
+                                            
+                                            # Check if this source+ID combination already exists in legacy_client_ids
+                                            legacy_id_entry = {'source': source_type, 'client_id': normalized_source_id}
+                                            legacy_exists = any(
+                                                isinstance(entry, dict) and 
+                                                entry.get('source') == source_type and 
+                                                str(entry.get('client_id', '')).strip() == normalized_source_id
+                                                for entry in client.legacy_client_ids
+                                            )
+                                            
+                                            if not legacy_exists:
+                                                client.legacy_client_ids.append(legacy_id_entry)
+                                                logger.info(
+                                                    f"Added {source_type} ID '{normalized_source_id}' to legacy_client_ids for client {client.id}"
+                                                )
+                                            
+                                            # Prepare update data - collect fields from CSV (same logic as same-source match)
+                                            filtered_data = {}
+                                            
+                                            # Get all fields that are mapped from CSV columns
+                                            csv_fields = set()
+                                            for col in df.columns:
+                                                field_name = column_mapping.get(col)
+                                                if field_name:
+                                                    csv_fields.add(field_name)
+                                            
+                                            # Only include fields that exist in the CSV and have non-empty values
+                                            for field, value in client_data.items():
+                                                # Skip if field is not in CSV
+                                                if field not in csv_fields:
+                                                    continue
+                                                    
+                                                # Skip if value is None, empty string, or empty dict
+                                                if value is None:
+                                                    continue
+                                                if isinstance(value, str) and value.strip() == '':
+                                                    continue
+                                                if isinstance(value, dict) and not value:
+                                                    continue
+                                                    
+                                                # Handle contact_information specially - only include if it has actual values
+                                                if field == 'contact_information' and isinstance(value, dict):
+                                                    has_values = False
+                                                    for key, val in value.items():
+                                                        if val and str(val).strip():
+                                                            has_values = True
+                                                            break
+                                                    if not has_values:
+                                                        continue
+                                                
+                                                # Handle other dictionary fields (addresses, etc.) - only include if they have actual values
+                                                if isinstance(value, dict) and field not in ['contact_information']:
+                                                    has_values = False
+                                                    for key, val in value.items():
+                                                        if val and str(val).strip():
+                                                            has_values = True
+                                                            break
+                                                    if not has_values:
+                                                        continue
+                                                
+                                                filtered_data[field] = value
+                                            
+                                            # Define extended fields list
+                                            extended_fields_list = [
+                                                'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
+                                                'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
+                                                'num_bednights_current_stay', 'length_homeless_3yrs', 'income_source',
+                                                'taxation_year_filed', 'status_id', 'picture_id', 'other_id', 'bnl_consent',
+                                                'allergies', 'harm_reduction_support', 'medication_support', 'pregnancy_support',
+                                                'mental_health_support', 'physical_health_support', 'daily_activities_support',
+                                                'other_health_supports', 'cannot_use_stairs', 'limited_mobility',
+                                                'wheelchair_accessibility', 'vision_hearing_speech_supports', 'english_translator',
+                                                'reading_supports', 'other_accessibility_supports', 'pet_owner', 'legal_support',
+                                                'immigration_support', 'religious_cultural_supports', 'safety_concerns',
+                                                'intimate_partner_violence_support', 'human_trafficking_support', 'other_supports',
+                                                'access_to_housing_application', 'access_to_housing_no', 'access_point_application',
+                                                'access_point_no', 'cars', 'cars_no', 'discharge_disposition', 'intake_status',
+                                                'lived_last_12_months', 'reason_for_service', 'intake_date', 'service_end_date',
+                                                'rejection_date', 'rejection_reason', 'room', 'bed', 'occupancy_status',
+                                                'bed_nights_historical', 'restriction_reason', 'restriction_date',
+                                                'restriction_duration_days', 'restriction_status', 'early_termination_by'
+                                            ]
+                                            
+                                            # Apply filtered values to client object for bulk update
+                                            for field, value in filtered_data.items():
+                                                if hasattr(client, field) and field not in extended_fields_list:
+                                                    # Only update if existing value is empty/null, or merge data intelligently
+                                                    existing_value = getattr(client, field, None)
+                                                    if not existing_value or existing_value == '':
+                                                        setattr(client, field, value)
+                                                    # For SMIS/EMHware IDs, always update to preserve legacy IDs
+                                                    elif field in ['smis_id', 'emhware_id'] and value:
+                                                        setattr(client, field, value)
+                                            
+                                            # If discharge_date is present, ensure it's handled
+                                            if has_discharge_date:
+                                                # Check if program is specified
+                                                if not program_name or not program_name.strip():
+                                                    # No program specified - store at client level
+                                                    if discharge_date_parsed:
+                                                        client.discharge_date = discharge_date_parsed
+                                                        if 'discharge_date' not in filtered_data:
+                                                            filtered_data['discharge_date'] = discharge_date_parsed
+                                                    if reason_discharge_value:
+                                                        client.reason_discharge = reason_discharge_value
+                                                        if 'reason_discharge' not in filtered_data:
+                                                            filtered_data['reason_discharge'] = reason_discharge_value
+                                                    logger.info(f"Prepared client-level discharge update for {client.first_name} {client.last_name}")
+                                                # If program is specified, we'll handle it later in enrollment processing
+                                            
+                                            # Set updated_by field
+                                            if request.user.is_authenticated:
+                                                first_name = request.user.first_name or ''
+                                                last_name = request.user.last_name or ''
+                                                user_name = f"{first_name} {last_name}".strip()
+                                                if not user_name or user_name == ' ':
+                                                    user_name = request.user.username or request.user.email or 'System'
+                                                client.updated_by = user_name
+                                            else:
+                                                client.updated_by = 'System'
+                                            
+                                            # Store client and extended data for bulk update
+                                            extended_data = {}
+                                            for field in extended_fields_list:
+                                                if field in filtered_data:
+                                                    value = filtered_data[field]
+                                                    if value is not None and value != '':
+                                                        if isinstance(value, str) and value.strip() != '':
+                                                            extended_data[field] = value.strip()
+                                                        elif not isinstance(value, str):
+                                                            extended_data[field] = value
+                                            
+                                            # Add to update list
+                                            clients_to_update.append({
+                                                'client': client,
+                                                'extended_data': extended_data,
+                                                'row_index': index
+                                            })
+                                            
+                                            logger.info(f"Prepared cross-source update for client: {client.first_name} {client.last_name} (matched by {match_reason})")
+                                            # Skip further matching since we found a cross-source match
+                                            continue
+                                        
+                                except Exception as e:
+                                    logger.warning(f"Error checking cross-source ID match: {e}")
+                                    import traceback
+                                    logger.error(f"Cross-source matching error traceback: {traceback.format_exc()}")
+                            
                             # Check for existing client_id - this is the secondary update mechanism (using batch lookup)
                             if not client and client_data.get('client_id'):
                                 try:
@@ -5061,6 +5486,62 @@ def upload_clients(request):
                                         
                                         filtered_data[field] = value
                                     
+                                    # IMPORTANT: Update source IDs when client is matched by name+DOB (cross-source merge)
+                                    # This ensures emhware_id/smis_id and legacy_client_ids are set when clients from different sources are matched
+                                    client_id_value = client_data.get('client_id')
+                                    if source and client_id_value:
+                                        normalized_client_id = str(client_id_value).strip() if client_id_value else None
+                                        if normalized_client_id:
+                                            # Set source-specific ID field
+                                            if source == 'EMHware':
+                                                # Only set if not already set, or if different add to legacy
+                                                if not client.emhware_id:
+                                                    client.emhware_id = normalized_client_id
+                                                    logger.info(
+                                                        f"Set emhware_id='{normalized_client_id}' for client {client.id} "
+                                                        f"(matched by name+DOB, cross-source merge)"
+                                                    )
+                                                elif client.emhware_id != normalized_client_id:
+                                                    # Different EMHware ID exists - add to legacy_client_ids
+                                                    logger.info(
+                                                        f"Client {client.id} already has emhware_id='{client.emhware_id}', "
+                                                        f"new EMHware ID '{normalized_client_id}' will be added to legacy_client_ids"
+                                                    )
+                                            elif source == 'SMIS':
+                                                # Only set if not already set, or if different add to legacy
+                                                if not client.smis_id:
+                                                    client.smis_id = normalized_client_id
+                                                    logger.info(
+                                                        f"Set smis_id='{normalized_client_id}' for client {client.id} "
+                                                        f"(matched by name+DOB, cross-source merge)"
+                                                    )
+                                                elif client.smis_id != normalized_client_id:
+                                                    # Different SMIS ID exists - add to legacy_client_ids
+                                                    logger.info(
+                                                        f"Client {client.id} already has smis_id='{client.smis_id}', "
+                                                        f"new SMIS ID '{normalized_client_id}' will be added to legacy_client_ids"
+                                                    )
+                                            
+                                            # Update legacy_client_ids to include the new source ID
+                                            if not client.legacy_client_ids:
+                                                client.legacy_client_ids = []
+                                            # Check if this source+ID combination already exists
+                                            legacy_id_exists = any(
+                                                isinstance(leg_id, dict) and
+                                                leg_id.get('source') == source and 
+                                                str(leg_id.get('client_id', '')).strip() == normalized_client_id
+                                                for leg_id in client.legacy_client_ids
+                                            )
+                                            if not legacy_id_exists:
+                                                client.legacy_client_ids.append({
+                                                    'source': source,
+                                                    'client_id': normalized_client_id
+                                                })
+                                                logger.info(
+                                                    f"Added {source} ID '{normalized_client_id}' to legacy_client_ids for client {client.id} "
+                                                    f"(matched by name+DOB, cross-source merge)"
+                                                )
+                                    
                                     # Prepare discharge data
                                     if not program_name or not program_name.strip():
                                         # No program specified - store at client level
@@ -5316,25 +5797,51 @@ def upload_clients(request):
                                     # Copy client_id to emhware_id or smis_id based on source
                                     client_id_value = client_data.get('client_id')
                                     if source and client_id_value:
-                                        if source == 'EMHware':
-                                            existing_client.emhware_id = client_id_value
-                                        elif source == 'SMIS':
-                                            existing_client.smis_id = client_id_value
+                                        normalized_client_id = str(client_id_value).strip() if client_id_value else None
+                                        if normalized_client_id:
+                                            if source == 'EMHware':
+                                                # Only set if not already set, or if different add to legacy
+                                                if not existing_client.emhware_id:
+                                                    existing_client.emhware_id = normalized_client_id
+                                                elif existing_client.emhware_id != normalized_client_id:
+                                                    # Different EMHware ID exists - add to legacy_client_ids
+                                                    logger.info(
+                                                        f"Client {existing_client.id} already has emhware_id='{existing_client.emhware_id}', "
+                                                        f"new EMHware ID '{normalized_client_id}' will be added to legacy_client_ids"
+                                                    )
+                                            elif source == 'SMIS':
+                                                # Only set if not already set, or if different add to legacy
+                                                if not existing_client.smis_id:
+                                                    existing_client.smis_id = normalized_client_id
+                                                elif existing_client.smis_id != normalized_client_id:
+                                                    # Different SMIS ID exists - add to legacy_client_ids
+                                                    logger.info(
+                                                        f"Client {existing_client.id} already has smis_id='{existing_client.smis_id}', "
+                                                        f"new SMIS ID '{normalized_client_id}' will be added to legacy_client_ids"
+                                                    )
                                     
                                     # Update legacy_client_ids to include the new source ID
                                     if client_id_value and source:
-                                        if not existing_client.legacy_client_ids:
-                                            existing_client.legacy_client_ids = []
-                                        # Check if this source+ID combination already exists
-                                        legacy_id_exists = any(
-                                            leg_id.get('source') == source and leg_id.get('client_id') == client_id_value
-                                            for leg_id in existing_client.legacy_client_ids
-                                        )
-                                        if not legacy_id_exists:
-                                            existing_client.legacy_client_ids.append({
-                                                'source': source,
-                                                'client_id': client_id_value
-                                            })
+                                        normalized_client_id = str(client_id_value).strip() if client_id_value else None
+                                        if normalized_client_id:
+                                            if not existing_client.legacy_client_ids:
+                                                existing_client.legacy_client_ids = []
+                                            # Check if this source+ID combination already exists
+                                            legacy_id_exists = any(
+                                                isinstance(leg_id, dict) and
+                                                leg_id.get('source') == source and 
+                                                str(leg_id.get('client_id', '')).strip() == normalized_client_id
+                                                for leg_id in existing_client.legacy_client_ids
+                                            )
+                                            if not legacy_id_exists:
+                                                existing_client.legacy_client_ids.append({
+                                                    'source': source,
+                                                    'client_id': normalized_client_id
+                                                })
+                                                logger.info(
+                                                    f"Added {source} ID '{normalized_client_id}' to legacy_client_ids for client {existing_client.id} "
+                                                    f"(matched by {match_type})"
+                                                )
                                     
                                     # Set updated_by field
                                     if request.user.is_authenticated:
@@ -5430,10 +5937,21 @@ def upload_clients(request):
                                 # Copy client_id to emhware_id or smis_id based on source
                                 client_id_value = client_data.get('client_id')
                                 if source and client_id_value:
-                                    if source == 'EMHware':
-                                        client_fields['emhware_id'] = client_id_value
-                                    elif source == 'SMIS':
-                                        client_fields['smis_id'] = client_id_value
+                                    normalized_client_id = str(client_id_value).strip() if client_id_value else None
+                                    if normalized_client_id:
+                                        if source == 'EMHware':
+                                            client_fields['emhware_id'] = normalized_client_id
+                                        elif source == 'SMIS':
+                                            client_fields['smis_id'] = normalized_client_id
+                                        
+                                        # Initialize legacy_client_ids for new clients
+                                        if 'legacy_client_ids' not in client_fields or not client_fields.get('legacy_client_ids'):
+                                            client_fields['legacy_client_ids'] = []
+                                        
+                                        # Add source ID to legacy_client_ids
+                                        legacy_id_entry = {'source': source, 'client_id': normalized_client_id}
+                                        if legacy_id_entry not in client_fields['legacy_client_ids']:
+                                            client_fields['legacy_client_ids'].append(legacy_id_entry)
                                 
                                 # Add client to bulk create list instead of creating immediately
                                 clients_to_create.append({
@@ -5559,7 +6077,7 @@ def upload_clients(request):
                             'no_health_card_reason', 'next_of_kin', 'emergency_contact', 'comments',
                             'chart_number', 'contact_information', 'addresses', 'languages_spoken',
                             'ethnicity', 'support_workers', 'discharge_date', 'reason_discharge', 'updated_by',
-                            'emhware_id', 'smis_id'
+                            'emhware_id', 'smis_id', 'legacy_client_ids'
                         ]
                         
                         # Use bulk_update - Django will only update fields that are set on the objects
