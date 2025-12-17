@@ -3105,7 +3105,17 @@ def upload_clients(request):
                         date_diff = abs((start1 - start2).days)
                         return date_diff <= threshold_days
                     
-                    # PRIORITY 1: Check for exact start_date matches (highest priority)
+                    # PRIORITY 0: Check for open-ended enrollments (no end_date) - highest priority
+                    # If both existing and new enrollment have no end_date, they should ALWAYS merge
+                    # regardless of start_date difference (they represent the same ongoing enrollment)
+                    open_ended_enrollments = []
+                    if new_end_date is None:
+                        # New enrollment has no end_date - find all existing open-ended enrollments
+                        for existing in all_enrollments:
+                            if existing.end_date is None:
+                                open_ended_enrollments.append(existing)
+                    
+                    # PRIORITY 1: Check for exact start_date matches
                     # This handles enrollments with the same start_date in the same program
                     exact_match_enrollments = [
                         e for e in all_enrollments 
@@ -3128,12 +3138,23 @@ def upload_clients(request):
                         ):
                             overlapping_enrollments.append(existing)
                     
-                    # Combine all potential matches: exact matches, similar starts, and overlapping
-                    # Remove duplicates while preserving priority (exact > similar > overlapping)
+                    # Combine all potential matches: open-ended > exact > similar > overlapping
+                    # Remove duplicates while preserving priority
                     all_potential_matches = []
                     match_ids = set()
                     
-                    # Add exact matches first (highest priority)
+                    # Add open-ended matches first (highest priority - always merge open-ended enrollments)
+                    if open_ended_enrollments:
+                        logger.info(
+                            f"Found {len(open_ended_enrollments)} open-ended enrollment(s) (no end_date) for client {client.first_name} {client.last_name} "
+                            f"in program {program.name}. New enrollment also has no end_date - will merge into one."
+                        )
+                        for e in open_ended_enrollments:
+                            if e.id not in match_ids:
+                                all_potential_matches.append(e)
+                                match_ids.add(e.id)
+                    
+                    # Add exact matches (high priority)
                     for e in exact_match_enrollments:
                         if e.id not in match_ids:
                             all_potential_matches.append(e)
@@ -3463,22 +3484,102 @@ def upload_clients(request):
                                 )
                         
                         # Create new enrollment - check for duplicate with same start_date first
-                        # Use start_date (admission date) as the key to prevent duplicates
-                        enrollment, created = ClientProgramEnrollment.objects.get_or_create(
-                            client=client,
-                            program=program,
-                            start_date=enrollment_start_date,  # Use start_date as part of unique constraint
-                            defaults={
-                                'end_date': discharge_date,  # Set discharge_date as end_date
-                                'status': final_status,
-                                'days_elapsed': days_elapsed,
-                                'notes': ' | '.join(notes_parts),
-                                'created_by': request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
-                            }
-                        )
-                        # Cache the enrollment for potential future use in the same upload
-                        enrollment_cache_key = (client.id, program.id, enrollment_start_date)
-                        enrollment_cache[enrollment_cache_key] = enrollment
+                        # IMPORTANT: Before creating, check if there's an existing open-ended enrollment
+                        # (no end_date) that we might have missed - if so, merge instead of creating duplicate
+                        if discharge_date is None:
+                            # New enrollment has no end_date - check for any existing open-ended enrollments
+                            existing_open_ended = ClientProgramEnrollment.objects.filter(
+                                client=client,
+                                program=program,
+                                end_date__isnull=True,
+                                is_archived=False
+                            ).exclude(
+                                start_date=enrollment_start_date  # Exclude exact start_date match (already handled above)
+                            ).first()
+                            
+                            if existing_open_ended:
+                                # Found an existing open-ended enrollment - merge into it instead of creating duplicate
+                                logger.info(
+                                    f"Found existing open-ended enrollment (ID: {existing_open_ended.id}, start_date: {existing_open_ended.start_date}) "
+                                    f"for client {client.first_name} {client.last_name} in program {program.name}. "
+                                    f"New enrollment also has no end_date - merging into existing enrollment."
+                                )
+                                # Use earliest start_date
+                                if enrollment_start_date < existing_open_ended.start_date:
+                                    existing_open_ended.start_date = enrollment_start_date
+                                    existing_open_ended.save()
+                                    logger.info(
+                                        f"Updated existing enrollment start_date to {enrollment_start_date} "
+                                        f"(earliest date) for client {client.first_name} {client.last_name}"
+                                    )
+                                
+                                # Merge notes
+                                new_notes = ' | '.join(notes_parts)
+                                existing_notes = existing_open_ended.notes or ''
+                                if existing_notes:
+                                    if new_notes not in existing_notes:
+                                        existing_open_ended.notes = f'{existing_notes} | {new_notes}'
+                                else:
+                                    existing_open_ended.notes = new_notes
+                                
+                                # Update status if needed
+                                if final_status:
+                                    existing_open_ended.status = final_status
+                                
+                                existing_open_ended.updated_by = request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
+                                existing_open_ended.save()
+                                
+                                # Cache the enrollment
+                                enrollment_cache_key = (client.id, program.id, existing_open_ended.start_date)
+                                enrollment_cache[enrollment_cache_key] = existing_open_ended
+                                
+                                enrollment = existing_open_ended
+                                created = False
+                                
+                                # Update client status
+                                try:
+                                    status_changed = client.update_inactive_status()
+                                    if status_changed:
+                                        client.save(update_fields=['is_inactive'])
+                                        logger.debug(f"Updated client inactive status after merging open-ended enrollment for {client.first_name} {client.last_name}")
+                                except Exception as e:
+                                    logger.warning(f"Failed to update client status after merging open-ended enrollment: {e}")
+                                
+                                logger.info(f"Merged into existing open-ended enrollment for {client.first_name} {client.last_name} in {current_program_name}")
+                            else:
+                                # No existing open-ended enrollment - proceed with normal creation
+                                enrollment, created = ClientProgramEnrollment.objects.get_or_create(
+                                    client=client,
+                                    program=program,
+                                    start_date=enrollment_start_date,  # Use start_date as part of unique constraint
+                                    defaults={
+                                        'end_date': discharge_date,  # Set discharge_date as end_date (None for open-ended)
+                                        'status': final_status,
+                                        'days_elapsed': days_elapsed,
+                                        'notes': ' | '.join(notes_parts),
+                                        'created_by': request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
+                                    }
+                                )
+                                # Cache the enrollment for potential future use in the same upload
+                                enrollment_cache_key = (client.id, program.id, enrollment_start_date)
+                                enrollment_cache[enrollment_cache_key] = enrollment
+                        else:
+                            # New enrollment has end_date - proceed with normal creation
+                            enrollment, created = ClientProgramEnrollment.objects.get_or_create(
+                                client=client,
+                                program=program,
+                                start_date=enrollment_start_date,  # Use start_date as part of unique constraint
+                                defaults={
+                                    'end_date': discharge_date,  # Set discharge_date as end_date
+                                    'status': final_status,
+                                    'days_elapsed': days_elapsed,
+                                    'notes': ' | '.join(notes_parts),
+                                    'created_by': request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'System'
+                                }
+                            )
+                            # Cache the enrollment for potential future use in the same upload
+                            enrollment_cache_key = (client.id, program.id, enrollment_start_date)
+                            enrollment_cache[enrollment_cache_key] = enrollment
                         
                         if not created:
                             # Enrollment was found during get_or_create (race condition), update it instead
