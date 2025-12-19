@@ -4235,6 +4235,10 @@ def upload_clients(request):
                     chunk_skipped_count = 0
                     chunk_duplicates_flagged = 0
                     
+                    # CRITICAL FIX: Track clients being created in this chunk by name+DOB
+                    # This allows us to merge duplicates within the same upload batch
+                    chunk_clients_by_name_dob = {}  # Key: (first_name_lower, last_name_lower, dob) -> client_data dict
+                    
                     # Process rows in this chunk
                     for chunk_row_idx, (index, row) in enumerate(chunk_df.iterrows()):
                         try:
@@ -4874,6 +4878,7 @@ def upload_clients(request):
                             
                             # ISSUE 5 FIX: Check for existing client by source ID (smis_id/emhware_id) FIRST - highest priority
                             # This prevents duplicate clients with same source ID
+                            # CRITICAL FIX: When file contains BOTH SMIS and EMHware IDs, check BOTH against existing clients
                             client = None
                             is_update = False
                             original_email = ''
@@ -4883,15 +4888,126 @@ def upload_clients(request):
                             source_id = client_data.get('client_id')
                             source_type = client_data.get('source')  # 'SMIS' or 'EMHware'
                             
+                            # Extract BOTH SMIS and EMHware IDs from the row if present
+                            # This handles files that contain both IDs in the same row
+                            def extract_source_id_from_row(row, column_mapping, source_type):
+                                """Extract source ID from row based on source type"""
+                                # First try to get from client_data (already parsed)
+                                if source_type == 'SMIS':
+                                    # Check for SMIS ID in various column names
+                                    for col in df.columns:
+                                        col_lower = col.lower().strip()
+                                        if 'smis' in col_lower and 'id' in col_lower:
+                                            value = row[col]
+                                            if pd.notna(value) and str(value).strip():
+                                                return str(value).strip()
+                                elif source_type == 'EMHware':
+                                    # Check for EMHware ID in various column names
+                                    for col in df.columns:
+                                        col_lower = col.lower().strip()
+                                        if 'emhware' in col_lower and 'id' in col_lower:
+                                            value = row[col]
+                                            if pd.notna(value) and str(value).strip():
+                                                return str(value).strip()
+                                return None
+                            
+                            # Extract the OTHER source ID (opposite of source_type)
+                            other_source_id = None
+                            if source_type == 'SMIS':
+                                # Try to extract EMHware ID from row
+                                other_source_id = extract_source_id_from_row(row, column_mapping, 'EMHware')
+                                # Also check if it's in client_data (might be in a different field)
+                                if not other_source_id:
+                                    # Check legacy_client_ids structure or other fields
+                                    pass
+                            elif source_type == 'EMHware':
+                                # Try to extract SMIS ID from row
+                                other_source_id = extract_source_id_from_row(row, column_mapping, 'SMIS')
+                            
                             if source_id and source_type:
                                 try:
-                                    # Check for existing client with same source ID
+                                    existing_client_by_source_id = None
+                                    
+                                    # Priority 1: Check same-source ID first (using pre-loaded cache for efficiency)
                                     if source_type == 'SMIS':
-                                        existing_client_by_source_id = Client.objects.filter(smis_id=source_id).first()
+                                        smis_matches = existing_clients_by_smis_id.get(str(source_id).strip(), [])
+                                        if smis_matches:
+                                            existing_client_by_source_id = smis_matches[0]  # Take first match
                                     elif source_type == 'EMHware':
-                                        existing_client_by_source_id = Client.objects.filter(emhware_id=source_id).first()
-                                    else:
-                                        existing_client_by_source_id = None
+                                        emhware_matches = existing_clients_by_emhware_id.get(str(source_id).strip(), [])
+                                        if emhware_matches:
+                                            existing_client_by_source_id = emhware_matches[0]  # Take first match
+                                    
+                                    # Priority 2: ALSO check the OTHER source ID if it exists in the row
+                                    # This handles files with BOTH SMIS and EMHware IDs in the same row
+                                    if not existing_client_by_source_id and other_source_id:
+                                        if source_type == 'SMIS':
+                                            # Check EMHware ID against existing clients
+                                            emhware_matches = existing_clients_by_emhware_id.get(str(other_source_id).strip(), [])
+                                            if emhware_matches:
+                                                existing_client_by_source_id = emhware_matches[0]
+                                                logger.info(
+                                                    f"Found existing client by EMHware ID '{other_source_id}' "
+                                                    f"when importing from SMIS source (file contains both IDs)"
+                                                )
+                                        elif source_type == 'EMHware':
+                                            # Check SMIS ID against existing clients
+                                            smis_matches = existing_clients_by_smis_id.get(str(other_source_id).strip(), [])
+                                            if smis_matches:
+                                                existing_client_by_source_id = smis_matches[0]
+                                                logger.info(
+                                                    f"Found existing client by SMIS ID '{other_source_id}' "
+                                                    f"when importing from EMHware source (file contains both IDs)"
+                                                )
+                                    
+                                    # Priority 3: Check legacy_client_ids for BOTH IDs
+                                    if not existing_client_by_source_id:
+                                        # Check primary source ID in legacy_client_ids
+                                        legacy_matches = existing_clients_by_legacy_id.get(str(source_id).strip(), [])
+                                        if legacy_matches:
+                                            # Validate match with name similarity to prevent false positives
+                                            for legacy_client in legacy_matches:
+                                                # Check if this legacy ID matches the source type
+                                                if legacy_client.legacy_client_ids and isinstance(legacy_client.legacy_client_ids, list):
+                                                    for legacy_entry in legacy_client.legacy_client_ids:
+                                                        if isinstance(legacy_entry, dict):
+                                                            legacy_id = str(legacy_entry.get('client_id', '')).strip()
+                                                            legacy_source = legacy_entry.get('source', '')
+                                                            if legacy_id == str(source_id).strip() and legacy_source == source_type:
+                                                                existing_client_by_source_id = legacy_client
+                                                                break
+                                                if existing_client_by_source_id:
+                                                    break
+                                        
+                                        # Also check other source ID in legacy_client_ids
+                                        if not existing_client_by_source_id and other_source_id:
+                                            legacy_matches = existing_clients_by_legacy_id.get(str(other_source_id).strip(), [])
+                                            if legacy_matches:
+                                                for legacy_client in legacy_matches:
+                                                    if legacy_client.legacy_client_ids and isinstance(legacy_client.legacy_client_ids, list):
+                                                        for legacy_entry in legacy_client.legacy_client_ids:
+                                                            if isinstance(legacy_entry, dict):
+                                                                legacy_id = str(legacy_entry.get('client_id', '')).strip()
+                                                                legacy_source = legacy_entry.get('source', '')
+                                                                # Match if ID matches and source is the OTHER source
+                                                                if legacy_id == str(other_source_id).strip():
+                                                                    # Validate with name match to prevent false positives
+                                                                    incoming_first = str(client_data.get('first_name', '')).strip().lower()
+                                                                    incoming_last = str(client_data.get('last_name', '')).strip().lower()
+                                                                    existing_first = str(legacy_client.first_name or '').strip().lower()
+                                                                    existing_last = str(legacy_client.last_name or '').strip().lower()
+                                                                    
+                                                                    if (incoming_first == existing_first and incoming_last == existing_last) or \
+                                                                       (incoming_first and existing_first and (incoming_first in existing_first or existing_first in incoming_first)) and \
+                                                                       (incoming_last and existing_last and (incoming_last in existing_last or existing_last in incoming_last)):
+                                                                        existing_client_by_source_id = legacy_client
+                                                                        logger.info(
+                                                                            f"Found existing client by legacy ID '{other_source_id}' "
+                                                                            f"with name validation (file contains both IDs)"
+                                                                        )
+                                                                        break
+                                                            if existing_client_by_source_id:
+                                                                break
                                     
                                     if existing_client_by_source_id:
                                         # Found existing client by source ID - UPDATE instead of CREATE
@@ -5499,6 +5615,318 @@ def upload_clients(request):
                                     logger.error(f"Error updating client with ID {client_data['client_id']}: {e}")
                                     # Continue to create new client if update fails
                             
+                            # CRITICAL FIX: Check for exact name+DOB match BEFORE checking discharge_date
+                            # This ensures exact name+DOB matches ALWAYS merge, regardless of source ID differences
+                            # This should happen for ALL imports, not just discharge updates
+                            # IMPORTANT: Check BOTH clients being created in this batch AND existing database clients
+                            if not is_update:
+                                first_name_val = client_data.get('first_name')
+                                last_name_val = client_data.get('last_name')
+                                dob_val = client_data.get('dob')
+                                
+                                if first_name_val and last_name_val and dob_val:
+                                    try:
+                                        first_name = first_name_val.strip().lower() if isinstance(first_name_val, str) else str(first_name_val or '').lower()
+                                        last_name = last_name_val.strip().lower() if isinstance(last_name_val, str) else str(last_name_val or '').lower()
+                                        
+                                        # Normalize DOB to date object for consistent key matching
+                                        # The cache uses date objects, so we need to match that format
+                                        if isinstance(dob_val, str):
+                                            try:
+                                                dob_date = pd.to_datetime(dob_val).date()
+                                            except:
+                                                dob_date = dob_val
+                                        elif hasattr(dob_val, 'date'):
+                                            dob_date = dob_val.date() if hasattr(dob_val, 'date') else dob_val
+                                        else:
+                                            dob_date = dob_val
+                                        
+                                        key = (first_name, last_name, dob_date)
+                                        
+                                        # PRIORITY 1: Check against clients being created in THIS chunk (same upload batch)
+                                        matching_client_in_chunk = chunk_clients_by_name_dob.get(key)
+                                        
+                                        if matching_client_in_chunk:
+                                            # Found exact name+DOB match in the same upload batch - merge into that client
+                                            matching_row_index = matching_client_in_chunk.get('row_index')
+                                            
+                                            # Find the matching client entry in clients_to_create
+                                            matching_client_entry = None
+                                            for client_entry in clients_to_create:
+                                                if client_entry.get('row_index') == matching_row_index:
+                                                    matching_client_entry = client_entry
+                                                    break
+                                            
+                                            if matching_client_entry:
+                                                logger.info(
+                                                    f"Found exact name+DOB match in same upload batch: {first_name} {last_name}, DOB: {dob_val}. "
+                                                    f"Will merge into client being created in row {matching_row_index + 2}."
+                                                )
+                                                
+                                                # Update the existing client_fields in clients_to_create with new source ID
+                                                matching_client_fields = matching_client_entry.get('client_fields', {})
+                                                
+                                                # Update source IDs
+                                                client_id_value = client_data.get('client_id')
+                                                if source and client_id_value:
+                                                    normalized_client_id = str(client_id_value).strip() if client_id_value else None
+                                                    if normalized_client_id:
+                                                        if source == 'EMHware':
+                                                            if not matching_client_fields.get('emhware_id'):
+                                                                matching_client_fields['emhware_id'] = normalized_client_id
+                                                        elif source == 'SMIS':
+                                                            if not matching_client_fields.get('smis_id'):
+                                                                matching_client_fields['smis_id'] = normalized_client_id
+                                                        
+                                                        # Update legacy_client_ids
+                                                        if 'legacy_client_ids' not in matching_client_fields or not matching_client_fields.get('legacy_client_ids'):
+                                                            matching_client_fields['legacy_client_ids'] = []
+                                                        legacy_id_entry = {'source': source, 'client_id': normalized_client_id}
+                                                        legacy_exists = any(
+                                                            isinstance(leg_id, dict) and
+                                                            leg_id.get('source') == source and 
+                                                            str(leg_id.get('client_id', '')).strip() == normalized_client_id
+                                                            for leg_id in matching_client_fields['legacy_client_ids']
+                                                        )
+                                                        if not legacy_exists:
+                                                            matching_client_fields['legacy_client_ids'].append(legacy_id_entry)
+                                                        
+                                                        logger.info(
+                                                            f"Updated client in same batch with {source} ID '{normalized_client_id}' "
+                                                            f"(matched by exact name+DOB in same upload)"
+                                                        )
+                                                
+                                                # Define extended fields list BEFORE merging to exclude them from client_fields
+                                                extended_fields_list_temp = [
+                                                    'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
+                                                    'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
+                                                    'num_bednights_current_stay', 'length_homeless_3yrs', 'income_source',
+                                                    'taxation_year_filed', 'status_id', 'picture_id', 'other_id', 'bnl_consent',
+                                                    'allergies', 'harm_reduction_support', 'medication_support', 'pregnancy_support',
+                                                    'mental_health_support', 'physical_health_support', 'daily_activities_support',
+                                                    'other_health_supports', 'cannot_use_stairs', 'limited_mobility',
+                                                    'wheelchair_accessibility', 'vision_hearing_speech_supports', 'english_translator',
+                                                    'reading_supports', 'other_accessibility_supports', 'pet_owner', 'legal_support',
+                                                    'immigration_support', 'religious_cultural_supports', 'safety_concerns',
+                                                    'intimate_partner_violence_support', 'human_trafficking_support', 'other_supports',
+                                                    'access_to_housing_application', 'access_to_housing_no', 'access_point_application',
+                                                    'access_point_no', 'cars', 'cars_no', 'discharge_disposition', 'intake_status',
+                                                    'lived_last_12_months', 'reason_for_service', 'intake_date', 'service_end_date',
+                                                    'rejection_date', 'rejection_reason', 'room', 'bed', 'occupancy_status',
+                                                    'bed_nights_historical', 'restriction_reason', 'restriction_date',
+                                                    'restriction_duration_days', 'restriction_status', 'early_termination_by'
+                                                ]
+                                                
+                                                # Merge other fields from current row into the matching client
+                                                # EXCLUDE extended fields - they go to extended_data, not client_fields
+                                                for field, value in client_data.items():
+                                                    if field not in ['client_id', 'smis_id', 'emhware_id', 'legacy_client_ids', 'source'] and field not in extended_fields_list_temp:
+                                                        if field in matching_client_fields:
+                                                            existing_value = matching_client_fields.get(field)
+                                                            if not existing_value or existing_value == '':
+                                                                matching_client_fields[field] = value
+                                                        else:
+                                                            matching_client_fields[field] = value
+                                                
+                                                # Merge extended data
+                                                for field in extended_fields_list_temp:
+                                                    if field in client_data:
+                                                        value = client_data[field]
+                                                        if value is not None and value != '':
+                                                            if isinstance(value, str) and value.strip() != '':
+                                                                matching_client_entry['extended_data'][field] = value.strip()
+                                                            elif not isinstance(value, str):
+                                                                matching_client_entry['extended_data'][field] = value
+                                                
+                                                # Store the row index so we can process intake for this merged row later
+                                                # The intake processing will use the matching client
+                                                if 'merged_row_indices' not in matching_client_entry:
+                                                    matching_client_entry['merged_row_indices'] = []
+                                                matching_client_entry['merged_row_indices'].append(index)
+                                                
+                                                # Skip creating a new client - we're merging into the existing one in the batch
+                                                logger.info(f"Skipping duplicate client creation - merging into existing client in batch for {first_name} {last_name}")
+                                                continue
+                                        
+                                        # PRIORITY 2: Check against existing database clients
+                                        matching_clients = clients_by_name_dob.get(key, [])
+                                        
+                                        if matching_clients:
+                                            # EXACT name+DOB match found - merge regardless of source ID differences
+                                            existing_client = matching_clients[0]  # Take first match
+                                            client = existing_client
+                                            is_update = True
+                                            updated_count += 1
+                                            
+                                            logger.info(
+                                                f"Found exact name+DOB match: {first_name} {last_name}, DOB: {dob_val}. "
+                                                f"Will merge into existing client {client.id} regardless of source ID differences."
+                                            )
+                                            
+                                            # Update source IDs when client is matched by name+DOB (cross-source merge)
+                                            # This ensures emhware_id/smis_id and legacy_client_ids are set when clients from different sources are matched
+                                            client_id_value = client_data.get('client_id')
+                                            if source and client_id_value:
+                                                normalized_client_id = str(client_id_value).strip() if client_id_value else None
+                                                if normalized_client_id:
+                                                    # Set source-specific ID field
+                                                    if source == 'EMHware':
+                                                        if not client.emhware_id:
+                                                            client.emhware_id = normalized_client_id
+                                                            logger.info(
+                                                                f"Set emhware_id='{normalized_client_id}' for client {client.id} "
+                                                                f"(matched by exact name+DOB, cross-source merge)"
+                                                            )
+                                                        elif client.emhware_id != normalized_client_id:
+                                                            # Different EMHware ID exists - add to legacy_client_ids
+                                                            logger.info(
+                                                                f"Client {client.id} already has emhware_id='{client.emhware_id}', "
+                                                                f"new EMHware ID '{normalized_client_id}' will be added to legacy_client_ids"
+                                                            )
+                                                    elif source == 'SMIS':
+                                                        if not client.smis_id:
+                                                            client.smis_id = normalized_client_id
+                                                            logger.info(
+                                                                f"Set smis_id='{normalized_client_id}' for client {client.id} "
+                                                                f"(matched by exact name+DOB, cross-source merge)"
+                                                            )
+                                                        elif client.smis_id != normalized_client_id:
+                                                            # Different SMIS ID exists - add to legacy_client_ids
+                                                            logger.info(
+                                                                f"Client {client.id} already has smis_id='{client.smis_id}', "
+                                                                f"new SMIS ID '{normalized_client_id}' will be added to legacy_client_ids"
+                                                            )
+                                                    
+                                                    # Update legacy_client_ids to include the new source ID
+                                                    if not client.legacy_client_ids:
+                                                        client.legacy_client_ids = []
+                                                    legacy_id_entry = {'source': source, 'client_id': normalized_client_id}
+                                                    legacy_exists = any(
+                                                        isinstance(leg_id, dict) and
+                                                        leg_id.get('source') == source and 
+                                                        str(leg_id.get('client_id', '')).strip() == normalized_client_id
+                                                        for leg_id in client.legacy_client_ids
+                                                    )
+                                                    if not legacy_exists:
+                                                        client.legacy_client_ids.append(legacy_id_entry)
+                                                        logger.info(
+                                                            f"Added {source} ID '{normalized_client_id}' to legacy_client_ids for client {client.id} "
+                                                            f"(matched by exact name+DOB, cross-source merge)"
+                                                        )
+                                            
+                                            # Prepare update data - collect fields from CSV (same logic as other matches)
+                                            filtered_data = {}
+                                            
+                                            # Get all fields that are mapped from CSV columns
+                                            csv_fields = set()
+                                            for col in df.columns:
+                                                field_name = column_mapping.get(col)
+                                                if field_name:
+                                                    csv_fields.add(field_name)
+                                            
+                                            # Only include fields that exist in the CSV and have non-empty values
+                                            for field, value in client_data.items():
+                                                # Skip if field is not in CSV
+                                                if field not in csv_fields:
+                                                    continue
+                                                    
+                                                # Skip if value is None, empty string, or empty dict
+                                                if value is None:
+                                                    continue
+                                                if isinstance(value, str) and value.strip() == '':
+                                                    continue
+                                                if isinstance(value, dict) and not value:
+                                                    continue
+                                                    
+                                                # Handle contact_information specially - only include if it has actual values
+                                                if field == 'contact_information' and isinstance(value, dict):
+                                                    has_values = False
+                                                    for key, val in value.items():
+                                                        if val and str(val).strip():
+                                                            has_values = True
+                                                            break
+                                                    if not has_values:
+                                                        continue
+                                                
+                                                # Handle other dictionary fields (addresses, etc.) - only include if they have actual values
+                                                if isinstance(value, dict) and field not in ['contact_information']:
+                                                    has_values = False
+                                                    for key, val in value.items():
+                                                        if val and str(val).strip():
+                                                            has_values = True
+                                                            break
+                                                    if not has_values:
+                                                        continue
+                                                
+                                                filtered_data[field] = value
+                                            
+                                            # Define extended fields list
+                                            extended_fields_list = [
+                                                'indigenous_identity', 'military_status', 'refugee_status', 'household_size',
+                                                'family_head_client_no', 'relationship', 'primary_worker', 'chronically_homeless',
+                                                'num_bednights_current_stay', 'length_homeless_3yrs', 'income_source',
+                                                'taxation_year_filed', 'status_id', 'picture_id', 'other_id', 'bnl_consent',
+                                                'allergies', 'harm_reduction_support', 'medication_support', 'pregnancy_support',
+                                                'mental_health_support', 'physical_health_support', 'daily_activities_support',
+                                                'other_health_supports', 'cannot_use_stairs', 'limited_mobility',
+                                                'wheelchair_accessibility', 'vision_hearing_speech_supports', 'english_translator',
+                                                'reading_supports', 'other_accessibility_supports', 'pet_owner', 'legal_support',
+                                                'immigration_support', 'religious_cultural_supports', 'safety_concerns',
+                                                'intimate_partner_violence_support', 'human_trafficking_support', 'other_supports',
+                                                'access_to_housing_application', 'access_to_housing_no', 'access_point_application',
+                                                'access_point_no', 'cars', 'cars_no', 'discharge_disposition', 'intake_status',
+                                                'lived_last_12_months', 'reason_for_service', 'intake_date', 'service_end_date',
+                                                'rejection_date', 'rejection_reason', 'room', 'bed', 'occupancy_status',
+                                                'bed_nights_historical', 'restriction_reason', 'restriction_date',
+                                                'restriction_duration_days', 'restriction_status', 'early_termination_by'
+                                            ]
+                                            
+                                            # Apply filtered values to client object for bulk update
+                                            for field, value in filtered_data.items():
+                                                if hasattr(client, field) and field not in extended_fields_list:
+                                                    # Only update if existing value is empty/null, or merge data intelligently
+                                                    existing_value = getattr(client, field, None)
+                                                    if not existing_value or existing_value == '':
+                                                        setattr(client, field, value)
+                                                    # For SMIS/EMHware IDs, always update to preserve legacy IDs
+                                                    elif field in ['smis_id', 'emhware_id'] and value:
+                                                        setattr(client, field, value)
+                                            
+                                            # Set updated_by field
+                                            if request.user.is_authenticated:
+                                                first_name = request.user.first_name or ''
+                                                last_name = request.user.last_name or ''
+                                                user_name = f"{first_name} {last_name}".strip()
+                                                if not user_name or user_name == ' ':
+                                                    user_name = request.user.username or request.user.email or 'System'
+                                                client.updated_by = user_name
+                                            else:
+                                                client.updated_by = 'System'
+                                            
+                                            # Store client and extended data for bulk update
+                                            extended_data = {}
+                                            for field in extended_fields_list:
+                                                if field in filtered_data:
+                                                    value = filtered_data[field]
+                                                    if value is not None and value != '':
+                                                        if isinstance(value, str) and value.strip() != '':
+                                                            extended_data[field] = value.strip()
+                                                        elif not isinstance(value, str):
+                                                            extended_data[field] = value
+                                            
+                                            # Add to update list
+                                            clients_to_update.append({
+                                                'client': client,
+                                                'extended_data': extended_data,
+                                                'row_index': index
+                                            })
+                                            
+                                            logger.info(f"Prepared update for client matched by exact name+DOB: {client.first_name} {client.last_name}")
+                                            # Skip further duplicate checks and client creation since we have an exact match
+                                            continue
+                                    except Exception as e:
+                                        logger.error(f"Error finding client by exact name+DOB match: {e}")
+                            
                             # If discharge_date is present but we haven't found a client yet, try to find existing client
                             # This ensures we update existing clients instead of creating new ones when discharge_date is present
                             # Maintains original business logic: try client_id first, then name+DOB
@@ -5518,6 +5946,8 @@ def upload_clients(request):
                                 
                                 # If still not found, try to find by name + DOB matching (using pre-loaded cache)
                                 # Maintains original business logic
+                                # CRITICAL FIX: Also check if incoming client_id matches existing client's smis_id/emhware_id
+                                # This prevents duplicate flagging when data matches 100% (same name, DOB, and IDs)
                                 first_name_val = client_data.get('first_name')
                                 last_name_val = client_data.get('last_name')
                                 if not is_update and first_name_val and last_name_val:
@@ -5531,7 +5961,45 @@ def upload_clients(request):
                                             key = (first_name, last_name, dob)
                                             matching_clients = clients_by_name_dob.get(key, [])
                                             if matching_clients:
-                                                existing_client = matching_clients[0]  # Take first match
+                                                # Check if incoming client_id matches any of the matching clients' IDs
+                                                # This handles the case where file has both SMIS and EMHware IDs
+                                                incoming_client_id = str(client_data.get('client_id', '')).strip() if client_data.get('client_id') else None
+                                                
+                                                for matching_client in matching_clients:
+                                                    # Check if incoming client_id matches existing client's smis_id or emhware_id
+                                                    exact_id_match = False
+                                                    if incoming_client_id:
+                                                        if (matching_client.smis_id and str(matching_client.smis_id).strip() == incoming_client_id) or \
+                                                           (matching_client.emhware_id and str(matching_client.emhware_id).strip() == incoming_client_id):
+                                                            exact_id_match = True
+                                                            logger.info(
+                                                                f"Exact ID match found: incoming client_id '{incoming_client_id}' "
+                                                                f"matches existing client {matching_client.id}'s smis_id or emhware_id"
+                                                            )
+                                                    
+                                                    # Also check legacy_client_ids
+                                                    if not exact_id_match and incoming_client_id and matching_client.legacy_client_ids:
+                                                        if isinstance(matching_client.legacy_client_ids, list):
+                                                            for legacy_entry in matching_client.legacy_client_ids:
+                                                                if isinstance(legacy_entry, dict):
+                                                                    legacy_id = str(legacy_entry.get('client_id', '')).strip()
+                                                                    if legacy_id == incoming_client_id:
+                                                                        exact_id_match = True
+                                                                        logger.info(
+                                                                            f"Exact ID match found in legacy_client_ids: "
+                                                                            f"incoming client_id '{incoming_client_id}' matches existing client {matching_client.id}"
+                                                                        )
+                                                                        break
+                                                    
+                                                    # If exact ID match found, use this client (highest confidence)
+                                                    if exact_id_match:
+                                                        existing_client = matching_client
+                                                        break
+                                                
+                                                # If no exact ID match, use first matching client (name+DOB match)
+                                                if not is_update:
+                                                    existing_client = matching_clients[0]  # Take first match
+                                                
                                                 client = existing_client
                                                 is_update = True
                                                 updated_count += 1
@@ -5782,23 +6250,117 @@ def upload_clients(request):
                                             )
                                             
                                             if potential_duplicates:
-                                                # Found name-based duplicate - mark it for duplicate record creation
-                                                # Only mark as duplicate if similarity is >= 0.9 (90%)
+                                                # Found name-based duplicate - check if it's an EXACT match that should auto-merge
                                                 duplicate_client, match_type, similarity = potential_duplicates[0]  # Take the first/highest match
+                                                
+                                                # CRITICAL FIX: Check if this is an exact match (100% data match) that should auto-merge
+                                                # instead of flagging as duplicate
+                                                is_exact_match = False
+                                                incoming_client_id = str(client_data.get('client_id', '')).strip() if client_data.get('client_id') else None
+                                                incoming_dob = client_data.get('dob')
+                                                
                                                 if similarity >= 0.9:
+                                                    # Check for exact ID match
+                                                    if incoming_client_id:
+                                                        if (duplicate_client.smis_id and str(duplicate_client.smis_id).strip() == incoming_client_id) or \
+                                                           (duplicate_client.emhware_id and str(duplicate_client.emhware_id).strip() == incoming_client_id):
+                                                            is_exact_match = True
+                                                            logger.info(
+                                                                f"Exact ID match found for {client_name}: "
+                                                                f"incoming client_id '{incoming_client_id}' matches existing client {duplicate_client.id}'s smis_id or emhware_id. "
+                                                                f"Will auto-merge instead of flagging as duplicate."
+                                                            )
+                                                        # Also check legacy_client_ids
+                                                        elif duplicate_client.legacy_client_ids and isinstance(duplicate_client.legacy_client_ids, list):
+                                                            for legacy_entry in duplicate_client.legacy_client_ids:
+                                                                if isinstance(legacy_entry, dict):
+                                                                    legacy_id = str(legacy_entry.get('client_id', '')).strip()
+                                                                    if legacy_id == incoming_client_id:
+                                                                        is_exact_match = True
+                                                                        logger.info(
+                                                                            f"Exact ID match found in legacy_client_ids for {client_name}: "
+                                                                            f"incoming client_id '{incoming_client_id}' matches existing client {duplicate_client.id}. "
+                                                                            f"Will auto-merge instead of flagging as duplicate."
+                                                                        )
+                                                                        break
+                                                    
+                                                    # Check for exact name+DOB match (already matched by name, check DOB)
+                                                    if not is_exact_match and incoming_dob and duplicate_client.dob:
+                                                        if incoming_dob == duplicate_client.dob:
+                                                            is_exact_match = True
+                                                            logger.info(
+                                                                f"Exact name+DOB match found for {client_name}: "
+                                                                f"Will auto-merge instead of flagging as duplicate."
+                                                            )
+                                                
+                                                if is_exact_match:
+                                                    # EXACT MATCH FOUND - Auto-merge instead of flagging as duplicate
+                                                    client = duplicate_client
+                                                    is_update = True
+                                                    updated_count += 1
+                                                    
+                                                    # Update source IDs if needed (same logic as name+DOB matching)
+                                                    if incoming_client_id and source:
+                                                        normalized_client_id = str(incoming_client_id).strip()
+                                                        if source == 'EMHware':
+                                                            if not duplicate_client.emhware_id:
+                                                                duplicate_client.emhware_id = normalized_client_id
+                                                        elif source == 'SMIS':
+                                                            if not duplicate_client.smis_id:
+                                                                duplicate_client.smis_id = normalized_client_id
+                                                        
+                                                        # Update legacy_client_ids
+                                                        if not duplicate_client.legacy_client_ids:
+                                                            duplicate_client.legacy_client_ids = []
+                                                        legacy_id_entry = {'source': source, 'client_id': normalized_client_id}
+                                                        legacy_exists = any(
+                                                            isinstance(leg_id, dict) and
+                                                            leg_id.get('source') == source and 
+                                                            str(leg_id.get('client_id', '')).strip() == normalized_client_id
+                                                            for leg_id in duplicate_client.legacy_client_ids
+                                                        )
+                                                        if not legacy_exists:
+                                                            duplicate_client.legacy_client_ids.append(legacy_id_entry)
+                                                    
+                                                    logger.info(
+                                                        f"Auto-merged exact match for {client_name} (ID: {incoming_client_id}, "
+                                                        f"similarity: {similarity:.2f}). Skipping duplicate flagging and client creation."
+                                                    )
+                                                    
+                                                    # Prepare update data and skip to update logic (same as name+DOB matching)
+                                                    # This ensures the exact match is handled as an update, not a new client creation
+                                                    # The update logic will be handled in the "if is_update and client" section below
+                                                    # Skip duplicate flagging
+                                                    duplicate_client = None
+                                                    match_type = None
+                                                    
+                                                    # Continue to update logic - skip client creation
+                                                    # The code will continue and check "if is_update and client" to handle the update
+                                                elif similarity >= 0.9:
+                                                    # Similarity >= 90% but not exact match - flag as duplicate
                                                     name_duplicate_similarity = similarity
                                                     duplicates_flagged += 1
-                                                    
-                                                    # logger.info(f"Name duplicate found for {client_name} (similarity: {similarity:.2f}). Will mark as duplicate after client creation.")
+                                                    logger.info(
+                                                        f"Name duplicate found for {client_name} (similarity: {similarity:.2f}). "
+                                                        f"Will mark as duplicate after client creation."
+                                                    )
                                                 else:
                                                     # Similarity below 90%, don't mark as duplicate
                                                     duplicate_client = None
                                                     match_type = None
-                                                    # logger.info(f"Name similarity found for {client_name} (similarity: {similarity:.2f}) but below 90% threshold, not marking as duplicate.")
+                                                    logger.debug(f"Name similarity found for {client_name} (similarity: {similarity:.2f}) but below 90% threshold, not marking as duplicate.")
                                 
                                 # If no name duplicate found, check for other types of duplicates using optimized batch function
                                 if not duplicate_client:
                                     duplicate_client, match_type = find_duplicate_client_optimized(client_data, index)
+                                
+                                # Check if we already found an exact match in fuzzy matching (is_update and client are set)
+                                # If so, skip the duplicate check and proceed to update logic
+                                if is_update and client:
+                                    # Exact match already found and handled in fuzzy matching section
+                                    # Skip duplicate flagging and proceed to update logic
+                                    duplicate_client = None
+                                    match_type = None
                                 
                                 # Check if this is an exact match that should be auto-merged/updated
                                 # Auto-merge for: exact_email, exact_phone, email_phone, name_dob_match, matching_external_id
@@ -6080,6 +6642,45 @@ def upload_clients(request):
                                                 clients_to_create[-1]['extended_data'][field] = value.strip()
                                             elif not isinstance(value, str):
                                                 clients_to_create[-1]['extended_data'][field] = value
+                                
+                                # CRITICAL FIX: Track this client by name+DOB in the chunk cache AFTER adding to create list
+                                # This allows subsequent rows in the same batch to find and merge with this client
+                                # We do this AFTER adding to clients_to_create so the entry exists when we look it up
+                                first_name_val = client_data.get('first_name')
+                                last_name_val = client_data.get('last_name')
+                                dob_val = client_data.get('dob')
+                                if first_name_val and last_name_val and dob_val:
+                                    try:
+                                        first_name = first_name_val.strip().lower() if isinstance(first_name_val, str) else str(first_name_val or '').lower()
+                                        last_name = last_name_val.strip().lower() if isinstance(last_name_val, str) else str(last_name_val or '').lower()
+                                        
+                                        # Normalize DOB to date object for consistent key matching
+                                        # The cache uses date objects, so we need to match that format
+                                        if isinstance(dob_val, str):
+                                            try:
+                                                dob_date = pd.to_datetime(dob_val).date()
+                                            except:
+                                                dob_date = dob_val
+                                        elif hasattr(dob_val, 'date'):
+                                            dob_date = dob_val.date() if hasattr(dob_val, 'date') else dob_val
+                                        else:
+                                            dob_date = dob_val
+                                        
+                                        key = (first_name, last_name, dob_date)
+                                        
+                                        # Store client data in chunk cache for name+DOB matching
+                                        # Store the index so we can find it in clients_to_create later
+                                        chunk_clients_by_name_dob[key] = {
+                                            'row_index': index,
+                                            'client_fields': client_fields,
+                                            'client_data': client_data
+                                        }
+                                        logger.debug(
+                                            f"Tracked client in chunk cache: {first_name} {last_name}, DOB: {dob_val}, "
+                                            f"row_index: {index}"
+                                        )
+                                    except Exception as e:
+                                        logger.warning(f"Error tracking client in chunk cache: {e}")
                             
                             # Note: Duplicate relationships and intake data will be created after bulk client creation
                     
@@ -6357,6 +6958,58 @@ def upload_clients(request):
                                         intake_cache,
                                         chunk_warnings,  # Pass warnings list
                                     )
+                                    
+                                    # CRITICAL FIX: Also process intake data for merged rows (if this client was merged in the same batch)
+                                    merged_row_indices = client_data.get('merged_row_indices', [])
+                                    if merged_row_indices:
+                                        logger.info(
+                                            f"Processing intake data for {len(merged_row_indices)} merged row(s) for client {client.first_name} {client.last_name}"
+                                        )
+                                        for merged_row_index in merged_row_indices:
+                                            try:
+                                                merged_row = df.iloc[merged_row_index]
+                                                process_intake_data(
+                                                    client,
+                                                    merged_row,
+                                                    merged_row_index,
+                                                    column_mapping,
+                                                    df.columns,
+                                                    departments_cache,
+                                                    program_lookup_by_name,
+                                                    all_programs_list,
+                                                    program_fuzzy_cache,
+                                                    enrollment_cache,
+                                                    intake_cache,
+                                                    chunk_warnings,
+                                                )
+                                            except Exception as e:
+                                                logger.error(f"Error processing intake data for merged row {merged_row_index + 2}: {e}"                                    )
+                                    
+                                    # CRITICAL FIX: Also process intake data for merged rows (if this client was merged in the same batch)
+                                    merged_row_indices = client_data.get('merged_row_indices', [])
+                                    if merged_row_indices:
+                                        logger.info(
+                                            f"Processing intake data for {len(merged_row_indices)} merged row(s) for client {client.first_name} {client.last_name}"
+                                        )
+                                        for merged_row_index in merged_row_indices:
+                                            try:
+                                                merged_row = df.iloc[merged_row_index]
+                                                process_intake_data(
+                                                    client,
+                                                    merged_row,
+                                                    merged_row_index,
+                                                    column_mapping,
+                                                    df.columns,
+                                                    departments_cache,
+                                                    program_lookup_by_name,
+                                                    all_programs_list,
+                                                    program_fuzzy_cache,
+                                                    enrollment_cache,
+                                                    intake_cache,
+                                                    chunk_warnings,
+                                                )
+                                            except Exception as e:
+                                                logger.error(f"Error processing intake data for merged row {merged_row_index + 2}: {e}")
                                 except UploadError:
                                     # Re-raise UploadError to trigger transaction rollback
                                     raise
