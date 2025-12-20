@@ -3859,10 +3859,21 @@ def upload_clients(request):
                         break
                 if dob_value:
                     try:
-                        parsed_dob = pd.to_datetime(dob_value).date()
-                        if parsed_dob and parsed_dob != datetime(1900, 1, 1).date():
-                            all_dobs_in_upload.add(parsed_dob)
-                    except:
+                        # Check if value is pandas NaT (Not a Time) before processing
+                        if pd.isna(dob_value):
+                            continue
+                        parsed_dob = pd.to_datetime(dob_value, errors='coerce')
+                        # Check if parsing resulted in NaT
+                        if pd.isna(parsed_dob):
+                            continue
+                        # Convert to date object
+                        parsed_dob_date = parsed_dob.date()
+                        # Additional check: ensure it's a valid date (not NaT date)
+                        if parsed_dob_date and parsed_dob_date != datetime(1900, 1, 1).date():
+                            all_dobs_in_upload.add(parsed_dob_date)
+                    except Exception as e:
+                        # Skip invalid date values
+                        logger.debug(f"Skipping invalid DOB value at row {index}: {e}")
                         pass
             except:
                 pass
